@@ -12,6 +12,7 @@ import { markdownKeybindings } from './keybindings';
 import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
+import { hoverBlockMenu } from './hover-menu';
 
 export const previewCompartment = new Compartment();
 
@@ -36,6 +37,7 @@ export function createExtensions(): Extension[] {
       ...searchKeymap,
     ]),
     previewCompartment.of(livePreviewPlugin),
+    hoverBlockMenu(),
     EditorView.lineWrapping,
     EditorState.allowMultipleSelections.of(false),
   ];

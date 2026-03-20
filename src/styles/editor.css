@@ -126,3 +126,81 @@
 .cm-md-table tr:hover td {
   background: var(--highlight);
 }
+
+/* Hover block menu — gutter */
+.cm-hover-gutter {
+  width: 24px;
+  cursor: default;
+}
+
+.cm-hover-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-subtle);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.cm-hover-menu-btn:hover {
+  background: var(--highlight);
+  color: var(--text-normal);
+}
+
+/* Show the button when hovering the gutter element */
+.cm-gutterElement:hover .cm-hover-menu-btn {
+  display: flex;
+}
+
+/* Floating popup */
+.cm-hover-menu-popup {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+}
+
+.cm-hover-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  gap: 12px;
+}
+
+.cm-hover-menu-item:hover {
+  background: var(--highlight);
+}
+
+.cm-hover-menu-item-label {
+  font-size: 0.875rem;
+  color: var(--text-normal);
+  font-family: var(--font-ui);
+}
+
+.cm-hover-menu-item-detail {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  font-family: var(--font-code);
+  flex-shrink: 0;
+}
