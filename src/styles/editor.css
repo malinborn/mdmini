@@ -64,3 +64,65 @@
   padding-left: 1em;
   color: var(--text-subtle);
 }
+
+/* Horizontal Rule */
+.cm-md-hr {
+  border: none;
+  border-top: 2px solid var(--color-hr);
+  margin: 1em 0;
+}
+
+/* Code blocks */
+.cm-md-code-fence-hidden {
+  font-size: 0;
+  line-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.cm-md-code-line {
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  background: var(--color-code-bg);
+  padding-left: 1em;
+}
+
+.cm-md-code-block-start {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 0.5em;
+}
+
+.cm-md-code-block-end {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding-bottom: 0.5em;
+}
+
+/* Tables */
+.cm-md-table-wrapper {
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.cm-md-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95em;
+}
+
+.cm-md-table th,
+.cm-md-table td {
+  border: 1px solid var(--color-table-border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.cm-md-table th {
+  background: var(--color-table-header-bg);
+  font-weight: 600;
+}
+
+.cm-md-table tr:hover td {
+  background: var(--highlight);
+}

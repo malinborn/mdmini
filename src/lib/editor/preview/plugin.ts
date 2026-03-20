@@ -16,6 +16,8 @@ import {
   decorateLink,
 } from './inline';
 import { decorateListItem, decorateBlockquote } from './lists';
+import { decorateHorizontalRule, decorateFencedCode } from './blocks';
+import { decorateTable } from './tables';
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -51,6 +53,15 @@ function buildDecorations(view: EditorView): DecorationSet {
           break;
         case 'Blockquote':
           decorateBlockquote(view, node.node, builder);
+          break;
+        case 'HorizontalRule':
+          decorateHorizontalRule(view, node.node, builder);
+          break;
+        case 'FencedCode':
+          decorateFencedCode(view, node.node, builder);
+          break;
+        case 'Table':
+          decorateTable(view, node.node, builder);
           break;
       }
     },
