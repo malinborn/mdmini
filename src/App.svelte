@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
-  import { createThemeStore, createModeStore, createZoomStore, createFileState } from './lib/stores';
+  import { createThemeStore, createModeStore, createZoomStore, createFileState, createRecentFilesStore } from './lib/stores';
   import { readFile, writeFile, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
+  import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -15,6 +16,9 @@
   const mode = createModeStore();
   const zoom = createZoomStore();
   const fileState = createFileState();
+  const recentFiles = createRecentFilesStore();
+
+  let showRecentFiles = $state(false);
 
   let editorHandle: EditorHandle | undefined = $state(undefined);
 
@@ -76,6 +80,7 @@
     if (!path) return;
     fileState.filePath = path;
     await performSave();
+    recentFiles.add(path);
   }
 
   async function handleOpen(): Promise<void> {
@@ -86,6 +91,7 @@
       fileState.filePath = path;
       fileState.isDirty = false;
       editorHandle?.replaceContent(content);
+      recentFiles.add(path);
     } catch (err) {
       console.error('Open failed:', err);
     }
@@ -116,6 +122,7 @@
       fileState.filePath = path;
       fileState.isDirty = false;
       editorHandle?.replaceContent(content);
+      recentFiles.add(path);
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -214,6 +221,9 @@
         case 'theme_system':
           theme.preference = 'system';
           break;
+        case 'recent_files':
+          showRecentFiles = true;
+          break;
       }
     });
 
@@ -224,6 +234,21 @@
     const unlistenExternalChange = onFileChangedExternally((path) => {
       handleExternalChange(path);
     });
+
+    // Drag & drop: open .md/.markdown/.txt files dropped onto the window
+    const unlistenDragDrop = import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
+      getCurrentWebview().onDragDropEvent(async (event) => {
+        if (event.payload.type !== 'drop') return;
+        const paths = event.payload.paths as string[];
+        for (const path of paths) {
+          if (path.endsWith('.md') || path.endsWith('.markdown') || path.endsWith('.txt')) {
+            await invoke('open_file_window_cmd', { path }).catch((err: unknown) => {
+              console.error('Failed to open dropped file:', err);
+            });
+          }
+        }
+      })
+    );
 
     // Intercept window close to prompt for unsaved changes
     let unlistenClose: (() => void) | null = null;
@@ -257,6 +282,7 @@
       unlistenMenu.then((fn) => fn());
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
+      unlistenDragDrop.then((fn) => fn());
       if (unlistenClose) unlistenClose();
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
@@ -276,6 +302,14 @@
 <main style="font-size: {zoom.level}rem;">
   <Editor bind:handle={editorHandle} onchange={handleChange} />
 </main>
+
+{#if showRecentFiles}
+  <RecentFilesPanel
+    files={recentFiles.list}
+    onopen={handleOpenFilePath}
+    onclose={() => { showRecentFiles = false; }}
+  />
+{/if}
 
 <style>
   main {

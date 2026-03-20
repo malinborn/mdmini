@@ -13,7 +13,8 @@ export type MenuAction =
   | 'zoom_reset'
   | 'theme_light'
   | 'theme_dark'
-  | 'theme_system';
+  | 'theme_system'
+  | 'recent_files';
 
 export function onMenuEvent(handler: (action: MenuAction) => void): Promise<() => void> {
   return listen<string>('menu-event', (event) => {
