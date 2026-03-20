@@ -15,6 +15,7 @@ import {
   decorateInlineCode,
   decorateLink,
 } from './inline';
+import { decorateListItem, decorateBlockquote } from './lists';
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -44,6 +45,12 @@ function buildDecorations(view: EditorView): DecorationSet {
           break;
         case 'Link':
           decorateLink(view, node.node, builder);
+          break;
+        case 'ListItem':
+          decorateListItem(view, node.node, builder);
+          break;
+        case 'Blockquote':
+          decorateBlockquote(view, node.node, builder);
           break;
       }
     },

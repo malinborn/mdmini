@@ -24,3 +24,43 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* Lists */
+.cm-md-bullet {
+  color: var(--color-list-marker);
+  font-size: 1.2em;
+  margin-right: 0.3em;
+}
+
+.cm-md-checkbox {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-checkbox);
+  border-radius: 3px;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  cursor: pointer;
+  position: relative;
+}
+
+.cm-md-checkbox:checked {
+  background: var(--color-checkbox);
+}
+
+.cm-md-checkbox:checked::after {
+  content: '✓';
+  position: absolute;
+  top: -2px;
+  left: 2px;
+  color: var(--bg-base);
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Blockquotes */
+.cm-md-blockquote {
+  border-left: 3px solid var(--color-blockquote-border);
+  padding-left: 1em;
+  color: var(--text-subtle);
+}
