@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Vite
+vite.config.ts.timestamp-*
+
+# Editor
+.idea/
+.vscode/settings.json
+
+# Superpowers (brainstorm server temp files)
+.superpowers/brainstorm/

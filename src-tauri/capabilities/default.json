@@ -1,0 +1,17 @@
+{
+  "identifier": "default",
+  "description": "Default capability for md-mini",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-create",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-title",
+    "core:window:allow-center",
+    "cli:default",
+    "fs:default",
+    "fs:allow-read",
+    "fs:allow-write"
+  ]
+}
