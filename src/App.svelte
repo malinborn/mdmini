@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createFileState } from './lib/stores';
   import { readFile, writeFile, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
+  import { onMenuEvent } from './lib/tauri/events';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -56,20 +58,74 @@
     }
   }
 
-  function handleKeydown(e: KeyboardEvent): void {
-    if (!e.metaKey) return;
-    if (e.key === 's') {
-      e.preventDefault();
-      if (e.shiftKey) {
-        handleSaveAs();
-      } else {
-        handleSave();
-      }
-    } else if (e.key === 'o') {
-      e.preventDefault();
-      handleOpen();
-    }
+  function handleNew(): void {
+    fileState.filePath = null;
+    fileState.isDirty = false;
+    editorHandle?.replaceContent('');
   }
+
+  async function handleClose(): Promise<void> {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().close();
+  }
+
+  function handleFind(): void {
+    const view = editorHandle?.view;
+    if (!view) return;
+    import('@codemirror/search').then(({ openSearchPanel }) => {
+      openSearchPanel(view);
+    });
+  }
+
+  onMount(() => {
+    const unlisten = onMenuEvent((action) => {
+      switch (action) {
+        case 'new':
+          handleNew();
+          break;
+        case 'open':
+          handleOpen();
+          break;
+        case 'save':
+          handleSave();
+          break;
+        case 'save_as':
+          handleSaveAs();
+          break;
+        case 'close':
+          handleClose();
+          break;
+        case 'find':
+          handleFind();
+          break;
+        case 'toggle_mode':
+          mode.toggle();
+          break;
+        case 'zoom_in':
+          zoom.zoomIn();
+          break;
+        case 'zoom_out':
+          zoom.zoomOut();
+          break;
+        case 'zoom_reset':
+          zoom.reset();
+          break;
+        case 'theme_light':
+          theme.preference = 'light';
+          break;
+        case 'theme_dark':
+          theme.preference = 'dark';
+          break;
+        case 'theme_system':
+          theme.preference = 'system';
+          break;
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  });
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme.resolved);
@@ -79,8 +135,6 @@
     document.title = fileState.title;
   });
 </script>
-
-<svelte:window onkeydown={handleKeydown} />
 
 <main style="font-size: {zoom.level}rem;">
   <Editor bind:handle={editorHandle} onchange={handleChange} />
