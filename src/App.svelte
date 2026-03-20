@@ -4,7 +4,8 @@
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createFileState } from './lib/stores';
   import { readFile, writeFile, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
-  import { onMenuEvent } from './lib/tauri/events';
+  import { onMenuEvent, onOpenFile } from './lib/tauri/events';
+  import { invoke } from '@tauri-apps/api/core';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -60,9 +61,10 @@
   }
 
   function handleNew(): void {
-    fileState.filePath = null;
-    fileState.isDirty = false;
-    editorHandle?.replaceContent('');
+    // Open a new window via Tauri backend
+    invoke('open_file_window_cmd', { path: null }).catch((err: unknown) => {
+      console.error('Failed to open new window:', err);
+    });
   }
 
   async function handleClose(): Promise<void> {
@@ -78,8 +80,19 @@
     });
   }
 
+  async function handleOpenFilePath(path: string): Promise<void> {
+    try {
+      const content = await readFile(path);
+      fileState.filePath = path;
+      fileState.isDirty = false;
+      editorHandle?.replaceContent(content);
+    } catch (err) {
+      console.error('Failed to open file:', err);
+    }
+  }
+
   onMount(() => {
-    const unlisten = onMenuEvent((action) => {
+    const unlistenMenu = onMenuEvent((action) => {
       switch (action) {
         case 'new':
           handleNew();
@@ -123,8 +136,13 @@
       }
     });
 
+    const unlistenOpenFile = onOpenFile((path) => {
+      handleOpenFilePath(path);
+    });
+
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenMenu.then((fn) => fn());
+      unlistenOpenFile.then((fn) => fn());
     };
   });
 

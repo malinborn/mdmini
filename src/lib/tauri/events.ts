@@ -20,3 +20,9 @@ export function onMenuEvent(handler: (action: MenuAction) => void): Promise<() =
     handler(event.payload as MenuAction);
   });
 }
+
+export function onOpenFile(handler: (path: string) => void): Promise<() => void> {
+  return listen<string>('open-file', (event) => {
+    handler(event.payload);
+  });
+}
