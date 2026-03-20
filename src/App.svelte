@@ -7,6 +7,8 @@
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
+  import { previewCompartment } from './lib/editor/setup';
+  import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -296,6 +298,18 @@
 
   $effect(() => {
     document.title = fileState.title;
+  });
+
+  // Reconfigure live-preview compartment when mode toggles
+  $effect(() => {
+    const m = mode.value;
+    const v = editorHandle?.view;
+    if (!v) return;
+    v.dispatch({
+      effects: previewCompartment.reconfigure(
+        m === 'live-preview' ? livePreviewPlugin : []
+      ),
+    });
   });
 </script>
 

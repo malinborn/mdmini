@@ -23,3 +23,6 @@ vite.config.ts.timestamp-*
 
 # Superpowers (brainstorm server temp files)
 .superpowers/brainstorm/
+
+# Claude
+.claude/
