@@ -8,10 +8,12 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { Strikethrough, Table } from '@lezer/markdown';
 import { editorTheme } from '../theme/editor-theme';
+import { markdownKeybindings } from './keybindings';
 
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
+    markdownKeybindings(),
     history(),
     closeBrackets(),
     markdown({
