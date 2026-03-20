@@ -1,19 +1,26 @@
 <script lang="ts">
-  let message = $state('md-mini');
+  import Editor from './lib/editor/Editor.svelte';
+
+  let content = $state('# Hello md-mini\n\nStart writing...\n\n- Item one\n- Item two\n\n```js\nconsole.log("hello");\n```\n');
+
+  function handleChange(doc: string) {
+    content = doc;
+  }
 </script>
 
 <main>
-  <h1>{message}</h1>
+  <Editor content={content} onchange={handleChange} />
 </main>
 
 <style>
+  :global(body) {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
   main {
     height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: -apple-system, system-ui, sans-serif;
-    color: #e0def4;
-    background: #191724;
+    width: 100vw;
   }
 </style>
