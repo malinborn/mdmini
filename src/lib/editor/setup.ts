@@ -9,10 +9,12 @@ import { EditorView } from '@codemirror/view';
 import { Strikethrough, Table } from '@lezer/markdown';
 import { editorTheme } from '../theme/editor-theme';
 import { markdownKeybindings } from './keybindings';
+import { listContinuation } from './autocomplete';
 
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
+    listContinuation(),
     markdownKeybindings(),
     history(),
     closeBrackets(),
