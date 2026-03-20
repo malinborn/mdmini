@@ -26,3 +26,9 @@ export function onOpenFile(handler: (path: string) => void): Promise<() => void>
     handler(event.payload);
   });
 }
+
+export function onFileChangedExternally(handler: (path: string) => void): Promise<() => void> {
+  return listen<string>('file-changed-externally', (event) => {
+    handler(event.payload);
+  });
+}

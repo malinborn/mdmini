@@ -26,3 +26,4 @@ tauri-plugin-single-instance = "2.4.0"
 tauri-plugin-fs = "2.4.5"
 notify = { version = "8.2.0", features = ["macos_fsevent"] }
 tauri-plugin-dialog = "2.6.0"
+dirs = "6.0.0"

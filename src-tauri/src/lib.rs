@@ -1,5 +1,8 @@
 mod commands;
 mod menu;
+mod recovery;
+#[allow(dead_code)]
+mod watcher;
 mod window;
 
 use tauri::{Emitter, Manager};
@@ -36,6 +39,9 @@ pub fn run() {
             commands::write_file,
             commands::file_exists,
             window::open_file_window_cmd,
+            recovery::save_recovery,
+            recovery::delete_recovery,
+            recovery::check_recovery,
         ])
         .setup(|app| {
             let menu = menu::build_menu(app.handle())?;
