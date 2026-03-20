@@ -7,9 +7,11 @@ import { searchKeymap } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { Strikethrough, Table } from '@lezer/markdown';
+import { editorTheme } from '../theme/editor-theme';
 
 export function createExtensions(): Extension[] {
   return [
+    editorTheme,
     history(),
     closeBrackets(),
     markdown({
