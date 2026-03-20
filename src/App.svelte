@@ -8,6 +8,7 @@
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
+  import './styles/editor.css';
 
   const theme = createThemeStore();
   const mode = createModeStore();

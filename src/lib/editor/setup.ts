@@ -4,12 +4,15 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { searchKeymap } from '@codemirror/search';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { Strikethrough, Table } from '@lezer/markdown';
 import { editorTheme } from '../theme/editor-theme';
 import { markdownKeybindings } from './keybindings';
 import { listContinuation } from './autocomplete';
+import { livePreviewPlugin } from './preview/plugin';
+
+export const previewCompartment = new Compartment();
 
 export function createExtensions(): Extension[] {
   return [
@@ -29,6 +32,7 @@ export function createExtensions(): Extension[] {
       ...closeBracketsKeymap,
       ...searchKeymap,
     ]),
+    previewCompartment.of(livePreviewPlugin),
     EditorView.lineWrapping,
     EditorState.allowMultipleSelections.of(false),
   ];
