@@ -4,17 +4,41 @@
   import { EditorState } from '@codemirror/state';
   import { createExtensions } from './setup';
 
-  let { content = '', onchange }: {
-    content?: string;
+  export interface EditorHandle {
+    view: EditorView | undefined;
+    replaceContent: (newContent: string) => void;
+  }
+
+  let { onchange, handle = $bindable() }: {
     onchange?: (doc: string) => void;
+    handle?: EditorHandle;
   } = $props();
 
   let editorContainer: HTMLDivElement;
   let view: EditorView | undefined = $state(undefined);
 
+  $effect(() => {
+    handle = {
+      get view() {
+        return view;
+      },
+      replaceContent(newContent: string) {
+        if (!view) return;
+        view.dispatch({
+          changes: {
+            from: 0,
+            to: view.state.doc.length,
+            insert: newContent,
+          },
+        });
+        view.focus();
+      },
+    };
+  });
+
   onMount(() => {
     const state = EditorState.create({
-      doc: content,
+      doc: '',
       extensions: [
         ...createExtensions(),
         EditorView.updateListener.of((update) => {
