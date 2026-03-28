@@ -24,7 +24,7 @@ const blockCommands: BlockCommand[] = [
   {
     label: 'Table',
     detail: 'table',
-    insert: '| Column 1 | Column 2 |\n|----------|----------|\n|          |          |\n',
+    insert: '| Column 1 | Column 2 |\n|----------|----------|\n| -        | -        |\n',
   },
   { label: 'Blockquote', detail: 'quote', insert: '> ' },
   { label: 'Horizontal rule', detail: 'hr', insert: '---\n' },

@@ -23,7 +23,7 @@ const commands: SlashCommand[] = [
   {
     label: '/table',
     detail: 'Table',
-    insert: '| Column 1 | Column 2 |\n|----------|----------|\n|          |          |\n',
+    insert: '| Column 1 | Column 2 |\n|----------|----------|\n| -        | -        |\n',
   },
   { label: '/quote', detail: 'Blockquote', insert: '> ' },
   { label: '/hr', detail: 'Horizontal rule', insert: '---\n' },
