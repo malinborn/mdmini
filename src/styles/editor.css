@@ -108,7 +108,9 @@
 }
 
 /* Tables — line decorations */
+/* Gutter width = del circle (16px) + gap (2px) + drag (26px) + gap (4px) = 48px */
 .cm-md-table-line {
+  --table-row-gutter: 48px;
   font-family: var(--font-code);
   font-size: 0.9em;
   background: var(--color-code-bg);
@@ -118,9 +120,13 @@
 
 .cm-md-table-header {
   font-weight: 600;
-  background: var(--color-table-header-bg);
+  background: linear-gradient(135deg, #302848 0%, #24203a 40%, #1f1d2e 70%, #282248 100%);
   border-bottom: 2px solid var(--color-table-border);
   border-radius: 4px 4px 0 0;
+}
+
+:root[data-theme='light'] .cm-md-table-header {
+  background: linear-gradient(135deg, #e8e0f6 0%, #ede8f4 40%, #f5f3f8 70%, #e4ecf8 100%);
 }
 
 .cm-md-table-line:not(.cm-md-table-header):not(.cm-md-table-delimiter) + .cm-line:not(.cm-md-table-line),
@@ -147,6 +153,10 @@
   position: relative;
 }
 
+.cm-md-table-row-wrap-header {
+  padding-left: var(--table-row-gutter);
+}
+
 .cm-md-table-row {
   display: inline-flex;
   align-items: center;
@@ -161,6 +171,11 @@
 
 .cm-md-table-cell-header {
   font-weight: 600;
+  color: var(--color-heading);
+}
+
+:root[data-theme='light'] .cm-md-table-cell-header {
+  color: #44403c;
 }
 
 .cm-md-table-sep {
@@ -177,51 +192,175 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
-  color: var(--color-text);
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
 
-.cm-md-table-btn:hover {
-  background: var(--color-accent);
-  color: var(--color-bg);
+/* Delete button (−) — muted rose */
+.cm-md-table-row-wrap:hover .cm-md-table-btn-del,
+.cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-del {
+  color: #c4657a;
+  opacity: 0.5;
+}
+
+.cm-md-table-btn-del:hover {
+  background: #3b1f25 !important;
+  color: #d1748a !important;
+  opacity: 1 !important;
+}
+
+/* Add button (+) — muted teal */
+.cm-md-table-row-wrap:hover .cm-md-table-btn-add,
+.cm-md-table-header:hover .cm-md-table-btn-add-col {
+  color: #56a89e;
+  opacity: 0.5;
+}
+
+.cm-md-table-btn-add:hover {
+  background: #1a3533 !important;
+  color: #6bbfb5 !important;
+  opacity: 1 !important;
+}
+
+/* Drag handle (⠿) — neutral */
+.cm-md-table-row-wrap:hover .cm-md-table-btn-drag-row,
+.cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-drag {
+  color: #6e6a86;
+  opacity: 0.5;
+  cursor: grab;
+}
+
+.cm-md-table-btn-drag:hover {
+  background: #3d3a55 !important;
+  color: #908caa !important;
+  opacity: 1 !important;
+  cursor: grab;
+}
+
+.cm-md-table-btn-drag:active,
+.cm-md-table-btn-drag-row.cm-md-table-dragging,
+.cm-md-table-btn-drag-col.cm-md-table-dragging {
+  cursor: grabbing !important;
+}
+
+/* Light theme button overrides */
+:root[data-theme='light'] .cm-md-table-btn-del:hover {
+  background: #fce8ec !important;
+  color: #c0415a !important;
+}
+
+:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-del,
+:root[data-theme='light'] .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-del {
+  color: #c0415a;
+}
+
+:root[data-theme='light'] .cm-md-table-btn-add:hover {
+  background: #d4f5f0 !important;
+  color: #1a7a70 !important;
+}
+
+:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-add,
+:root[data-theme='light'] .cm-md-table-header:hover .cm-md-table-btn-add-col {
+  color: #1a7a70;
+}
+
+:root[data-theme='light'] .cm-md-table-btn-drag:hover {
+  background: #e8e6f0 !important;
+  color: #5c5882 !important;
+}
+
+:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-drag-row,
+:root[data-theme='light'] .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-drag {
+  color: #a8a4c0;
+}
+
+/* Dragging source highlight */
+.cm-md-table-dragging {
+  opacity: 0.5;
 }
 
 /* Show row delete on row hover */
-.cm-md-table-btn-del-row {
-  margin-left: 6px;
+.cm-md-table-btn-del-row,
+.cm-md-table-btn-add-row {
+  margin-left: 4px;
+  flex-shrink: 0;
+  width: 30px;
+  border-radius: 11px;
+}
+
+/* Left-side delete button — small circle, before drag handle */
+.cm-md-table-btn-del-row-left {
+  width: 16px;
+  height: 16px;
+  font-size: 12px;
+  border-radius: 50%;
+  margin-right: 2px;
   flex-shrink: 0;
 }
 
-.cm-md-table-row-wrap:hover .cm-md-table-btn-del-row {
+/* Floating "+" button below last row, aligned under drag handle */
+.cm-md-table-add-row-bottom {
+  position: absolute;
+  bottom: -28px;
+  left: 18px;
+  z-index: 10;
+}
+
+.cm-md-table-row-wrap:hover .cm-md-table-add-row-bottom .cm-md-table-btn {
   opacity: 0.5;
 }
 
-.cm-md-table-row-wrap:hover .cm-md-table-btn-del-row:hover {
-  opacity: 1;
+.cm-md-table-add-row-bottom .cm-md-table-btn:hover {
+  opacity: 1 !important;
 }
 
-/* Show column delete on header cell hover */
+.cm-md-table-add-row-bottom .cm-md-table-btn {
+  width: 30px;
+  border-radius: 11px;
+}
+
+/* Show column controls above header cell — only the hovered cell */
+.cm-md-table-cell-has-ctrl {
+  /* Extend hover zone upward so mouse can reach the controls */
+  padding-top: 24px;
+  margin-top: -24px;
+}
+
 .cm-md-table-col-ctrl {
   position: absolute;
-  top: -16px;
+  top: -8px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 2px;
+  gap: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s 0s;
 }
 
-.cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn {
-  opacity: 0.5;
+.cm-md-table-cell-has-ctrl:hover > .cm-md-table-col-ctrl {
+  pointer-events: auto;
+  opacity: 1;
+  transition-delay: 0s;
 }
 
-.cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn:hover {
+/* Keep controls visible briefly when mouse moves between cell and controls */
+.cm-md-table-col-ctrl:hover {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.cm-md-table-col-ctrl .cm-md-table-btn {
+  opacity: 0.7;
+}
+
+.cm-md-table-col-ctrl .cm-md-table-btn:hover {
   opacity: 1;
 }
 
@@ -251,6 +390,41 @@
 
 .cm-md-table-row-wrap:hover .cm-md-table-btn-add-row:hover {
   opacity: 1;
+}
+
+/* Drag handle button */
+.cm-md-table-btn-drag {
+  font-family: system-ui;
+  font-size: 16px;
+  border-radius: 3px;
+  width: 26px;
+  height: 26px;
+}
+
+.cm-md-table-btn-drag-row {
+  width: 26px;
+  min-width: 26px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+/* Drop indicator line */
+.cm-md-table-drop-indicator {
+  position: fixed;
+  background: #c4a7e7;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 2px;
+  /* Row indicator: horizontal bar */
+  height: 2px;
+  width: 100%;
+  left: 0;
+}
+
+.cm-md-table-drop-indicator-col {
+  /* Column indicator: vertical bar */
+  height: auto;
+  width: 2px;
 }
 
 .cm-md-table-editor {

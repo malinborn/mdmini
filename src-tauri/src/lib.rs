@@ -77,6 +77,18 @@ pub fn run() {
                     return;
                 }
 
+                // Handle theme switching — update check marks (radio behavior)
+                if id.starts_with("theme_") {
+                    let theme_ids = ["theme_light", "theme_dark", "theme_system"];
+                    for tid in &theme_ids {
+                        if let Some(item) = _app.menu().and_then(|m| m.get(*tid)) {
+                            if let Some(check) = item.as_check_menuitem() {
+                                let _ = check.set_checked(*tid == id.as_str());
+                            }
+                        }
+                    }
+                }
+
                 // Broadcast all other menu events to all windows
                 for (_label, win) in _app.webview_windows() {
                     let _ = win.emit("menu-event", &id);

@@ -108,6 +108,289 @@ function deleteColumn(view: EditorView, ctx: TableContext, colIndex: number): vo
   replaceTable(view, ctx, grid);
 }
 
+// --- Drag and drop helpers ---
+
+interface DragState {
+  active: boolean;
+  type: 'row' | 'col';
+  sourceIndex: number;
+  targetIndex: number;
+  indicator: HTMLElement | null;
+}
+
+const drag: DragState = {
+  active: false,
+  type: 'row',
+  sourceIndex: -1,
+  targetIndex: -1,
+  indicator: null,
+};
+
+function createDropIndicator(vertical: boolean): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'cm-md-table-drop-indicator';
+  if (vertical) el.classList.add('cm-md-table-drop-indicator-col');
+  document.body.appendChild(el);
+  return el;
+}
+
+function removeDropIndicator(): void {
+  drag.indicator?.remove();
+  drag.indicator = null;
+}
+
+function getRowWraps(tableWrapper: HTMLElement | null): HTMLElement[] {
+  if (!tableWrapper) return [];
+  const cmLine = tableWrapper.closest('.cm-line') as HTMLElement | null;
+  if (!cmLine) return [];
+
+  // Walk BACKWARD to find the first table line (header)
+  let firstLine: HTMLElement = cmLine;
+  let prev = cmLine.previousElementSibling as HTMLElement | null;
+  while (prev && prev.classList.contains('cm-md-table-line')) {
+    firstLine = prev;
+    prev = prev.previousElementSibling as HTMLElement | null;
+  }
+
+  // Walk FORWARD from the first line, collecting all data row wraps
+  const wraps: HTMLElement[] = [];
+  let el: HTMLElement | null = firstLine;
+  while (el) {
+    if (el.classList.contains('cm-line') && el.classList.contains('cm-md-table-line') &&
+        !el.classList.contains('cm-md-table-header') &&
+        !el.classList.contains('cm-md-table-delimiter')) {
+      const wrap = el.querySelector('.cm-md-table-row-wrap') as HTMLElement | null;
+      if (wrap) wraps.push(wrap);
+    } else if (!el.classList.contains('cm-md-table-line')) {
+      break; // left the table
+    }
+    el = el.nextElementSibling as HTMLElement | null;
+  }
+  return wraps;
+}
+
+function getHeaderCells(anyTableEl: HTMLElement | null): HTMLElement[] {
+  if (!anyTableEl) return [];
+  const cmLine = anyTableEl.closest('.cm-line') as HTMLElement | null;
+  if (!cmLine) return [];
+
+  // Check current line first, then walk backward
+  let el: HTMLElement | null = cmLine;
+  while (el) {
+    if (el.classList.contains('cm-md-table-header')) {
+      return Array.from(el.querySelectorAll('.cm-md-table-cell')) as HTMLElement[];
+    }
+    el = el.previousElementSibling as HTMLElement | null;
+  }
+  return [];
+}
+
+function startRowDrag(
+  e: MouseEvent,
+  view: EditorView,
+  ctx: TableContext,
+  dataRowIndex: number,
+  wrapEl: HTMLElement
+): void {
+  e.preventDefault();
+  e.stopPropagation();
+
+  drag.active = true;
+  drag.type = 'row';
+  drag.sourceIndex = dataRowIndex;
+  drag.targetIndex = dataRowIndex;
+
+  wrapEl.classList.add('cm-md-table-dragging');
+
+  const onMove = (ev: MouseEvent): void => {
+    if (!drag.active) return;
+
+    const wraps = getRowWraps(wrapEl);
+    if (wraps.length === 0) return;
+
+    let insertBefore = wraps.length; // default: after last
+    let bestY = Infinity;
+
+    for (let i = 0; i < wraps.length; i++) {
+      const rect = wraps[i].getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const distToTop = Math.abs(ev.clientY - rect.top);
+      if (ev.clientY < midY && distToTop < bestY) {
+        insertBefore = i;
+        bestY = distToTop;
+      }
+    }
+
+    // targetIndex is the data row index we want to insert before
+    drag.targetIndex = insertBefore;
+
+    // Position indicator
+    if (!drag.indicator) {
+      drag.indicator = createDropIndicator(false);
+    }
+
+    const containerRect = wraps[0].closest('.cm-content')?.getBoundingClientRect();
+    if (containerRect) {
+      if (insertBefore < wraps.length) {
+        const targetRect = wraps[insertBefore].getBoundingClientRect();
+        drag.indicator.style.top = `${targetRect.top}px`;
+        drag.indicator.style.left = `${containerRect.left}px`;
+        drag.indicator.style.width = `${containerRect.width}px`;
+      } else {
+        const lastRect = wraps[wraps.length - 1].getBoundingClientRect();
+        drag.indicator.style.top = `${lastRect.bottom}px`;
+        drag.indicator.style.left = `${containerRect.left}px`;
+        drag.indicator.style.width = `${containerRect.width}px`;
+      }
+    }
+  };
+
+  const onUp = (): void => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('keydown', onEscape);
+
+    wrapEl.classList.remove('cm-md-table-dragging');
+    removeDropIndicator();
+
+    if (!drag.active) return;
+    drag.active = false;
+
+    const src = drag.sourceIndex; // 0-based data row index
+    const tgt = drag.targetIndex; // insert-before index among data rows
+
+    // No-op if same position or adjacent (moving to its own slot)
+    if (tgt === src || tgt === src + 1) return;
+
+    const grid = tableToGrid(ctx);
+    // grid[0] = header, grid[1..] = data rows
+    const dataRows = grid.slice(1);
+    if (src < 0 || src >= dataRows.length) return;
+
+    const [moved] = dataRows.splice(src, 1);
+    const insertAt = tgt > src ? tgt - 1 : tgt;
+    dataRows.splice(insertAt, 0, moved);
+
+    replaceTable(view, ctx, [grid[0], ...dataRows]);
+  };
+
+  const onEscape = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape') {
+      drag.active = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onEscape);
+      wrapEl.classList.remove('cm-md-table-dragging');
+      removeDropIndicator();
+    }
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('keydown', onEscape);
+}
+
+function startColDrag(
+  e: MouseEvent,
+  view: EditorView,
+  ctx: TableContext,
+  colIndex: number,
+  headerCellEl: HTMLElement
+): void {
+  e.preventDefault();
+  e.stopPropagation();
+
+  drag.active = true;
+  drag.type = 'col';
+  drag.sourceIndex = colIndex;
+  drag.targetIndex = colIndex;
+
+  headerCellEl.classList.add('cm-md-table-dragging');
+
+  const onMove = (ev: MouseEvent): void => {
+    if (!drag.active) return;
+
+    const cells = getHeaderCells(headerCellEl.closest('.cm-md-table-row-wrap') as HTMLElement | null);
+    if (cells.length === 0) return;
+
+    let insertBefore = cells.length;
+    let bestX = Infinity;
+
+    for (let i = 0; i < cells.length; i++) {
+      const rect = cells[i].getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      const distToLeft = Math.abs(ev.clientX - rect.left);
+      if (ev.clientX < midX && distToLeft < bestX) {
+        insertBefore = i;
+        bestX = distToLeft;
+      }
+    }
+
+    drag.targetIndex = insertBefore;
+
+    if (!drag.indicator) {
+      drag.indicator = createDropIndicator(true);
+    }
+
+    if (insertBefore < cells.length) {
+      const targetRect = cells[insertBefore].getBoundingClientRect();
+      const headerRect = cells[0].closest('.cm-line')?.getBoundingClientRect();
+      drag.indicator.style.left = `${targetRect.left}px`;
+      drag.indicator.style.top = headerRect ? `${headerRect.top}px` : `${targetRect.top}px`;
+      drag.indicator.style.height = headerRect ? `${headerRect.height}px` : `${targetRect.height}px`;
+    } else {
+      const lastRect = cells[cells.length - 1].getBoundingClientRect();
+      const headerRect = cells[0].closest('.cm-line')?.getBoundingClientRect();
+      drag.indicator.style.left = `${lastRect.right}px`;
+      drag.indicator.style.top = headerRect ? `${headerRect.top}px` : `${lastRect.top}px`;
+      drag.indicator.style.height = headerRect ? `${headerRect.height}px` : `${lastRect.height}px`;
+    }
+  };
+
+  const onUp = (): void => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('keydown', onEscape);
+
+    headerCellEl.classList.remove('cm-md-table-dragging');
+    removeDropIndicator();
+
+    if (!drag.active) return;
+    drag.active = false;
+
+    const src = drag.sourceIndex;
+    const tgt = drag.targetIndex;
+
+    if (tgt === src || tgt === src + 1) return;
+
+    const grid = tableToGrid(ctx);
+    const newGrid = grid.map(row => {
+      const cols = [...row];
+      const [moved] = cols.splice(src, 1);
+      const insertAt = tgt > src ? tgt - 1 : tgt;
+      cols.splice(insertAt, 0, moved);
+      return cols;
+    });
+
+    replaceTable(view, ctx, newGrid);
+  };
+
+  const onEscape = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape') {
+      drag.active = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onEscape);
+      headerCellEl.classList.remove('cm-md-table-dragging');
+      removeDropIndicator();
+    }
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('keydown', onEscape);
+}
+
 // --- Widgets ---
 
 class TableRowWidget extends WidgetType {
@@ -125,6 +408,29 @@ class TableRowWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement('span');
     wrapper.className = 'cm-md-table-row-wrap';
+
+    // Row controls (data rows) or header spacer
+    if (!this.isHeader) {
+      const dataCount = this.ctx.rows.filter(r => !r.isDelimiter && !r.isHeader).length;
+
+      // Small circle delete button (leftmost, harder to accidentally click)
+      if (dataCount > 1) {
+        const delLeft = mkBtn('−', 'cm-md-table-btn-del cm-md-table-btn-del-row-left', () =>
+          deleteRow(view, this.ctx, this.dataRowIndex)
+        );
+        wrapper.appendChild(delLeft);
+      }
+
+      // Drag handle (after delete)
+      const dragHandle = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-row', () => {});
+      dragHandle.addEventListener('mousedown', (e) => {
+        startRowDrag(e, view, this.ctx, this.dataRowIndex, wrapper);
+      });
+      wrapper.appendChild(dragHandle);
+    } else {
+      // Header gets left padding via CSS --table-row-gutter to match data row controls
+      wrapper.classList.add('cm-md-table-row-wrap-header');
+    }
 
     const row = document.createElement('span');
     row.className = 'cm-md-table-row';
@@ -150,12 +456,24 @@ class TableRowWidget extends WidgetType {
         showCellEditor(view, cellEl, cellInfo);
       });
 
-      // Column delete on header cells
-      if (this.isHeader && this.ctx.colCount > 1) {
+      // Column controls on header cells
+      if (this.isHeader) {
         const ctrl = document.createElement('span');
         ctrl.className = 'cm-md-table-col-ctrl';
-        const del = mkBtn('−', 'cm-md-table-btn-del', () => deleteColumn(view, this.ctx, i));
-        ctrl.appendChild(del);
+
+        // Column drag handle — before delete
+        const colDrag = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-col', () => {});
+        const colIdx = i;
+        colDrag.addEventListener('mousedown', (e) => {
+          startColDrag(e, view, this.ctx, colIdx, cellEl);
+        });
+        ctrl.appendChild(colDrag);
+
+        if (this.ctx.colCount > 1) {
+          const del = mkBtn('−', 'cm-md-table-btn-del', () => deleteColumn(view, this.ctx, i));
+          ctrl.appendChild(del);
+        }
+
         cellEl.appendChild(ctrl);
         cellEl.classList.add('cm-md-table-cell-has-ctrl');
       }
@@ -182,10 +500,18 @@ class TableRowWidget extends WidgetType {
       }
     }
 
-    // "+" add row (below last data row)
+    // "+" add row (inline, right of delete button on last data row)
     if (this.isLastDataRow) {
       const add = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-row', () => addRow(view, this.ctx));
       wrapper.appendChild(add);
+
+      // Floating "+" button centered below the table
+      const bottomContainer = document.createElement('span');
+      bottomContainer.className = 'cm-md-table-add-row-bottom';
+      const addBottom = mkBtn('+', 'cm-md-table-btn-add', () => addRow(view, this.ctx));
+      bottomContainer.appendChild(addBottom);
+      wrapper.appendChild(bottomContainer);
+      wrapper.style.overflow = 'visible';
     }
 
     return wrapper;
