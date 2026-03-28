@@ -26,7 +26,7 @@ export function decorateHeading(
   // Line decoration FIRST (lower startSide)
   builder.add(line.from, line.from, Decoration.line({ class: cls }));
 
-  // Then hide "## " prefix via replace
+  // Then hide "## " prefix via replace (Decoration.line startSide=-200000000 < replace startSide=-1)
   const mark = node.getChild('HeaderMark');
   if (mark) {
     const hideEnd = Math.min(mark.to + 1, node.to);

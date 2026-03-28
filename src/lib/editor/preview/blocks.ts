@@ -1,20 +1,8 @@
-import { Decoration, WidgetType } from '@codemirror/view';
+import { Decoration } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { cursorInRange } from './utils';
-
-class HorizontalRuleWidget extends WidgetType {
-  toDOM(): HTMLElement {
-    const hr = document.createElement('hr');
-    hr.className = 'cm-md-hr';
-    return hr;
-  }
-
-  eq(): boolean {
-    return true;
-  }
-}
 
 export function decorateHorizontalRule(
   view: EditorView,
@@ -24,14 +12,8 @@ export function decorateHorizontalRule(
   if (cursorInRange(view, node.from, node.to, true)) return;
 
   const line = view.state.doc.lineAt(node.from);
-  builder.add(
-    line.from,
-    line.to,
-    Decoration.replace({
-      widget: new HorizontalRuleWidget(),
-      block: true,
-    })
-  );
+  builder.add(line.from, line.from, Decoration.line({ class: 'cm-md-hr' }));
+  builder.add(line.from, line.to, Decoration.replace({}));
 }
 
 export function decorateFencedCode(

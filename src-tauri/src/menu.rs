@@ -46,7 +46,11 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .cut()
         .copy()
         .paste()
-        .select_all()
+        .item(
+            &MenuItemBuilder::with_id("select_all", "Select All")
+                .accelerator("CmdOrCtrl+A")
+                .build(app)?,
+        )
         .separator()
         .item(
             &MenuItemBuilder::with_id("find", "Find...")

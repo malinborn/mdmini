@@ -7,11 +7,11 @@ mod window;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_cli::CliExt;
-use window::OpenFiles;
+use window::{OpenFiles, PendingFiles};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // argv[0] is the binary path — skip it
             let file_args: Vec<String> = argv.into_iter().skip(1).collect();
@@ -32,12 +32,21 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    let builder = builder
         .manage(OpenFiles::new())
+        .manage(PendingFiles::new())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
             commands::file_exists,
+            commands::get_pending_file,
             window::open_file_window_cmd,
             recovery::save_recovery,
             recovery::delete_recovery,
@@ -57,6 +66,17 @@ pub fn run() {
                     return;
                 }
 
+                // Handle "close" — close the focused window directly from Rust
+                if id == "close" {
+                    for (_label, win) in _app.webview_windows() {
+                        if win.is_focused().unwrap_or(false) {
+                            let _ = win.close();
+                            break;
+                        }
+                    }
+                    return;
+                }
+
                 // Broadcast all other menu events to all windows
                 for (_label, win) in _app.webview_windows() {
                     let _ = win.emit("menu-event", &id);
@@ -69,10 +89,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                let app = window.app_handle();
-                let label = window.label();
-                window::untrack_window(app, label);
+            match event {
+                tauri::WindowEvent::CloseRequested { .. } => {
+                    // Allow close — the frontend auto-saves, so no need to prompt
+                }
+                tauri::WindowEvent::Destroyed => {
+                    let app = window.app_handle();
+                    let label = window.label();
+                    window::untrack_window(app, label);
+                }
+                _ => {}
             }
         });
 
@@ -114,40 +140,28 @@ fn resolve_path(path: &str, cwd: Option<&str>) -> String {
 }
 
 /// Handle CLI file arguments on initial launch.
+/// The first file is loaded into the existing "main" window via PendingFiles;
+/// any additional files each get a new window (also via PendingFiles).
 fn handle_cli_args(app: &tauri::AppHandle) {
     if let Ok(matches) = app.cli().matches() {
         if let Some(files_arg) = matches.args.get("files") {
             if let serde_json::Value::Array(arr) = &files_arg.value {
+                let mut first = true;
                 for val in arr {
                     if let serde_json::Value::String(path) = val {
-                        if !path.is_empty() {
-                            let abs_path = resolve_path(path.as_str(), None);
-                            // Emit to the main window (created by tauri.conf.json)
-                            if let Some(main_window) = app.get_webview_window("main") {
-                                let file_path = abs_path.clone();
-                                std::thread::spawn(move || {
-                                    std::thread::sleep(std::time::Duration::from_millis(500));
-                                    let _ = main_window.emit("open-file", &file_path);
-                                });
-                            }
-                            // Only handle first file in main window; additional files get new windows
-                            // But since this is the initial launch, main window handles the first arg
-                            // and the rest get new windows
-                            let remaining: Vec<String> = arr
-                                .iter()
-                                .skip(1)
-                                .filter_map(|v| {
-                                    if let serde_json::Value::String(s) = v {
-                                        Some(resolve_path(s, None))
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-                            for extra_path in remaining {
-                                window::open_file_window(app, Some(extra_path));
-                            }
-                            return;
+                        if path.is_empty() {
+                            continue;
+                        }
+                        let abs_path = resolve_path(path.as_str(), None);
+                        if first {
+                            first = false;
+                            // Store in PendingFiles for the "main" window to pull on mount.
+                            let pending = app.state::<PendingFiles>();
+                            let mut map = pending.0.lock().unwrap();
+                            map.insert("main".to_string(), abs_path);
+                        } else {
+                            // Additional files each get a new window.
+                            window::open_file_window(app, Some(abs_path));
                         }
                     }
                 }

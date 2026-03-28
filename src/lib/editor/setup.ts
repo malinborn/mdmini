@@ -1,4 +1,4 @@
-import { keymap } from '@codemirror/view';
+import { keymap, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -19,6 +19,7 @@ export const previewCompartment = new Compartment();
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
+    drawSelection(),
     listContinuation(),
     slashCommands(),
     autocompletion(),

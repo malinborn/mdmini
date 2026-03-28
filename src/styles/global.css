@@ -115,4 +115,6 @@ body {
   color: var(--text-primary);
   font-family: var(--font-text);
   transition: background-color 0.2s, color 0.2s;
+  -webkit-user-select: text;
+  user-select: text;
 }

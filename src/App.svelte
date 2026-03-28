@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
-  import { createThemeStore, createModeStore, createZoomStore, createFileState, createRecentFilesStore } from './lib/stores';
-  import { readFile, writeFile, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
+  import { createThemeStore, createModeStore, createZoomStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
@@ -105,11 +105,6 @@
     });
   }
 
-  async function handleClose(): Promise<void> {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    await getCurrentWindow().close();
-  }
-
   function handleFind(): void {
     const view = editorHandle?.view;
     if (!view) return;
@@ -120,10 +115,16 @@
 
   async function handleOpenFilePath(path: string): Promise<void> {
     try {
-      const content = await readFile(path);
+      const exists = await fileExists(path);
+      if (exists) {
+        const content = await readFile(path);
+        editorHandle?.replaceContent(content);
+      } else {
+        // New file — start empty, will be created on first save
+        editorHandle?.replaceContent('');
+      }
       fileState.filePath = path;
       fileState.isDirty = false;
-      editorHandle?.replaceContent(content);
       recentFiles.add(path);
     } catch (err) {
       console.error('Failed to open file:', err);
@@ -146,8 +147,9 @@
       }
     } else {
       // Ask user
-      const reload = confirm(
-        'The file has been modified externally. Reload and lose your changes?'
+      const reload = await ask(
+        'The file has been modified externally. Reload and lose your changes?',
+        { title: 'External Change', kind: 'warning' }
       );
       if (reload) {
         try {
@@ -181,6 +183,14 @@
   }
 
   onMount(() => {
+    // Pull any file path stored by the backend for this window (CLI args or new-window open).
+    // This avoids the race condition of the push-based emit approach.
+    invoke<string | null>('get_pending_file').then((pendingFile) => {
+      if (pendingFile) {
+        handleOpenFilePath(pendingFile);
+      }
+    });
+
     // Menu events
     const unlistenMenu = onMenuEvent((action) => {
       switch (action) {
@@ -196,9 +206,14 @@
         case 'save_as':
           handleSaveAs();
           break;
-        case 'close':
-          handleClose();
+        case 'select_all': {
+          const view = editorHandle?.view;
+          if (view) {
+            view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+            view.focus();
+          }
           break;
+        }
         case 'find':
           handleFind();
           break;
@@ -252,27 +267,6 @@
       })
     );
 
-    // Intercept window close to prompt for unsaved changes
-    let unlistenClose: (() => void) | null = null;
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-      getCurrentWindow().onCloseRequested(async (event) => {
-        if (fileState.isDirty) {
-          const shouldClose = confirm(
-            'You have unsaved changes. Close without saving?'
-          );
-          if (!shouldClose) {
-            event.preventDefault();
-            return;
-          }
-        }
-        // Clean up recovery file on close
-        if (fileState.filePath) {
-          await invoke('delete_recovery', { path: fileState.filePath }).catch(() => {});
-        }
-      }).then((unlisten) => {
-        unlistenClose = unlisten;
-      });
-    });
 
     // Save on window blur
     window.addEventListener('blur', handleWindowBlur);
@@ -285,7 +279,6 @@
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
-      if (unlistenClose) unlistenClose();
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
       if (recoveryInterval !== null) clearInterval(recoveryInterval);
@@ -297,7 +290,12 @@
   });
 
   $effect(() => {
-    document.title = fileState.title;
+    const title = fileState.title;
+    document.title = title;
+    // Sync to native Tauri window title bar
+    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+      getCurrentWindow().setTitle(title);
+    });
   });
 
   // Reconfigure live-preview compartment when mode toggles

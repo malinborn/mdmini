@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# CLI wrapper for md-mini — launches without blocking terminal
+# Uses open -n to force new process; single-instance plugin deduplicates
+
+args=()
+for arg in "$@"; do
+  # Resolve relative paths to absolute
+  if [[ "$arg" != -* && "$arg" != /* ]]; then
+    arg="$PWD/$arg"
+  fi
+  args+=("$arg")
+done
+
+open -n -a md-mini --args "${args[@]}" 2>/dev/null

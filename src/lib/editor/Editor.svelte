@@ -31,7 +31,6 @@
             insert: newContent,
           },
         });
-        view.focus();
       },
     };
   });

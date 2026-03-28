@@ -14,8 +14,9 @@ class CheckboxWidget extends WidgetType {
     input.type = 'checkbox';
     input.checked = this.checked;
     input.className = 'cm-md-checkbox';
-    input.addEventListener('click', (e) => {
+    input.addEventListener('mousedown', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const replacement = this.checked ? '[ ]' : '[x]';
       view.dispatch({
         changes: { from: this.pos, to: this.pos + 3, insert: replacement },
@@ -51,8 +52,6 @@ export function decorateListItem(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
-
   const listMark = node.getChild('ListMark');
   if (!listMark) return;
 
@@ -61,6 +60,7 @@ export function decorateListItem(
 
   const checkboxMatch = afterMark.match(/^\s\[([x ])\]/);
   if (checkboxMatch) {
+    // Always show checkbox widget — even when cursor is on this line
     const isChecked = checkboxMatch[1] === 'x';
     const checkboxStart = listMark.to + 1;
     builder.add(
@@ -72,6 +72,9 @@ export function decorateListItem(
     );
     return;
   }
+
+  // Bullet markers: only replace when cursor is NOT in range
+  if (cursorInRange(view, node.from, node.to)) return;
 
   const markText = doc.sliceString(listMark.from, listMark.to);
   if (markText === '-' || markText === '*' || markText === '+') {

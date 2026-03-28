@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RecentFile } from './stores';
+  import type { RecentFile } from './stores.svelte';
 
   interface Props {
     files: RecentFile[];

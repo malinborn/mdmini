@@ -46,7 +46,7 @@ src/                    # Frontend (Svelte + TypeScript)
       blocks.ts         # Code blocks, HR
       tables.ts         # Table widget
       utils.ts          # cursorInRange() helper
-  lib/stores.ts         # Svelte stores (fileState, theme, mode, zoom, recentFiles)
+  lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
   lib/theme/            # CSS variables + CM6 theme
   lib/tauri/            # Tauri IPC wrappers + event listeners
   styles/               # Global CSS, editor decoration styles
@@ -100,11 +100,14 @@ src/                    # Frontend (Svelte + TypeScript)
 
 ## Gotchas
 
+- **Svelte 5 runes require `.svelte.ts` extension:** Files using `$state`, `$derived`, `$effect` outside `.svelte` components MUST be named `*.svelte.ts`, not `*.ts`. Plain `.ts` files won't compile runes — the app loads a white screen with no errors. `npm run check` does NOT catch this.
+- **Kill port 1420 before `npm run tauri dev`:** Previous dev sessions leave Vite running. Use `lsof -ti:1420 | xargs kill -9` to free the port.
 - **GFM required:** `@lezer/markdown` needs explicit `extensions: [Strikethrough, Table]` in the markdown() call — without this, `~~strikethrough~~` and tables don't produce AST nodes
 - **Decoration ordering:** CM6 RangeSetBuilder crashes if decorations aren't in `(from, startSide)` order. `Decoration.mark` goes before `Decoration.replace` at the same position.
 - **No cross-line Decoration.replace:** Replacing text that crosses `\n` boundaries causes rendering glitches. Use line decorations (e.g., `Decoration.line({ class: 'hidden' })`) instead.
 - **Slash commands vs closeBrackets:** Don't use `autocompletion({ override: [...] })` — it replaces ALL completion sources. Use `EditorState.languageData` to add completion sources alongside existing ones.
 - **Svelte 5 exports:** `export function` from `<script>` doesn't work in runes mode. Use `bind:this` + public `$state` properties.
+- **Svelte 5 `$bindable` for handles:** To expose EditorView from Editor.svelte, use a `$bindable()` handle prop with an interface, not `export let` or `export function`.
 - **Tauri 2 MenuId:** Use `event.id().as_ref()` not `event.id().0` to get menu item ID string.
 - **Single instance:** `tauri-plugin-single-instance` callback receives `&AppHandle`, not owned. `args[0]` is the binary path — skip it.
 - **Font paths:** Vite resolves `url()` in CSS relative to the CSS file. Put fonts in `src/assets/fonts/` and reference as `/src/assets/fonts/Foo.woff2`.

@@ -16,7 +16,7 @@ export const editorTheme = EditorView.theme({
     borderLeftWidth: '2px',
   },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-    backgroundColor: 'var(--color-selection)',
+    backgroundColor: 'var(--color-selection) !important',
   },
   '.cm-activeLine': {
     backgroundColor: 'var(--color-line-highlight)',
@@ -37,7 +37,7 @@ export const editorTheme = EditorView.theme({
     borderBottom: '1px solid var(--color-border)',
   },
   '.cm-searchMatch': {
-    backgroundColor: 'var(--color-selection)',
+    backgroundColor: 'var(--color-selection) !important',
   },
   '.cm-tooltip': {
     backgroundColor: 'var(--bg-surface)',

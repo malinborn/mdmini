@@ -52,6 +52,18 @@ pub async fn save_recovery(path: String, content: String) -> Result<(), String> 
     })
 }
 
+/// Synchronous version for use from Rust (e.g., window cleanup).
+pub fn delete_recovery_sync(path: &str) -> Result<(), String> {
+    let dir = recovery_dir()?;
+    let filename = hash_path(path);
+    let recovery_path = dir.join(filename);
+    if recovery_path.exists() {
+        fs::remove_file(&recovery_path)
+            .map_err(|e| format!("Failed to delete recovery file: {}", e))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn delete_recovery(path: String) -> Result<(), String> {
     let dir = recovery_dir()?;

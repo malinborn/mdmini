@@ -2,12 +2,21 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Tracks which file paths are open in which windows.
 pub struct OpenFiles(pub Mutex<HashMap<String, String>>);
 
 impl OpenFiles {
+    pub fn new() -> Self {
+        Self(Mutex::new(HashMap::new()))
+    }
+}
+
+/// Stores a pending file path per window label, to be pulled by the frontend on mount.
+pub struct PendingFiles(pub Mutex<HashMap<String, String>>);
+
+impl PendingFiles {
     pub fn new() -> Self {
         Self(Mutex::new(HashMap::new()))
     }
@@ -51,22 +60,17 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
     .position(100.0 + offset, 100.0 + offset);
 
     match builder.build() {
-        Ok(window) => {
-            // Track the file path
+        Ok(_window) => {
+            // Track the file path in OpenFiles and store it in PendingFiles
+            // so the frontend can pull it on mount via get_pending_file command.
             if let Some(ref file_path) = path {
                 let open_files = app.state::<OpenFiles>();
                 let mut map = open_files.0.lock().unwrap();
                 map.insert(file_path.clone(), label.clone());
-            }
 
-            // Emit open-file event to the new window after a short delay
-            // so the frontend has time to mount
-            if let Some(file_path) = path {
-                let window_clone = window.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    let _ = window_clone.emit("open-file", &file_path);
-                });
+                let pending = app.state::<PendingFiles>();
+                let mut pending_map = pending.0.lock().unwrap();
+                pending_map.insert(label.clone(), file_path.clone());
             }
         }
         Err(e) => {
@@ -76,10 +80,24 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
 }
 
 /// Removes a file path from the open files tracking when a window is closed.
+/// Also cleans up any recovery file for that path.
 pub fn untrack_window(app: &AppHandle, label: &str) {
     let open_files = app.state::<OpenFiles>();
     let mut map = open_files.0.lock().unwrap();
+    // Find the file path for this window before removing
+    let file_path: Option<String> = map
+        .iter()
+        .find(|(_, v)| v.as_str() == label)
+        .map(|(k, _)| k.clone());
     map.retain(|_, v| v != label);
+    drop(map);
+
+    // Clean up recovery file in background
+    if let Some(path) = file_path {
+        std::thread::spawn(move || {
+            let _ = crate::recovery::delete_recovery_sync(&path);
+        });
+    }
 }
 
 /// IPC command: open a file in a new window (or focus existing).

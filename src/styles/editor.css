@@ -1,6 +1,6 @@
 /* Headings */
-.cm-md-h1 { font-size: 2em; font-weight: 700; color: var(--color-heading); line-height: 1.3; margin: 0.5em 0; }
-.cm-md-h2 { font-size: 1.6em; font-weight: 700; color: var(--color-heading); line-height: 1.3; margin: 0.4em 0; }
+.cm-md-h1 { font-size: 2em; font-weight: 700; color: var(--color-heading); line-height: 1.3; padding: 0.67em 0 0; }
+.cm-md-h2 { font-size: 1.6em; font-weight: 700; color: var(--color-heading); line-height: 1.3; padding: 0.5em 0 0; }
 .cm-md-h3 { font-size: 1.3em; font-weight: 600; color: var(--color-heading); line-height: 1.4; }
 .cm-md-h4 { font-size: 1.1em; font-weight: 600; color: var(--color-heading); }
 .cm-md-h5 { font-size: 1em; font-weight: 600; color: var(--color-heading); }
@@ -65,11 +65,19 @@
   color: var(--text-subtle);
 }
 
-/* Horizontal Rule */
+/* Horizontal Rule — line decoration with pseudo-element */
 .cm-md-hr {
-  border: none;
+  position: relative;
+  min-height: 2em;
+}
+
+.cm-md-hr::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
   border-top: 2px solid var(--color-hr);
-  margin: 1em 0;
 }
 
 /* Code blocks */
@@ -99,32 +107,28 @@
   padding-bottom: 0.5em;
 }
 
-/* Tables */
-.cm-md-table-wrapper {
-  overflow-x: auto;
-  margin: 0.5em 0;
+/* Tables — line decorations */
+.cm-md-table-line {
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  background: var(--color-code-bg);
+  padding: 0.15em 0.5em;
+  border-bottom: 1px solid var(--color-table-border);
 }
 
-.cm-md-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.95em;
-}
-
-.cm-md-table th,
-.cm-md-table td {
-  border: 1px solid var(--color-table-border);
-  padding: 0.5em 0.75em;
-  text-align: left;
-}
-
-.cm-md-table th {
-  background: var(--color-table-header-bg);
+.cm-md-table-header {
   font-weight: 600;
+  background: var(--color-table-header-bg);
+  border-bottom: 2px solid var(--color-table-border);
 }
 
-.cm-md-table tr:hover td {
-  background: var(--highlight);
+.cm-md-table-delimiter {
+  font-size: 0;
+  line-height: 0;
+  height: 0;
+  overflow: hidden;
+  padding: 0;
+  border-bottom: none;
 }
 
 /* Hover block menu — gutter */
@@ -133,7 +137,13 @@
   cursor: default;
 }
 
+.cm-hover-gutter .cm-gutterElement {
+  position: relative;
+}
+
 .cm-hover-menu-btn {
+  position: absolute;
+  bottom: 3px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -152,7 +162,7 @@
 
 .cm-hover-menu-btn:hover {
   background: var(--highlight);
-  color: var(--text-normal);
+  color: var(--text-primary);
 }
 
 /* Show the button when hovering the gutter element */
@@ -168,6 +178,8 @@
   max-height: 320px;
   overflow-y: auto;
   background: var(--bg-overlay);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
@@ -194,8 +206,8 @@
 
 .cm-hover-menu-item-label {
   font-size: 0.875rem;
-  color: var(--text-normal);
-  font-family: var(--font-ui);
+  color: var(--text-primary);
+  font-family: var(--font-text);
 }
 
 .cm-hover-menu-item-detail {

@@ -32,37 +32,37 @@ function buildDecorations(view: EditorView): DecorationSet {
         case 'ATXHeading5':
         case 'ATXHeading6':
           decorateHeading(view, node.node, builder);
-          break;
+          return false;
         case 'Emphasis':
           decorateEmphasis(view, node.node, builder);
-          break;
+          return false;
         case 'StrongEmphasis':
           decorateStrongEmphasis(view, node.node, builder);
-          break;
+          return false;
         case 'Strikethrough':
           decorateStrikethrough(view, node.node, builder);
-          break;
+          return false;
         case 'InlineCode':
           decorateInlineCode(view, node.node, builder);
-          break;
+          return false;
         case 'Link':
           decorateLink(view, node.node, builder);
-          break;
+          return false;
+        case 'FencedCode':
+          decorateFencedCode(view, node.node, builder);
+          return false;
+        case 'Table':
+          decorateTable(view, node.node, builder);
+          return false;
+        case 'HorizontalRule':
+          decorateHorizontalRule(view, node.node, builder);
+          return false;
         case 'ListItem':
           decorateListItem(view, node.node, builder);
           break;
         case 'Blockquote':
           decorateBlockquote(view, node.node, builder);
-          break;
-        case 'HorizontalRule':
-          decorateHorizontalRule(view, node.node, builder);
-          break;
-        case 'FencedCode':
-          decorateFencedCode(view, node.node, builder);
-          break;
-        case 'Table':
-          decorateTable(view, node.node, builder);
-          break;
+          return false;
       }
     },
   });
@@ -75,12 +75,23 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildDecorations(view);
+      try {
+        this.decorations = buildDecorations(view);
+      } catch (e) {
+        console.warn('Live preview decoration error:', e);
+        this.decorations = Decoration.none;
+      }
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) {
-        this.decorations = buildDecorations(update.view);
+      const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
+      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged) {
+        try {
+          this.decorations = buildDecorations(update.view);
+        } catch (e) {
+          console.warn('Live preview decoration error:', e);
+          this.decorations = Decoration.none;
+        }
       }
     }
   },
