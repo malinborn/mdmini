@@ -2,33 +2,7 @@ import { computePosition, flip, offset } from '@floating-ui/dom';
 import { GutterMarker, gutter } from '@codemirror/view';
 import type { EditorView, BlockInfo } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
-
-interface BlockCommand {
-  label: string;
-  detail: string;
-  insert: string;
-  cursorOffset?: number;
-}
-
-const blockCommands: BlockCommand[] = [
-  { label: 'Heading 1', detail: 'h1', insert: '# ' },
-  { label: 'Heading 2', detail: 'h2', insert: '## ' },
-  { label: 'Heading 3', detail: 'h3', insert: '### ' },
-  { label: 'Heading 4', detail: 'h4', insert: '#### ' },
-  { label: 'Heading 5', detail: 'h5', insert: '##### ' },
-  { label: 'Heading 6', detail: 'h6', insert: '###### ' },
-  { label: 'Bullet list', detail: 'ul', insert: '- ' },
-  { label: 'Numbered list', detail: 'ol', insert: '1. ' },
-  { label: 'Checkbox', detail: 'task', insert: '- [ ] ' },
-  { label: 'Code block', detail: 'code', insert: '```\n\n```', cursorOffset: -4 },
-  {
-    label: 'Table',
-    detail: 'table',
-    insert: '| Column 1 | Column 2 |\n|----------|----------|\n| -        | -        |\n',
-  },
-  { label: 'Blockquote', detail: 'quote', insert: '> ' },
-  { label: 'Horizontal rule', detail: 'hr', insert: '---\n' },
-];
+import { blockTemplates, type BlockTemplate } from './block-templates';
 
 let activePopup: HTMLElement | null = null;
 let activeView: EditorView | null = null;
@@ -55,25 +29,25 @@ function showPopup(button: HTMLElement, view: EditorView, linePos: number): void
   const popup = document.createElement('div');
   popup.className = 'cm-hover-menu-popup';
 
-  for (const cmd of blockCommands) {
+  for (const tpl of blockTemplates) {
     const item = document.createElement('button');
     item.className = 'cm-hover-menu-item';
     item.type = 'button';
 
     const labelSpan = document.createElement('span');
     labelSpan.className = 'cm-hover-menu-item-label';
-    labelSpan.textContent = cmd.label;
+    labelSpan.textContent = tpl.label;
 
     const detailSpan = document.createElement('span');
     detailSpan.className = 'cm-hover-menu-item-detail';
-    detailSpan.textContent = cmd.detail;
+    detailSpan.textContent = tpl.id;
 
     item.appendChild(labelSpan);
     item.appendChild(detailSpan);
 
     item.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      applyCommand(view, linePos, cmd);
+      applyCommand(view, linePos, tpl);
       hidePopup();
     });
 
@@ -99,7 +73,7 @@ function showPopup(button: HTMLElement, view: EditorView, linePos: number): void
   }, 0);
 }
 
-function applyCommand(view: EditorView, linePos: number, cmd: BlockCommand): void {
+function applyCommand(view: EditorView, linePos: number, cmd: BlockTemplate): void {
   const line = view.state.doc.lineAt(linePos);
   const lineText = line.text;
 
