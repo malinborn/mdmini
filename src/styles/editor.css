@@ -178,6 +178,35 @@
   color: #44403c;
 }
 
+.cm-md-table-inline-code {
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-table-border);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  color: var(--color-accent);
+}
+
+:root[data-theme='light'] .cm-md-table-inline-code {
+  color: #d6336c;
+  background: #f8f0f4;
+  border-color: #e8dde4;
+}
+
+.cm-md-table-cell strong {
+  font-weight: 700;
+}
+
+.cm-md-table-cell em {
+  font-style: italic;
+}
+
+.cm-md-table-cell s {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 .cm-md-table-sep {
   display: inline-block;
   width: 1px;

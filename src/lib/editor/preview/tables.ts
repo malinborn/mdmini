@@ -446,7 +446,7 @@ class TableRowWidget extends WidgetType {
       cellEl.className = 'cm-md-table-cell';
       if (this.isHeader) cellEl.classList.add('cm-md-table-cell-header');
       cellEl.style.minWidth = `${(this.widths[i] ?? cell.text.length) + 2}ch`;
-      cellEl.textContent = cell.text;
+      renderCellContent(cellEl, cell.text);
 
       // Double-click to edit
       const cellInfo = cell;
@@ -535,6 +535,66 @@ class TableRowWidget extends WidgetType {
 
   ignoreEvent(): boolean {
     return false;
+  }
+}
+
+/** Render inline markdown (code, bold, italic, strikethrough) into a cell element. */
+function renderCellContent(cellEl: HTMLElement, text: string): void {
+  if (!text) return;
+
+  // Regex for inline markdown tokens — order matters (longer patterns first)
+  const inlineRegex = /(`+)(.*?)\1|(\*\*\*|___)(.*?)\3|(\*\*|__)(.*?)\5|(\*|_)(.*?)\7|(~~)(.*?)\9/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = inlineRegex.exec(text)) !== null) {
+    // Append plain text before this match
+    if (match.index > lastIndex) {
+      cellEl.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+    }
+
+    if (match[1]) {
+      // Code: `code` or ``code``
+      const code = document.createElement('code');
+      code.className = 'cm-md-table-inline-code';
+      code.textContent = match[2];
+      cellEl.appendChild(code);
+    } else if (match[3]) {
+      // Bold+italic: ***text*** or ___text___
+      const el = document.createElement('strong');
+      const em = document.createElement('em');
+      em.textContent = match[4];
+      el.appendChild(em);
+      cellEl.appendChild(el);
+    } else if (match[5]) {
+      // Bold: **text** or __text__
+      const el = document.createElement('strong');
+      el.textContent = match[6];
+      cellEl.appendChild(el);
+    } else if (match[7]) {
+      // Italic: *text* or _text_
+      const el = document.createElement('em');
+      el.textContent = match[8];
+      cellEl.appendChild(el);
+    } else if (match[9]) {
+      // Strikethrough: ~~text~~
+      const el = document.createElement('s');
+      el.textContent = match[10];
+      cellEl.appendChild(el);
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Append remaining plain text
+  if (lastIndex < text.length) {
+    cellEl.appendChild(document.createTextNode(text.slice(lastIndex)));
+  }
+
+  // If nothing was parsed (no inline markdown), just set text
+  if (lastIndex === 0) {
+    cellEl.textContent = text;
   }
 }
 
