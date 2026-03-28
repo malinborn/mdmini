@@ -4,13 +4,13 @@ import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { markdownTable } from 'markdown-table';
 
-interface CellInfo {
+export interface CellInfo {
   text: string;
   from: number;
   to: number;
 }
 
-interface RowData {
+export interface RowData {
   from: number;
   to: number;
   text: string;
@@ -20,7 +20,7 @@ interface RowData {
   rowIndex: number;
 }
 
-interface TableContext {
+export interface TableContext {
   rows: RowData[];
   colWidths: number[];
   colCount: number;
@@ -29,7 +29,7 @@ interface TableContext {
   nodeTo: number;
 }
 
-function parseCellsWithPositions(text: string, lineFrom: number): CellInfo[] {
+export function parseCellsWithPositions(text: string, lineFrom: number): CellInfo[] {
   const cells: CellInfo[] = [];
   let i = 0;
   while (i < text.length && text[i] !== '|') i++;
@@ -57,7 +57,7 @@ function parseCellsWithPositions(text: string, lineFrom: number): CellInfo[] {
 }
 
 /** Convert table context to a 2D string array (header + data rows, no delimiter). */
-function tableToGrid(ctx: TableContext): string[][] {
+export function tableToGrid(ctx: TableContext): string[][] {
   return ctx.rows
     .filter(r => !r.isDelimiter)
     .map(r => r.cells.map(c => c.text));
