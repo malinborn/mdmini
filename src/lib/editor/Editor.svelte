@@ -24,13 +24,16 @@
       },
       replaceContent(newContent: string) {
         if (!view) return;
+        const docLen = view.state.doc.length;
         view.dispatch({
-          changes: {
-            from: 0,
-            to: view.state.doc.length,
-            insert: newContent,
-          },
+          changes: { from: 0, to: docLen, insert: newContent },
+          // Place cursor at end so first heading renders in preview mode
+          selection: newContent.length > 0 ? { anchor: newContent.length } : undefined,
         });
+        // Blur editor so decorations render without cursorInRange interference
+        if (newContent.length > 0) {
+          view.contentDOM.blur();
+        }
       },
     };
   });
