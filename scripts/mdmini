@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
-# CLI wrapper for md-mini — launches without blocking terminal
-# Uses open -n to force new process; single-instance plugin deduplicates
+# CLI wrapper for md-mini
+APP="/Applications/md-mini.app"
+BIN="$APP/Contents/MacOS/md-mini"
+SOCK="/tmp/com_md_mini_app_si.sock"
+PENDING="/tmp/md-mini-pending-files"
 
+# Resolve relative paths to absolute
 args=()
 for arg in "$@"; do
-  # Resolve relative paths to absolute
   if [[ "$arg" != -* && "$arg" != /* ]]; then
-    arg="$PWD/$arg"
+    arg="$(cd "$(dirname "$arg")" 2>/dev/null && pwd)/$(basename "$arg")"
   fi
   args+=("$arg")
 done
 
-open -n -a md-mini --args "${args[@]}" 2>/dev/null
+if [ -S "$SOCK" ]; then
+  # App is running (socket exists) — send files via single-instance IPC
+  # Second instance connects, sends argv, exits instantly (no blocking)
+  "$BIN" "${args[@]}" 2>/dev/null
+else
+  # App not running — write pending files, launch via open
+  if [ ${#args[@]} -gt 0 ]; then
+    printf '%s\n' "${args[@]}" > "$PENDING"
+  fi
+  open "$APP"
+fi

@@ -98,6 +98,9 @@ pub fn run() {
             // Handle CLI args on initial launch
             handle_cli_args(app.handle());
 
+            // Handle files from CLI wrapper (written to temp file before `open`)
+            load_pending_open_files(app.handle());
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -119,7 +122,6 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|_app_handle, event| {
-        #[allow(clippy::single_match)]
         match event {
             tauri::RunEvent::Opened { urls } => {
                 for url in urls {
@@ -129,6 +131,11 @@ pub fn run() {
                         }
                     }
                 }
+            }
+            tauri::RunEvent::Reopen { .. } => {
+                // App re-activated (Dock click, `open` while running)
+                // Open any pending files from CLI wrapper in new windows
+                open_pending_files(_app_handle);
             }
             _ => {}
         }
@@ -149,6 +156,63 @@ fn resolve_path(path: &str, cwd: Option<&str>) -> String {
         .canonicalize()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| base.join(path).to_string_lossy().to_string())
+}
+
+/// Open pending files when app is already running (Reopen event).
+/// Each file gets a new window since "main" already exists.
+fn open_pending_files(app: &tauri::AppHandle) {
+    let path = std::path::Path::new("/tmp/md-mini-pending-files");
+    if !path.exists() {
+        return;
+    }
+    let contents = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let _ = std::fs::remove_file(path);
+
+    for line in contents.lines() {
+        let file = line.trim();
+        if !file.is_empty() {
+            window::open_file_window(app, Some(file.to_string()));
+        }
+    }
+}
+
+/// Load files written by the CLI wrapper script to /tmp/md-mini-pending-files.
+/// Uses the same PendingFiles mechanism as CLI args — first file goes into "main" window.
+fn load_pending_open_files(app: &tauri::AppHandle) {
+    let path = std::path::Path::new("/tmp/md-mini-pending-files");
+    if !path.exists() {
+        return;
+    }
+    let contents = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let _ = std::fs::remove_file(path);
+
+    let pending = app.state::<PendingFiles>();
+    let mut map = pending.0.lock().unwrap();
+    let already_has_main = map.contains_key("main");
+
+    let mut first = !already_has_main; // only use "main" slot if CLI args didn't take it
+    drop(map);
+
+    for line in contents.lines() {
+        let file = line.trim();
+        if file.is_empty() {
+            continue;
+        }
+        if first {
+            first = false;
+            let pending = app.state::<PendingFiles>();
+            let mut map = pending.0.lock().unwrap();
+            map.insert("main".to_string(), file.to_string());
+        } else {
+            window::open_file_window(app, Some(file.to_string()));
+        }
+    }
 }
 
 /// Handle CLI file arguments on initial launch.
