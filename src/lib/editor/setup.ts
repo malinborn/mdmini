@@ -6,6 +6,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/
 import { searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { codeFolding, foldGutter, foldKeymap } from '@codemirror/language';
 import { Strikethrough, Table } from '@lezer/markdown';
 import { editorTheme } from '../theme/editor-theme';
 import { markdownKeybindings } from './keybindings';
@@ -13,6 +14,7 @@ import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
 import { hoverBlockMenu } from './hover-menu';
+import { markdownFoldService } from './folding';
 
 export const previewCompartment = new Compartment();
 
@@ -32,11 +34,15 @@ export function createExtensions(): Extension[] {
       extensions: [Strikethrough, Table], // GFM: strikethrough + tables
     }),
     keymap.of([
+      ...foldKeymap,
       ...defaultKeymap,
       ...historyKeymap,
       ...closeBracketsKeymap,
       ...searchKeymap,
     ]),
+    markdownFoldService,
+    codeFolding(),
+    foldGutter({ openText: '▾', closedText: '▸' }),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
     EditorView.lineWrapping,

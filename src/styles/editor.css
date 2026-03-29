@@ -471,6 +471,51 @@
   min-width: 80px;
 }
 
+/* ===== Fold gutter ===== */
+.cm-foldGutter {
+  width: 16px;
+  cursor: pointer;
+}
+
+.cm-foldGutter .cm-gutterElement {
+  color: var(--color-list-marker);
+  font-size: 0.7em;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Reveal fold indicators when hovering anywhere over the gutter strip */
+.cm-gutters:hover .cm-foldGutter .cm-gutterElement {
+  opacity: 0.45;
+}
+
+.cm-foldGutter .cm-gutterElement:hover {
+  opacity: 1 !important;
+  color: var(--color-accent);
+}
+
+/* Placeholder widget rendered in place of folded content */
+.cm-foldPlaceholder {
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-table-border);
+  border-radius: 3px;
+  padding: 0 6px;
+  margin: 0 4px;
+  color: var(--color-list-marker);
+  font-size: 0.8em;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.cm-foldPlaceholder:hover {
+  background: var(--color-table-border);
+  color: var(--color-text);
+}
+
 /* Hover block menu — gutter */
 .cm-hover-gutter {
   width: 24px;
