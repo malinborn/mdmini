@@ -108,14 +108,8 @@
   function handleFind(): void {
     const view = editorHandle?.view;
     if (!view) return;
-    import('@codemirror/search').then(({ openSearchPanel, closeSearchPanel }) => {
-      // Toggle: close if already open, open if closed
-      const panel = view.dom.querySelector('.cm-search');
-      if (panel) {
-        closeSearchPanel(view);
-      } else {
-        openSearchPanel(view);
-      }
+    import('@codemirror/search').then(({ openSearchPanel }) => {
+      openSearchPanel(view);
     });
   }
 
