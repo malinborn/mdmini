@@ -786,3 +786,30 @@
 :root[data-theme='light'] .cm-searchMatch-selected {
   background: rgba(124, 58, 237, 0.3);
 }
+
+/* ===== Code file mode (non-markdown files) ===== */
+.cm-code-file-mode .cm-scroller {
+  font-family: var(--font-code);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cm-code-file-mode .cm-content {
+  background: var(--color-code-bg);
+  border-radius: 6px;
+  padding: 1em;
+}
+
+.cm-code-file-mode .cm-line {
+  padding-left: 0.5em;
+}
+
+.cm-code-file-mode .cm-gutters {
+  background: var(--color-code-bg);
+  border-right: 1px solid var(--color-table-border);
+}
+
+.cm-code-file-mode .cm-activeLineGutter,
+.cm-code-file-mode .cm-activeLine {
+  background: rgba(196, 167, 231, 0.08);
+}

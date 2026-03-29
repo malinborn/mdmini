@@ -113,6 +113,8 @@
     });
   }
 
+  const MD_EXTENSIONS = new Set(['md', 'markdown', 'txt', '']);
+
   async function handleOpenFilePath(path: string): Promise<void> {
     try {
       const exists = await fileExists(path);
@@ -120,12 +122,19 @@
         const content = await readFile(path);
         editorHandle?.replaceContent(content);
       } else {
-        // New file — start empty, will be created on first save
         editorHandle?.replaceContent('');
       }
       fileState.filePath = path;
       fileState.isDirty = false;
       recentFiles.add(path);
+
+      // Switch to code mode for non-markdown files
+      const ext = path.split('.').pop()?.toLowerCase() ?? '';
+      if (!MD_EXTENSIONS.has(ext)) {
+        editorHandle?.setCodeMode(ext);
+      } else {
+        editorHandle?.setCodeMode(null);
+      }
     } catch (err) {
       console.error('Failed to open file:', err);
     }

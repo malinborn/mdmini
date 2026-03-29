@@ -2,11 +2,16 @@
   import { onMount } from 'svelte';
   import { EditorView } from '@codemirror/view';
   import { EditorState } from '@codemirror/state';
-  import { createExtensions } from './setup';
+  import { createExtensions, languageCompartment, previewCompartment } from './setup';
+  import { languages } from '@codemirror/language-data';
+  import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+  import { Strikethrough, Table } from '@lezer/markdown';
+  import { livePreviewPlugin } from './preview/plugin';
 
   export interface EditorHandle {
     view: EditorView | undefined;
     replaceContent: (newContent: string) => void;
+    setCodeMode: (ext: string | null) => void;
   }
 
   let { onchange, handle = $bindable() }: {
@@ -27,12 +32,46 @@
         const docLen = view.state.doc.length;
         view.dispatch({
           changes: { from: 0, to: docLen, insert: newContent },
-          // Place cursor at end so first heading renders in preview mode
           selection: newContent.length > 0 ? { anchor: newContent.length } : undefined,
         });
-        // Blur editor so decorations render without cursorInRange interference
         if (newContent.length > 0) {
           view.contentDOM.blur();
+        }
+      },
+      setCodeMode(ext: string | null) {
+        if (!view) return;
+        if (!ext) {
+          // Back to markdown mode
+          view.dispatch({
+            effects: [
+              languageCompartment.reconfigure(
+                markdown({
+                  base: markdownLanguage,
+                  codeLanguages: languages,
+                  extensions: [Strikethrough, Table],
+                })
+              ),
+              previewCompartment.reconfigure(livePreviewPlugin),
+            ],
+          });
+          view.dom.classList.remove('cm-code-file-mode');
+          return;
+        }
+        // Find language by extension
+        const lang = languages.find(l =>
+          l.extensions.some(e => e === ext)
+        );
+        if (lang) {
+          lang.load().then(langSupport => {
+            if (!view) return;
+            view.dispatch({
+              effects: [
+                languageCompartment.reconfigure(langSupport),
+                previewCompartment.reconfigure([]), // disable live-preview decorations
+              ],
+            });
+            view.dom.classList.add('cm-code-file-mode');
+          });
         }
       },
     };

@@ -18,6 +18,7 @@ import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick } from './folding';
 
 export const previewCompartment = new Compartment();
+export const languageCompartment = new Compartment();
 
 export function createExtensions(): Extension[] {
   return [
@@ -29,11 +30,13 @@ export function createExtensions(): Extension[] {
     markdownKeybindings(),
     history(),
     closeBrackets(),
-    markdown({
-      base: markdownLanguage,
-      codeLanguages: languages,
-      extensions: [Strikethrough, Table], // GFM: strikethrough + tables
-    }),
+    languageCompartment.of(
+      markdown({
+        base: markdownLanguage,
+        codeLanguages: languages,
+        extensions: [Strikethrough, Table],
+      })
+    ),
     keymap.of([
       ...foldKeymap,
       ...defaultKeymap,
