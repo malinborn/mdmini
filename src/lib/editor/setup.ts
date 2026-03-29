@@ -6,7 +6,8 @@ import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/
 import { searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { codeFolding, foldKeymap } from '@codemirror/language';
+import { codeFolding, foldKeymap, syntaxHighlighting } from '@codemirror/language';
+import { classHighlighter } from '@lezer/highlight';
 import { Strikethrough, Table } from '@lezer/markdown';
 import { editorTheme } from '../theme/editor-theme';
 import { markdownKeybindings } from './keybindings';
@@ -43,6 +44,7 @@ export function createExtensions(): Extension[] {
     markdownFoldService,
     codeFolding(),
     headingFoldClick,
+    syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
     EditorView.lineWrapping,
