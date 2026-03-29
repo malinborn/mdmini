@@ -2,6 +2,8 @@
 
 Minimalist live-preview markdown editor for macOS. Tauri 2 + Svelte 5 + CodeMirror 6.
 
+# md
+
 ## Commands
 
 | Command | Description |
@@ -38,6 +40,8 @@ src/                    # Frontend (Svelte + TypeScript)
     autocomplete.ts     # List continuation, bracket pairing, code fence close
     slash-commands.ts   # "/" block insertion
     hover-menu.ts       # Gutter "+" menu
+    block-templates.ts  # Shared block insertion templates (headings, lists, table, etc.)
+    folding.ts          # Heading fold/collapse (foldService + mousedown click handler)
     preview/            # Live-preview decorations
       plugin.ts         # Main ViewPlugin (builds DecorationSet)
       headings.ts       # Heading decorations
@@ -57,10 +61,14 @@ src/                    # Frontend (Svelte + TypeScript)
 
 - `docs/superpowers/specs/2026-03-19-md-mini-design.md` — Full design specification
 - `docs/superpowers/plans/2026-03-20-md-mini-implementation.md` — Implementation plan (16 tasks)
+- `docs/cli-launcher.md` — How the CLI launcher works (two-path approach: `open` + single-instance IPC)
 - `src-tauri/tauri.conf.json` — Tauri config (window defaults, CLI args, plugins)
 - `src-tauri/capabilities/default.json` — Tauri permissions
 - `src/lib/editor/setup.ts` — All CM6 extensions assembled here
 - `src/lib/editor/preview/plugin.ts` — Core live-preview logic (ViewPlugin + DecorationSet)
+- `src/lib/editor/preview/CLAUDE.md` — Table implementation deep dive (decorations, operations, gotchas)
+- `src/lib/editor/block-templates.ts` — Single source of truth for block insertion templates (hover menu + slash commands)
+- `src/lib/editor/folding.ts` — Heading fold service + click handler
 
 ## Tech Stack
 
@@ -97,6 +105,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - `cargo test` — Rust unit tests for commands (file I/O, recovery)
 - After each task: manually verify in `npm run tauri dev` — many features are visual
 - CM6 decoration logic: test with CM6's `EditorState.create()` in Vitest, inspect decoration ranges
+- **Tauri MCP Bridge:** In dev mode, `mcp__tauri__webview_screenshot`, `webview_execute_js`, `read_logs` available for automated UI testing. Plugin only in debug builds (`#[cfg(debug_assertions)]`).
 
 ## Gotchas
 
@@ -111,6 +120,15 @@ src/                    # Frontend (Svelte + TypeScript)
 - **Tauri 2 MenuId:** Use `event.id().as_ref()` not `event.id().0` to get menu item ID string.
 - **Single instance:** `tauri-plugin-single-instance` callback receives `&AppHandle`, not owned. `args[0]` is the binary path — skip it.
 - **Font paths:** Vite resolves `url()` in CSS relative to the CSS file. Put fonts in `src/assets/fonts/` and reference as `/src/assets/fonts/Foo.woff2`.
+- **macOS CLI launcher:** GUI apps cannot be backgrounded with `&` / `disown` / `nohup` — lose window server access. Use `open /path/to/app.app` for launch, single-instance socket IPC for file args. See `docs/cli-launcher.md`.
+- **Single-instance stale socket:** `kill -9` leaves `/tmp/com_md_mini_app_si.sock` — new instances think app is running and exit silently. Delete socket to fix: `rm -f /tmp/com_md_mini_app_si.sock`
+- **Tauri 2 `onCloseRequested`:** Registering a JS listener automatically calls `api.prevent_close()`. The handler MUST call `window.destroy()` or the window will never close. Prefer handling close in Rust `on_window_event` instead.
+- **Lezer GFM tables exclude whitespace-only rows:** New/empty table rows must contain visible content (e.g., `-`) or Lezer won't include them in the Table syntax node.
+- **Table delimiter detection:** Use position-based (2nd line of table), NOT regex. Regex `\|[\s|:-]+\|` matches data rows containing dashes.
+- **CM6 widget `eq()` must compare structural context:** If a widget holds document positions (like TableContext), `eq()` must compare them. Otherwise CM6 reuses stale widgets after edits.
+- **CM6 fold API:** Use `foldable(state, from, to)` to query fold ranges. Do NOT access `foldService.value` directly.
+- **CM6 gutter elements get clipped:** `overflow: hidden` on `.cm-content` clips absolute-positioned elements. Use `padding-left` + `::before` within the line instead of negative `left` offsets.
+- **`/usr/local/bin/mdmini` must be a COPY** of `scripts/mdmini`, not a symlink to the binary. `cp` over a symlink follows the symlink and corrupts the target.
 
 ## Workflow
 
