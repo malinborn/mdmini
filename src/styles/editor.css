@@ -556,3 +556,96 @@
   font-family: var(--font-code);
   flex-shrink: 0;
 }
+
+/* ===== Find & Replace Panel ===== */
+.cm-panels {
+  background: var(--color-code-bg) !important;
+  border-bottom: 1px solid var(--color-table-border);
+  color: var(--color-text);
+  font-family: var(--font-code);
+  font-size: 0.85em;
+}
+
+.cm-panels .cm-panel {
+  background: transparent;
+  padding: 8px 12px;
+}
+
+.cm-panels .cm-panel input[type="text"],
+.cm-panels .cm-textfield {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-table-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  outline: none;
+}
+
+.cm-panels .cm-panel input[type="text"]:focus,
+.cm-panels .cm-textfield:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.cm-panels .cm-panel button,
+.cm-panels .cm-button {
+  background: var(--color-table-border);
+  color: var(--color-text);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-family: var(--font-code);
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cm-panels .cm-panel button:hover,
+.cm-panels .cm-button:hover {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.cm-panels .cm-panel label {
+  color: var(--color-text);
+  font-size: 0.85em;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cm-panels .cm-panel input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.cm-panels .cm-panel .cm-panel-close {
+  color: var(--color-text);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.cm-panels .cm-panel .cm-panel-close:hover {
+  background: var(--color-table-border);
+}
+
+/* Search match highlights */
+.cm-searchMatch {
+  background: rgba(196, 167, 231, 0.25);
+  border-radius: 2px;
+}
+
+.cm-searchMatch-selected {
+  background: rgba(196, 167, 231, 0.5);
+  border-radius: 2px;
+}
+
+:root[data-theme='light'] .cm-searchMatch {
+  background: rgba(124, 58, 237, 0.15);
+}
+
+:root[data-theme='light'] .cm-searchMatch-selected {
+  background: rgba(124, 58, 237, 0.3);
+}
