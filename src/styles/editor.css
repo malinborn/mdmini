@@ -471,31 +471,42 @@
   min-width: 80px;
 }
 
-/* ===== Fold gutter ===== */
-.cm-foldGutter {
-  width: 16px;
-  cursor: pointer;
+/* ===== Heading fold toggle (::before on heading lines) ===== */
+.cm-md-h1, .cm-md-h2, .cm-md-h3,
+.cm-md-h4, .cm-md-h5, .cm-md-h6 {
+  position: relative;
+  transition: padding-left 0.15s;
 }
 
-.cm-foldGutter .cm-gutterElement {
-  color: var(--color-list-marker);
-  font-size: 0.7em;
-  padding: 0 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.cm-md-h1:hover, .cm-md-h2:hover, .cm-md-h3:hover,
+.cm-md-h4:hover, .cm-md-h5:hover, .cm-md-h6:hover {
+  padding-left: 24px;
+}
+
+.cm-md-h1::before, .cm-md-h2::before, .cm-md-h3::before,
+.cm-md-h4::before, .cm-md-h5::before, .cm-md-h6::before {
+  content: '▾';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1em;
+  color: var(--color-accent);
   opacity: 0;
   transition: opacity 0.15s;
+  cursor: pointer;
+  width: 24px;
+  text-align: center;
 }
 
-/* Reveal fold indicators when hovering anywhere over the gutter strip */
-.cm-gutters:hover .cm-foldGutter .cm-gutterElement {
-  opacity: 0.45;
+.cm-md-h1:hover::before, .cm-md-h2:hover::before, .cm-md-h3:hover::before,
+.cm-md-h4:hover::before, .cm-md-h5:hover::before, .cm-md-h6:hover::before {
+  opacity: 0.7;
 }
 
-.cm-foldGutter .cm-gutterElement:hover {
-  opacity: 1 !important;
-  color: var(--color-accent);
+.cm-md-h1:hover::before:hover, .cm-md-h2:hover::before:hover, .cm-md-h3:hover::before:hover,
+.cm-md-h4:hover::before:hover, .cm-md-h5:hover::before:hover, .cm-md-h6:hover::before:hover {
+  opacity: 1;
 }
 
 /* Placeholder widget rendered in place of folded content */
