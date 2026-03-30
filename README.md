@@ -4,8 +4,7 @@ A minimalist live-preview markdown editor for macOS.
 
 You edit raw markdown and see it rendered inline — no split panes, no mode switching. Built with Tauri 2, Svelte 5, and CodeMirror 6.
 
-<!-- TODO: replace with actual screenshot -->
-<!-- ![mdmini](docs/screenshot.png) -->
+![mdmini](docs/screenshot.png)
 
 ## Install
 
