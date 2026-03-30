@@ -302,13 +302,14 @@
     // Start recovery interval
     startRecoveryInterval();
 
-    // Check for updates after 15 seconds (non-blocking)
-    const updateTimer = setTimeout(() => {
-      import('./lib/updater').then(({ checkForUpdates }) => checkForUpdates());
-    }, 15_000);
+    // Check for updates: first after 15s, then every hour
+    let stopUpdateChecker: (() => void) | null = null;
+    import('./lib/updater').then(({ startUpdateChecker }) => {
+      stopUpdateChecker = startUpdateChecker();
+    });
 
     return () => {
-      clearTimeout(updateTimer);
+      if (stopUpdateChecker) stopUpdateChecker();
       unlistenMenu.then((fn) => fn());
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());

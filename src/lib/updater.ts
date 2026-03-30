@@ -1,10 +1,12 @@
 /**
  * Simple update checker — compares current version with latest GitHub release.
  * Shows an in-app banner if a newer version exists.
+ * Checks on launch (after 15s) and then every hour.
  */
 
 const GITHUB_REPO = 'malinborn/mdmini';
 const CHECK_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+const CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 async function getCurrentVersion(): Promise<string> {
   const { getVersion } = await import('@tauri-apps/api/app');
@@ -21,17 +23,17 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 function showUpdateBanner(latest: string, current: string): void {
-  // Remove existing banner if any
-  document.querySelector('.md-update-banner')?.remove();
+  // Don't show if already visible
+  if (document.querySelector('.md-update-banner')) return;
 
-  const brewCmd = 'brew upgrade --cask md-mini';
+  const brewCmd = 'brew upgrade --cask mdmini';
 
   const banner = document.createElement('div');
   banner.className = 'md-update-banner';
   banner.innerHTML = `
     <div class="md-update-content">
       <span class="md-update-text">
-        <strong>md-mini ${latest}</strong> available <span class="md-update-dim">(you have v${current})</span>
+        <strong>mdmini ${latest}</strong> available <span class="md-update-dim">(you have v${current})</span>
       </span>
       <code class="md-update-cmd" title="Click to copy">${brewCmd}</code>
       <button class="md-update-close" title="Dismiss">✕</button>
@@ -69,4 +71,15 @@ export async function checkForUpdates(): Promise<void> {
   } catch {
     // Network error, repo not found — silently ignore
   }
+}
+
+/** Start periodic update checks: first after 15s, then every hour. */
+export function startUpdateChecker(): () => void {
+  const initialTimer = setTimeout(checkForUpdates, 15_000);
+  const intervalTimer = setInterval(checkForUpdates, CHECK_INTERVAL);
+
+  return () => {
+    clearTimeout(initialTimer);
+    clearInterval(intervalTimer);
+  };
 }
