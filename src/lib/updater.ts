@@ -26,7 +26,7 @@ function showUpdateBanner(latest: string, current: string): void {
   // Don't show if already visible
   if (document.querySelector('.md-update-banner')) return;
 
-  const brewCmd = 'brew upgrade --cask mdmini';
+  const brewCmd = 'brew update && brew upgrade --cask mdmini';
 
   const banner = document.createElement('div');
   banner.className = 'md-update-banner';
