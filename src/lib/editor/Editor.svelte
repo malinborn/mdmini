@@ -7,11 +7,13 @@
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
   import { Strikethrough, Table } from '@lezer/markdown';
   import { livePreviewPlugin } from './preview/plugin';
+  import { envPreviewPlugin } from './preview/env';
 
   export interface EditorHandle {
     view: EditorView | undefined;
     replaceContent: (newContent: string) => void;
     setCodeMode: (ext: string | null) => void;
+    setEnvMode: (enabled: boolean) => void;
   }
 
   let { onchange, handle = $bindable() }: {
@@ -67,11 +69,25 @@
             view.dispatch({
               effects: [
                 languageCompartment.reconfigure(langSupport),
-                previewCompartment.reconfigure([]), // disable live-preview decorations
+                previewCompartment.reconfigure([]),
               ],
             });
             view.dom.classList.add('cm-code-file-mode');
           });
+        }
+      },
+      setEnvMode(enabled: boolean) {
+        if (!view) return;
+        if (enabled) {
+          view.dispatch({
+            effects: [
+              languageCompartment.reconfigure([]),
+              previewCompartment.reconfigure(envPreviewPlugin),
+            ],
+          });
+          view.dom.classList.remove('cm-code-file-mode');
+        } else {
+          // Revert handled by setCodeMode(null) — no extra work needed
         }
       },
     };
