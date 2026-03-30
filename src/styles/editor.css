@@ -813,3 +813,74 @@
 .cm-code-file-mode .cm-activeLine {
   background: rgba(196, 167, 231, 0.08);
 }
+
+/* ===== .env file preview ===== */
+.cm-env-comment {
+  color: var(--color-list-marker);
+  font-style: italic;
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+
+.cm-env-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+  font-family: var(--font-code);
+  font-size: 0.9em;
+}
+
+.cm-env-key {
+  font-weight: 700;
+  color: var(--color-accent);
+  min-width: 20ch;
+}
+
+.cm-env-eq {
+  color: var(--color-list-marker);
+}
+
+.cm-env-value {
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-table-border);
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-family: var(--font-code);
+  color: var(--color-text);
+}
+
+.cm-env-value-masked {
+  color: var(--color-list-marker);
+}
+
+.cm-env-value-empty {
+  color: var(--color-list-marker);
+  font-style: italic;
+  opacity: 0.5;
+}
+
+.cm-env-copy {
+  all: unset;
+  cursor: pointer;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-family: var(--font-code);
+  font-size: 0.85em;
+  color: var(--color-list-marker);
+  transition: background 0.15s, color 0.15s;
+  margin-left: auto;
+}
+
+.cm-env-copy:hover {
+  background: var(--color-table-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .cm-env-key {
+  color: #7c3aed;
+}
+
+:root[data-theme='light'] .cm-env-value {
+  background: #f8f0f4;
+  border-color: #e8dde4;
+}
