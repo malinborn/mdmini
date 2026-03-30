@@ -1,7 +1,6 @@
 /**
  * Simple update checker — compares current version with latest GitHub release.
- * Shows a non-intrusive notification if a newer version exists.
- * No Tauri updater plugin needed — just fetch + compare.
+ * Shows an in-app banner if a newer version exists.
  */
 
 // TODO: Replace with your actual GitHub repo when published
@@ -22,6 +21,37 @@ function isNewer(latest: string, current: string): boolean {
   return lc > cc;
 }
 
+function showUpdateBanner(latest: string, current: string): void {
+  // Remove existing banner if any
+  document.querySelector('.md-update-banner')?.remove();
+
+  const brewCmd = 'brew upgrade --cask md-mini';
+
+  const banner = document.createElement('div');
+  banner.className = 'md-update-banner';
+  banner.innerHTML = `
+    <div class="md-update-content">
+      <span class="md-update-text">
+        <strong>md-mini ${latest}</strong> available <span class="md-update-dim">(you have v${current})</span>
+      </span>
+      <code class="md-update-cmd" title="Click to copy">${brewCmd}</code>
+      <button class="md-update-close" title="Dismiss">✕</button>
+    </div>
+  `;
+
+  const cmdEl = banner.querySelector('.md-update-cmd') as HTMLElement;
+  cmdEl.addEventListener('click', () => {
+    navigator.clipboard.writeText(brewCmd);
+    cmdEl.textContent = 'Copied!';
+    setTimeout(() => { cmdEl.textContent = brewCmd; }, 1500);
+  });
+
+  const closeBtn = banner.querySelector('.md-update-close') as HTMLElement;
+  closeBtn.addEventListener('click', () => banner.remove());
+
+  document.body.appendChild(banner);
+}
+
 export async function checkForUpdates(): Promise<void> {
   try {
     const current = await getCurrentVersion();
@@ -32,22 +62,12 @@ export async function checkForUpdates(): Promise<void> {
     if (!res.ok) return;
 
     const data = await res.json();
-    const latest = data.tag_name as string; // e.g. "v0.2.0"
+    const latest = data.tag_name as string;
 
     if (!latest || !isNewer(latest, current)) return;
 
-    // Show non-intrusive notification
-    const { ask } = await import('@tauri-apps/plugin-dialog');
-    const shouldUpdate = await ask(
-      `md-mini ${latest} is available (you have v${current}).\n\nTo update, run in terminal:\nbrew upgrade --cask md-mini`,
-      { title: 'Update Available', kind: 'info' }
-    );
-
-    if (shouldUpdate) {
-      // Copy the command to clipboard for convenience
-      await navigator.clipboard.writeText('brew upgrade --cask md-mini');
-    }
+    showUpdateBanner(latest, current);
   } catch {
-    // Network error, repo not found, etc. — silently ignore
+    // Network error, repo not found — silently ignore
   }
 }

@@ -118,3 +118,73 @@ body {
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* ===== Update banner ===== */
+.md-update-banner {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  background: var(--color-code-bg);
+  border: 1px solid var(--color-table-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 12px 16px;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--color-text);
+  max-width: 400px;
+  animation: md-update-slide-in 0.3s ease-out;
+}
+
+@keyframes md-update-slide-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.md-update-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.md-update-text {
+  line-height: 1.4;
+}
+
+.md-update-dim {
+  opacity: 0.5;
+}
+
+.md-update-cmd {
+  display: block;
+  background: var(--color-bg);
+  border: 1px solid var(--color-table-border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--color-accent);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: all;
+}
+
+.md-update-cmd:hover {
+  background: var(--color-table-border);
+  border-color: var(--color-accent);
+}
+
+.md-update-close {
+  all: unset;
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  cursor: pointer;
+  opacity: 0.4;
+  font-size: 14px;
+}
+
+.md-update-close:hover {
+  opacity: 1;
+}
