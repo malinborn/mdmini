@@ -68,8 +68,11 @@ function isSecret(value: string, key?: string): boolean {
 }
 
 function maskSecret(value: string): string {
-  if (value.length <= 6) return '***';
-  return value.slice(0, 3) + '\u2026' + value.slice(-3);
+  // If fewer than 14 chars would be hidden, mask everything — too easy to bruteforce
+  if (value.length < 20) return '••••••';
+  const hidden = value.length - 6; // 3 shown at start + 3 at end
+  if (hidden < 14) return '••••••';
+  return value.slice(0, 3) + '…' + value.slice(-3);
 }
 
 function stripQuotes(raw: string): string {
