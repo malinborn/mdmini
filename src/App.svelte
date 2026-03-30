@@ -6,6 +6,7 @@
   import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
+  import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
   import { previewCompartment } from './lib/editor/setup';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
@@ -62,7 +63,8 @@
     } catch (err) {
       console.error('Auto-save failed:', err);
     } finally {
-      isSaving = false;
+      // Keep isSaving true briefly to suppress FSEvent from our own atomic write
+      setTimeout(() => { isSaving = false; }, 600);
     }
   }
 

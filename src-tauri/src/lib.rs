@@ -1,13 +1,12 @@
 mod commands;
 mod menu;
 mod recovery;
-#[allow(dead_code)]
 mod watcher;
 mod window;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_cli::CliExt;
-use window::{OpenFiles, PendingFiles};
+use window::{FileWatchers, OpenFiles, PendingFiles};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -42,6 +41,7 @@ pub fn run() {
     let builder = builder
         .manage(OpenFiles::new())
         .manage(PendingFiles::new())
+        .manage(FileWatchers::new())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,

@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Manager};
@@ -33,6 +33,8 @@ pub fn watch_file(
     let watched_path = file_path.clone();
 
     thread::spawn(move || {
+        let mut last_emit = Instant::now() - Duration::from_secs(10);
+
         while let Ok(result) = rx.recv() {
             match result {
                 Ok(event) => {
@@ -40,10 +42,17 @@ pub fn watch_file(
                         event.kind,
                         EventKind::Modify(_) | EventKind::Create(_)
                     ) {
+                        // Debounce: skip events within 500ms of last emit
+                        // (suppresses tmp+rename noise from our own atomic saves)
+                        let now = Instant::now();
+                        if now.duration_since(last_emit) < Duration::from_millis(500) {
+                            continue;
+                        }
+                        last_emit = now;
+
                         if let Some(window) = app_handle.get_webview_window(&window_label) {
                             let _ = window.emit("file-changed-externally", &watched_path);
                         } else {
-                            // Window is gone, stop watching
                             break;
                         }
                     }
