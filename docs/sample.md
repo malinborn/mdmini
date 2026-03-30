@@ -6,7 +6,7 @@ Welcome to md-mini — a minimalist live-preview markdown editor. This file demo
 
 Regular text with **bold**, *italic*, ~~strikethrough~~, and `inline code`. You can also combine ***bold italic*** together.
 
-Links render inline: [md-mini on GitHub](https://github.com) — Cmd+Click to open in browser.
+Links render inline: [md-mini on GitHub](https://github.com) — click to open in browser.
 
 ## Headings Fold
 

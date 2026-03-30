@@ -51,25 +51,43 @@ export function createExtensions(): Extension[] {
     syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
-    // Cmd+Click on links opens URL in browser
+    // Click on rendered links opens URL in browser (mousedown to fire before CM6 removes decoration)
     EditorView.domEventHandlers({
-      click(event: MouseEvent, view: EditorView) {
-        if (!event.metaKey) return false;
+      mousedown(event: MouseEvent, view: EditorView) {
+        if (event.button !== 0) return false; // left click only
+        const target = event.target as HTMLElement;
+        if (!target.closest('.cm-md-link')) return false;
+
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
         if (pos === null) return false;
+
         const tree = syntaxTree(view.state);
         let url = '';
         tree.iterate({
-          from: pos, to: pos,
+          from: Math.max(0, pos - 500),
+          to: Math.min(view.state.doc.length, pos + 500),
           enter(node) {
-            if (node.name === 'URL') {
-              url = view.state.doc.sliceString(node.from, node.to);
+            if (node.name === 'Link' && node.from <= pos && node.to >= pos) {
+              const c = node.node.cursor();
+              if (c.firstChild()) {
+                do {
+                  if (c.name === 'URL') {
+                    url = view.state.doc.sliceString(c.from, c.to);
+                  }
+                } while (c.nextSibling());
+              }
             }
           },
         });
+
         if (url) {
-          window.open(url, '_blank');
           event.preventDefault();
+          event.stopPropagation();
+          import('@tauri-apps/plugin-shell').then(({ open }) => {
+            open(url);
+          }).catch(() => {
+            window.open(url, '_blank');
+          });
           return true;
         }
         return false;
