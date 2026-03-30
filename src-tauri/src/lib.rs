@@ -51,6 +51,7 @@ pub fn run() {
             recovery::save_recovery,
             recovery::delete_recovery,
             recovery::check_recovery,
+            watcher::start_watching,
         ])
         .setup(|app| {
             let menu = menu::build_menu(app.handle())?;

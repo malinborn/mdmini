@@ -137,6 +137,11 @@
       } else {
         editorHandle?.setCodeMode(null);
       }
+
+      // Start watching file for external changes
+      if (exists) {
+        invoke('start_watching', { path }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to open file:', err);
     }

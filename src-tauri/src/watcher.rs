@@ -66,3 +66,18 @@ pub fn watch_file(
 
     Ok(watcher)
 }
+
+/// IPC command: start watching a file for the calling window.
+#[tauri::command]
+pub async fn start_watching(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<(), String> {
+    let label = window.label().to_string();
+    let watcher = watch_file(&app, label.clone(), path)?;
+    let watchers = app.state::<crate::window::FileWatchers>();
+    let mut wmap = watchers.0.lock().unwrap();
+    wmap.insert(label, watcher);
+    Ok(())
+}
