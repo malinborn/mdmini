@@ -6,7 +6,7 @@ Welcome to md-mini — a minimalist live-preview markdown editor. This file demo
 
 Regular text with **bold**, *italic*, ~~strikethrough~~, and `inline code`. You can also combine ***bold italic*** together.
 
-Links render inline: [md-mini on GitHub](https://github.com) — click to follow.
+Links render inline: [md-mini on GitHub](https://github.com) — Cmd+Click to open in browser.
 
 ## Headings Fold
 
@@ -32,13 +32,13 @@ Click any checkbox to toggle it.
 
 Tables render with aligned columns, zebra striping, and full CRUD controls. Hover to see the buttons.
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Cell editing | Done | Double-click any cell |
-| Add row/column | Done | Hover for + buttons |
-| Delete row/column | Done | Hover for − buttons |
-| Drag reorder | Done | Drag ⠿ handles |
-| Inline formatting | Done | `code`, **bold**, *italic* in cells |
+| Feature           | Status | Notes                               |
+| ----------------- | ------ | ----------------------------------- |
+| Cell editing      | Done   | Double-click any cell               |
+| Add row/column    | Done   | Hover for + buttons                 |
+| Delete row/column | Done   | Hover for − buttons                 |
+| Drag reorder      | Done   | Drag ⠿ handles                      |
+| Inline formatting | Done   | `code`, **bold**, *italic* in cells |
 
 ## Code Blocks
 

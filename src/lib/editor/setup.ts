@@ -6,6 +6,7 @@ import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/
 import { searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { syntaxTree } from '@codemirror/language';
 import { codeFolding, foldKeymap, syntaxHighlighting } from '@codemirror/language';
 import { classHighlighter } from '@lezer/highlight';
 import { Strikethrough, Table } from '@lezer/markdown';
@@ -50,6 +51,30 @@ export function createExtensions(): Extension[] {
     syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
+    // Cmd+Click on links opens URL in browser
+    EditorView.domEventHandlers({
+      click(event: MouseEvent, view: EditorView) {
+        if (!event.metaKey) return false;
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos === null) return false;
+        const tree = syntaxTree(view.state);
+        let url = '';
+        tree.iterate({
+          from: pos, to: pos,
+          enter(node) {
+            if (node.name === 'URL') {
+              url = view.state.doc.sliceString(node.from, node.to);
+            }
+          },
+        });
+        if (url) {
+          window.open(url, '_blank');
+          event.preventDefault();
+          return true;
+        }
+        return false;
+      },
+    }),
     EditorView.lineWrapping,
     EditorState.allowMultipleSelections.of(false),
   ];
