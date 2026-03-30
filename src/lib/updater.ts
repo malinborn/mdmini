@@ -3,8 +3,7 @@
  * Shows an in-app banner if a newer version exists.
  */
 
-// TODO: Replace with your actual GitHub repo when published
-const GITHUB_REPO = 'maximkovalevskij/md-mini';
+const GITHUB_REPO = 'malinborn/mdmini';
 const CHECK_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
 async function getCurrentVersion(): Promise<string> {
