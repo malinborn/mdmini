@@ -1,9 +1,15 @@
 use tauri::{
-    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+    menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     AppHandle, Wry,
 };
 
-pub fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
+pub struct ThemeMenuItems {
+    pub light: CheckMenuItem<Wry>,
+    pub dark: CheckMenuItem<Wry>,
+    pub system: CheckMenuItem<Wry>,
+}
+
+pub fn build_menu(app: &AppHandle) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems)> {
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(
             &MenuItemBuilder::with_id("new", "New")
@@ -83,20 +89,18 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
         )
         .build()?;
 
+    let theme_light = CheckMenuItemBuilder::with_id("theme_light", "Light")
+        .build(app)?;
+    let theme_dark = CheckMenuItemBuilder::with_id("theme_dark", "Dark")
+        .build(app)?;
+    let theme_system = CheckMenuItemBuilder::with_id("theme_system", "System")
+        .checked(true)
+        .build(app)?;
+
     let theme_menu = SubmenuBuilder::new(app, "Theme")
-        .item(
-            &CheckMenuItemBuilder::with_id("theme_light", "Light")
-                .build(app)?,
-        )
-        .item(
-            &CheckMenuItemBuilder::with_id("theme_dark", "Dark")
-                .build(app)?,
-        )
-        .item(
-            &CheckMenuItemBuilder::with_id("theme_system", "System")
-                .checked(true)
-                .build(app)?,
-        )
+        .item(&theme_light)
+        .item(&theme_dark)
+        .item(&theme_system)
         .build()?;
 
     let app_menu = SubmenuBuilder::new(app, "md-mini")
@@ -119,5 +123,11 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
         .item(&theme_menu)
         .build()?;
 
-    Ok(menu)
+    let theme_items = ThemeMenuItems {
+        light: theme_light,
+        dark: theme_dark,
+        system: theme_system,
+    };
+
+    Ok((menu, theme_items))
 }

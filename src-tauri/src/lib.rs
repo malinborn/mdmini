@@ -55,7 +55,7 @@ pub fn run() {
             watcher::start_watching,
         ])
         .setup(|app| {
-            let menu = menu::build_menu(app.handle())?;
+            let (menu, theme_items) = menu::build_menu(app.handle())?;
             app.set_menu(menu)?;
 
             let app_handle = app.handle().clone();
@@ -79,16 +79,11 @@ pub fn run() {
                     return;
                 }
 
-                // Handle theme switching — update check marks (radio behavior)
+                // Handle theme switching — radio behavior via direct CheckMenuItem refs
                 if id.starts_with("theme_") {
-                    let theme_ids = ["theme_light", "theme_dark", "theme_system"];
-                    for tid in &theme_ids {
-                        if let Some(item) = _app.menu().and_then(|m| m.get(*tid)) {
-                            if let Some(check) = item.as_check_menuitem() {
-                                let _ = check.set_checked(*tid == id.as_str());
-                            }
-                        }
-                    }
+                    let _ = theme_items.light.set_checked(id == "theme_light");
+                    let _ = theme_items.dark.set_checked(id == "theme_dark");
+                    let _ = theme_items.system.set_checked(id == "theme_system");
                 }
 
                 // Broadcast all other menu events to all windows
