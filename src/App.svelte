@@ -10,6 +10,7 @@
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
   import { previewCompartment } from './lib/editor/setup';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
+  import { envPreviewPlugin } from './lib/editor/preview/env';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -22,6 +23,7 @@
   const recentFiles = createRecentFilesStore();
 
   let showRecentFiles = $state(false);
+  let activePreview: 'markdown' | 'env' | 'code' = $state('markdown');
 
   let editorHandle: EditorHandle | undefined = $state(undefined);
 
@@ -130,12 +132,22 @@
       fileState.isDirty = false;
       recentFiles.add(path);
 
-      // Switch to code mode for non-markdown files
+      // Detect file type and switch editor mode
+      const basename = path.split('/').pop()?.toLowerCase() ?? '';
       const ext = path.split('.').pop()?.toLowerCase() ?? '';
-      if (!MD_EXTENSIONS.has(ext)) {
+      const isEnvFile = basename.startsWith('.env') || ext === 'env';
+
+      if (isEnvFile) {
+        editorHandle?.setEnvMode(true);
+        activePreview = 'env';
+      } else if (!MD_EXTENSIONS.has(ext)) {
+        editorHandle?.setEnvMode(false);
         editorHandle?.setCodeMode(ext);
+        activePreview = 'code';
       } else {
+        editorHandle?.setEnvMode(false);
         editorHandle?.setCodeMode(null);
+        activePreview = 'markdown';
       }
 
       // Start watching file for external changes
@@ -315,15 +327,20 @@
   });
 
   // Reconfigure live-preview compartment when mode toggles
+  // Reconfigure preview when mode toggles (Cmd+E)
   $effect(() => {
     const m = mode.value;
     const v = editorHandle?.view;
     if (!v) return;
-    v.dispatch({
-      effects: previewCompartment.reconfigure(
-        m === 'live-preview' ? livePreviewPlugin : []
-      ),
-    });
+    if (m === 'live-preview') {
+      // Restore the correct preview plugin for the current file type
+      const plugin = activePreview === 'env' ? envPreviewPlugin
+        : activePreview === 'code' ? []
+        : livePreviewPlugin;
+      v.dispatch({ effects: previewCompartment.reconfigure(plugin) });
+    } else {
+      v.dispatch({ effects: previewCompartment.reconfigure([]) });
+    }
   });
 </script>
 
