@@ -619,10 +619,20 @@
   color: var(--color-text);
 }
 
+/* Hide default gutter background (visible as gray bar) */
+.cm-gutters {
+  background: none !important;
+  border-right: none !important;
+}
+
 /* Hover block menu — gutter */
 .cm-hover-gutter {
   width: 24px;
   cursor: default;
+}
+
+.cm-scrolled-x .cm-hover-gutter {
+  visibility: hidden;
 }
 
 .cm-hover-gutter .cm-gutterElement {

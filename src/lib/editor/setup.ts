@@ -1,4 +1,4 @@
-import { keymap, drawSelection } from '@codemirror/view';
+import { keymap, drawSelection, ViewPlugin } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -51,6 +51,21 @@ export function createExtensions(): Extension[] {
     syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
+    // Hide gutter when scrolled horizontally (buttons overlap content)
+    ViewPlugin.fromClass(class {
+      private handler: () => void;
+      private scroller: Element;
+      constructor(view: EditorView) {
+        this.scroller = view.scrollDOM;
+        this.handler = () => {
+          view.dom.classList.toggle('cm-scrolled-x', this.scroller.scrollLeft > 0);
+        };
+        this.scroller.addEventListener('scroll', this.handler, { passive: true });
+      }
+      destroy() {
+        this.scroller.removeEventListener('scroll', this.handler);
+      }
+    }),
     // Click on rendered links opens URL in browser (mousedown to fire before CM6 removes decoration)
     EditorView.domEventHandlers({
       mousedown(event: MouseEvent, view: EditorView) {
