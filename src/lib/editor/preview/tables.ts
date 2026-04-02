@@ -434,6 +434,10 @@ class TableRowWidget extends WidgetType {
 
     const row = document.createElement('span');
     row.className = 'cm-md-table-row';
+    // Consistent min-width across all rows: cells + cell padding + separators
+    const totalCellCh = this.widths.reduce((sum, w) => sum + w + 2 + 1, 0);
+    const sepCount = this.widths.length - 1;
+    row.style.minWidth = `calc(${totalCellCh}ch + ${sepCount}px)`;
 
     this.cells.forEach((cell, i) => {
       if (i > 0) {
@@ -481,13 +485,13 @@ class TableRowWidget extends WidgetType {
       row.appendChild(cellEl);
     });
 
-    // "+" add column (right of header row)
+    wrapper.appendChild(row);
+
+    // "+" add column (right of header row, in wrapper so row width is consistent)
     if (this.isHeader) {
       const addCol = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-col', () => addColumn(view, this.ctx));
-      row.appendChild(addCol);
+      wrapper.appendChild(addCol);
     }
-
-    wrapper.appendChild(row);
 
     // "−" delete row (on data rows, if more than 1 data row)
     if (!this.isHeader) {
@@ -498,6 +502,11 @@ class TableRowWidget extends WidgetType {
         );
         wrapper.appendChild(del);
       }
+    }
+
+    // Mark last data row for bottom border-radius
+    if (this.isLastDataRow) {
+      wrapper.classList.add('cm-md-table-row-wrap-last');
     }
 
     // "+" add row (inline, right of delete button on last data row)

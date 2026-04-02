@@ -190,29 +190,12 @@
 
 /* Tables — line decorations */
 /* Gutter width = del circle (16px) + gap (2px) + drag (26px) + gap (4px) = 48px */
-.cm-md-table-line {
+.cm-line.cm-md-table-line {
   --table-row-gutter: 48px;
   font-family: var(--font-code);
   font-size: 0.9em;
-  background: var(--color-code-bg);
-  padding: 0.2em 0.6em;
-  border-bottom: 1px solid var(--color-table-border);
-}
-
-.cm-md-table-header {
-  font-weight: 600;
-  background: linear-gradient(135deg, #302848 0%, #24203a 40%, #1f1d2e 70%, #282248 100%);
-  border-bottom: 2px solid var(--color-table-border);
-  border-radius: 4px 4px 0 0;
-}
-
-:root[data-theme='light'] .cm-md-table-header {
-  background: linear-gradient(135deg, #e8e0f6 0%, #ede8f4 40%, #f5f3f8 70%, #e4ecf8 100%);
-}
-
-.cm-md-table-line:not(.cm-md-table-header):not(.cm-md-table-delimiter) + .cm-line:not(.cm-md-table-line),
-.cm-md-table-line:last-child {
-  border-radius: 0 0 4px 4px;
+  contain: inline-size;
+  display: flex;
 }
 
 .cm-md-table-delimiter {
@@ -221,17 +204,37 @@
   height: 0;
   overflow: hidden;
   padding: 0;
-  border-bottom: none;
 }
 
-.cm-md-table-even {
-  background: var(--color-table-even-bg);
-}
-
+/* Visual styles on widget wrapper (not .cm-line) so they match content width */
 .cm-md-table-row-wrap {
   display: inline-flex;
   align-items: center;
   position: relative;
+  width: max-content;
+  background: var(--color-code-bg);
+  padding: 0.2em 0.6em 0.2em 0;
+  border-bottom: 1px solid var(--color-table-border);
+  line-height: 1.6;
+}
+
+.cm-md-table-header .cm-md-table-row-wrap {
+  font-weight: 600;
+  background: linear-gradient(135deg, #302848 0%, #24203a 40%, #1f1d2e 70%, #282248 100%);
+  border-bottom: 2px solid var(--color-table-border);
+  border-radius: 4px 4px 0 0;
+}
+
+:root[data-theme='light'] .cm-md-table-header .cm-md-table-row-wrap {
+  background: linear-gradient(135deg, #e8e0f6 0%, #ede8f4 40%, #f5f3f8 70%, #e4ecf8 100%);
+}
+
+.cm-md-table-even .cm-md-table-row-wrap {
+  background: var(--color-table-even-bg);
+}
+
+.cm-md-table-row-wrap-last {
+  border-radius: 0 0 4px 4px;
 }
 
 .cm-md-table-row-wrap-header {
@@ -395,13 +398,19 @@
   opacity: 0.5;
 }
 
-/* Show row delete on row hover */
+/* Right-side row buttons — absolute so they don't affect wrapper width */
 .cm-md-table-btn-del-row,
 .cm-md-table-btn-add-row {
-  margin-left: 4px;
-  flex-shrink: 0;
+  position: absolute;
+  right: -34px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 30px;
   border-radius: 11px;
+}
+
+.cm-md-table-btn-add-row {
+  right: -68px;
 }
 
 /* Left-side delete button — small circle, before drag handle */
@@ -476,8 +485,10 @@
 
 /* Add column button (right of header) */
 .cm-md-table-btn-add-col {
-  margin-left: 6px;
-  flex-shrink: 0;
+  position: absolute;
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .cm-md-table-header:hover .cm-md-table-btn-add-col {
