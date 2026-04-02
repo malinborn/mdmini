@@ -136,6 +136,7 @@
     padding: 2rem;
     font-size: 16px;
     line-height: 1.6;
+    overflow-x: hidden;
   }
 
   .editor-container :global(.cm-focused) {
