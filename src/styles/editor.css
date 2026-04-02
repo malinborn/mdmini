@@ -93,6 +93,8 @@
   font-size: 0.9em;
   background: var(--color-code-bg);
   padding-left: 1em;
+  max-width: calc(100vw - 6rem);
+  overflow-x: auto;
 }
 
 .cm-md-code-block-start {
@@ -117,6 +119,7 @@
   font-size: 0.75em;
   color: var(--color-list-marker);
   border-bottom: 1px solid var(--color-table-border);
+  max-width: calc(100vw - 6rem);
   margin-bottom: 4px;
   user-select: none;
 }
@@ -232,6 +235,8 @@
   display: inline-flex;
   align-items: center;
   position: relative;
+  max-width: calc(100vw - 6rem);
+  overflow-x: auto;
 }
 
 .cm-md-table-row-wrap-header {
