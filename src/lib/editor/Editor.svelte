@@ -138,10 +138,6 @@
     line-height: 1.6;
   }
 
-  .editor-container :global(.cm-content) {
-    max-width: 100%;
-  }
-
   .editor-container :global(.cm-focused) {
     outline: none;
   }
