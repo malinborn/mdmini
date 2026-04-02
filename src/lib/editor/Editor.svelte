@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { EditorView } from '@codemirror/view';
-  import { EditorState } from '@codemirror/state';
+  import { EditorState, Transaction } from '@codemirror/state';
   import { createExtensions, languageCompartment, previewCompartment } from './setup';
   import { languages } from '@codemirror/language-data';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -35,6 +35,7 @@
         view.dispatch({
           changes: { from: 0, to: docLen, insert: newContent },
           selection: newContent.length > 0 ? { anchor: newContent.length } : undefined,
+          annotations: Transaction.addToHistory.of(false),
         });
         if (newContent.length > 0) {
           view.contentDOM.blur();
