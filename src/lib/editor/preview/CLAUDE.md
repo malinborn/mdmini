@@ -126,6 +126,15 @@ All buttons use `opacity: 0` → `opacity: 0.5` on parent hover → `opacity: 1`
 
 Buttons use `mousedown` (not `click`) to fire before CM6 processes the event.
 
+### Visual Styles Live on Widget Wrapper, Not `.cm-line`
+
+Table backgrounds, borders, and border-radius are on `.cm-md-table-row-wrap` (not `.cm-md-table-line`). This is because `.cm-md-table-line` has `contain: inline-size` + `display: flex` to prevent wide tables from expanding `.cm-content` (which breaks text wrapping). If styles were on the line, they'd extend to viewport width.
+
+- Header gradient: `.cm-md-table-header .cm-md-table-row-wrap`
+- Even row bg: `.cm-md-table-even .cm-md-table-row-wrap`
+- Bottom radius: `.cm-md-table-row-wrap-last` (class added in widget JS)
+- Right-side buttons (del-row, add-row, add-col): `position: absolute` so they don't affect wrapper width alignment
+
 ## Dependencies
 
 - `markdown-table` — serializes 2D array → GFM markdown table string

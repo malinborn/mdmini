@@ -129,6 +129,9 @@ src/                    # Frontend (Svelte + TypeScript)
 - **CM6 fold API:** Use `foldable(state, from, to)` to query fold ranges. Do NOT access `foldService.value` directly.
 - **CM6 gutter elements get clipped:** `overflow: hidden` on `.cm-content` clips absolute-positioned elements. Use `padding-left` + `::before` within the line instead of negative `left` offsets.
 - **`/usr/local/bin/mdmini` must be a COPY** of `scripts/mdmini`, not a symlink to the binary. `cp` over a symlink follows the symlink and corrupts the target.
+- **CM6 CSS specificity:** CM6 uses generated selectors like `.ͼ1 .cm-line` (2 classes). To override, use `.cm-line.cm-md-table-line` (also 2 classes), not just `.cm-md-table-line` (1 class).
+- **CM6 `cm-widgetBuffer` images:** CM6 adds hidden `<img>` elements around widget decorations. In inline formatting context they add ~14px height per line. Use `display: flex` on parent line to eliminate this.
+- **CSS `contain: inline-size` for wide widgets:** Prevents wide tables/widgets from expanding `.cm-content` (which breaks `lineWrapping`). Apply on `.cm-line`, move visual styles (background, border) to widget wrapper so they match content width, not viewport width.
 
 ## Workflow
 
