@@ -67,7 +67,8 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
     .title("Untitled — md-mini")
     .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
     .min_inner_size(400.0, 300.0)
-    .position(100.0 + offset, 100.0 + offset);
+    .position(100.0 + offset, 100.0 + offset)
+    .background_color(tauri::utils::config::Color(25, 23, 36, 255));
 
     match builder.build() {
         Ok(_window) => {

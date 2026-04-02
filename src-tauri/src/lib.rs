@@ -16,10 +16,8 @@ pub fn run() {
             let file_args: Vec<String> = argv.into_iter().skip(1).collect();
 
             if file_args.is_empty() {
-                // No files — focus any existing window
-                if let Some((_label, win)) = app.webview_windows().into_iter().next() {
-                    let _ = win.set_focus();
-                }
+                // No files — open a new empty window
+                window::open_file_window(app, None);
             } else {
                 for path in file_args {
                     if !path.starts_with('-') {
@@ -121,10 +119,40 @@ pub fn run() {
     app.run(|_app_handle, event| {
         match event {
             tauri::RunEvent::Opened { urls } => {
-                for url in urls {
+                for url in &urls {
                     if let Ok(path) = url.to_file_path() {
                         if let Some(path_str) = path.to_str() {
-                            window::open_file_window(_app_handle, Some(path_str.to_string()));
+                            let file_path = path_str.to_string();
+                            // Check if "main" window is empty (not tracking a file)
+                            let main_is_empty = {
+                                let open_files = _app_handle.state::<window::OpenFiles>();
+                                let map = open_files.0.lock().unwrap();
+                                !map.values().any(|v| v == "main")
+                            };
+                            if main_is_empty {
+                                // Reuse "main" — store in PendingFiles + OpenFiles
+                                let pending = _app_handle.state::<window::PendingFiles>();
+                                let mut pmap = pending.0.lock().unwrap();
+                                pmap.insert("main".to_string(), file_path.clone());
+                                drop(pmap);
+                                let open_files = _app_handle.state::<window::OpenFiles>();
+                                let mut map = open_files.0.lock().unwrap();
+                                map.insert(file_path.clone(), "main".to_string());
+                                drop(map);
+                                // Emit in case frontend is already loaded
+                                if let Some(win) = _app_handle.get_webview_window("main") {
+                                    let _ = win.emit("open-file", &file_path);
+                                    let _ = win.set_focus();
+                                }
+                                // Start watcher
+                                if let Ok(watcher) = crate::watcher::watch_file(_app_handle, "main".to_string(), file_path) {
+                                    let watchers = _app_handle.state::<window::FileWatchers>();
+                                    let mut wmap = watchers.0.lock().unwrap();
+                                    wmap.insert("main".to_string(), watcher);
+                                }
+                            } else {
+                                window::open_file_window(_app_handle, Some(file_path));
+                            }
                         }
                     }
                 }

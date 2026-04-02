@@ -280,13 +280,18 @@
       handleExternalChange(path);
     });
 
-    // Drag & drop: open .md/.markdown/.txt files dropped onto the window
+    // Drag & drop: open files dropped onto the window
+    // If current window is empty (no file, no edits), open first file here; rest in new windows
     const unlistenDragDrop = import('@tauri-apps/api/webview').then(({ getCurrentWebview }) =>
       getCurrentWebview().onDragDropEvent(async (event) => {
         if (event.payload.type !== 'drop') return;
         const paths = event.payload.paths as string[];
+        let usedCurrentWindow = false;
         for (const path of paths) {
-          if (path.endsWith('.md') || path.endsWith('.markdown') || path.endsWith('.txt')) {
+          if (!usedCurrentWindow && !fileState.filePath && !fileState.isDirty) {
+            usedCurrentWindow = true;
+            await handleOpenFilePath(path);
+          } else {
             await invoke('open_file_window_cmd', { path }).catch((err: unknown) => {
               console.error('Failed to open dropped file:', err);
             });
