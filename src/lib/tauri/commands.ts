@@ -13,12 +13,18 @@ export async function fileExists(path: string): Promise<boolean> {
   return invoke<boolean>('file_exists', { path });
 }
 
-const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
+const FILE_FILTERS = [
+  { name: 'All Supported', extensions: ['md', 'markdown', 'txt', 'csv', 'json', 'yml', 'yaml', 'toml', 'py', 'rs', 'ts', 'js', 'sh', 'env'] },
+  { name: 'Markdown', extensions: ['md', 'markdown', 'txt'] },
+  { name: 'Data', extensions: ['csv', 'json', 'yml', 'yaml', 'toml'] },
+  { name: 'Code', extensions: ['py', 'rs', 'ts', 'js', 'sh'] },
+  { name: 'All Files', extensions: ['*'] },
+];
 
 export async function showOpenDialog(): Promise<string | null> {
   const result = await open({
     multiple: false,
-    filters: MD_FILTERS,
+    filters: FILE_FILTERS,
   });
   return result as string | null;
 }
@@ -26,7 +32,7 @@ export async function showOpenDialog(): Promise<string | null> {
 export async function showSaveDialog(defaultName?: string): Promise<string | null> {
   const result = await save({
     defaultPath: defaultName,
-    filters: MD_FILTERS,
+    filters: FILE_FILTERS,
   });
   return result as string | null;
 }
