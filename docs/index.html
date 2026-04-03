@@ -587,7 +587,7 @@
       <div class="install-block">
         <span class="install-label">$ install</span>
         <span class="install-cmd" id="install-text">
-          <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span class="pkg">malinborn/mdmini/mdmini</span>
+          <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
         </span>
         <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard" aria-label="Copy install command">
           <svg id="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -708,7 +708,7 @@
           <span class="terminal-title">zsh</span>
         </div>
         <div class="terminal-body">
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew install malinborn/mdmini/mdmini</span></div>
+          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew tap malinborn/mdmini && brew install --cask mdmini</span></div>
           <div><span class="t-out">==&gt; Downloading mdmini...</span></div>
           <div><span class="t-out">==&gt; Installing mdmini</span></div>
           <div><span class="t-out">✓  mdmini installed</span></div>
@@ -871,7 +871,7 @@
 
   <script>
     function copyInstall(btn) {
-      const text = 'brew install malinborn/mdmini/mdmini';
+      const text = 'brew tap malinborn/mdmini && brew install --cask mdmini';
       navigator.clipboard.writeText(text).then(() => {
         document.getElementById('copy-icon').style.display = 'none';
         document.getElementById('check-icon').style.display = 'block';
