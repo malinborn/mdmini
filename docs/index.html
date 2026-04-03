@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>mdmini — Minimalist Markdown Editor for macOS</title>
-  <meta name="description" content="A minimalist live-preview markdown editor for macOS. Fast, native, keyboard-first." />
+  <meta name="description" content="A minimalist live-preview markdown editor for macOS. Lightweight, fast, and distraction-free." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='-apple-system%2C BlinkMacSystemFont%2C sans-serif' font-weight='700' font-size='22' fill='%23c4a7e7'%3EM%3C/text%3E%3C/svg%3E" />
   <style>
     /* ── Design tokens (Rosé Pine dark) ── */
     :root {
@@ -529,6 +530,35 @@
     }
     .footer-links a:hover { color: var(--text); }
 
+    /* ── Screenshot ── */
+    .screenshot-wrap {
+      position: relative;
+      max-width: 900px;
+      margin: 40px auto 0;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--overlay);
+    }
+
+    .screenshot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: var(--radius-lg);
+    }
+
+    .screenshot-wrap::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 55%;
+      background: linear-gradient(to bottom, transparent 0%, var(--base) 100%);
+      pointer-events: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
     /* ── Divider ── */
     .divider {
       height: 1px;
@@ -581,7 +611,7 @@
 
       <p class="hero-tagline">
         A minimalist live-preview markdown editor for macOS.
-        Native, fast, and keyboard-first.
+        Lightweight, fast, and distraction-free.
       </p>
 
       <div class="install-block">
@@ -616,6 +646,13 @@
         </a>
       </div>
     </section>
+  </div>
+
+  <!-- Screenshot -->
+  <div class="container">
+    <div class="screenshot-wrap">
+      <img src="sample_image.png" alt="mdmini screenshot — live-preview markdown editor" />
+    </div>
   </div>
 
   <div class="divider"></div>
