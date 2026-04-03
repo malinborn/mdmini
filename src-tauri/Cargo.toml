@@ -28,4 +28,5 @@ notify = { version = "8.2.0", features = ["macos_fsevent"] }
 tauri-plugin-dialog = "2.6.0"
 tauri-plugin-shell = "2"
 dirs = "6.0.0"
+cocoa = "0.26"
 tauri-plugin-mcp-bridge = "0.10"

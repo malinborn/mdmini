@@ -71,7 +71,15 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
     .background_color(tauri::utils::config::Color(25, 23, 36, 255));
 
     match builder.build() {
-        Ok(_window) => {
+        Ok(window) => {
+            // Bring app + window to foreground (macOS requires NSApp activate)
+            let _ = window.set_focus();
+            #[cfg(target_os = "macos")]
+            unsafe {
+                use cocoa::appkit::{NSApplication, NSApplicationActivationPolicy};
+                let ns_app = cocoa::appkit::NSApp();
+                ns_app.activateIgnoringOtherApps_(true);
+            }
             // Track the file path in OpenFiles and store it in PendingFiles
             // so the frontend can pull it on mount via get_pending_file command.
             if let Some(ref file_path) = path {
