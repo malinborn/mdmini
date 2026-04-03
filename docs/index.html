@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mdmini — Minimalist Markdown Editor for macOS</title>
+  <meta name="description" content="A minimalist live-preview markdown editor for macOS. Fast, native, keyboard-first." />
+  <style>
+    /* ── Design tokens (Rosé Pine dark) ── */
+    :root {
+      --base:        #191724;
+      --surface:     #1f1d2e;
+      --overlay:     #26233a;
+      --muted:       #6e6a86;
+      --subtle:      #908caa;
+      --text:        #e0def4;
+      --love:        #eb6f92;
+      --gold:        #f6c177;
+      --rose:        #ebbcba;
+      --pine:        #31748f;
+      --foam:        #9ccfd8;
+      --iris:        #c4a7e7;
+      --highlight:   #403d52;
+
+      --font-sans:   -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono:   "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
+
+      --radius-sm:   6px;
+      --radius-md:   10px;
+      --radius-lg:   16px;
+
+      --transition:  140ms ease;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--base);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: var(--iris);
+      text-decoration: none;
+      transition: color var(--transition), opacity var(--transition);
+    }
+    a:hover { color: var(--foam); }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 80px 0;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(25, 23, 36, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--overlay);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .nav-logo {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .nav-logo span { color: var(--iris); }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 14px;
+      color: var(--subtle);
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--subtle);
+      background: var(--overlay);
+      border: 1px solid var(--highlight);
+      border-radius: 20px;
+      padding: 4px 12px;
+      margin-bottom: 28px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--iris);
+      opacity: 0.8;
+    }
+
+    h1 {
+      font-size: clamp(40px, 8vw, 68px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 20px;
+    }
+
+    .hero-tagline {
+      font-size: clamp(16px, 2.5vw, 19px);
+      color: var(--subtle);
+      max-width: 520px;
+      margin: 0 auto 44px;
+      line-height: 1.6;
+    }
+
+    .install-block {
+      display: inline-flex;
+      align-items: center;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--overlay);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .install-label {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--muted);
+      padding: 0 14px;
+      white-space: nowrap;
+      border-right: 1px solid var(--overlay);
+      height: 44px;
+      display: flex;
+      align-items: center;
+    }
+
+    .install-cmd {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text);
+      padding: 0 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .install-cmd .brew { color: var(--gold); }
+    .install-cmd .pkg  { color: var(--iris); }
+
+    .copy-btn {
+      background: none;
+      border: none;
+      border-left: 1px solid var(--overlay);
+      color: var(--subtle);
+      cursor: pointer;
+      padding: 0 14px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      transition: color var(--transition), background var(--transition);
+      flex-shrink: 0;
+    }
+    .copy-btn:hover {
+      color: var(--text);
+      background: var(--overlay);
+    }
+    .copy-btn svg { display: block; }
+
+    .hero-links {
+      margin-top: 24px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      transition: opacity var(--transition), background var(--transition);
+    }
+
+    .btn-primary {
+      background: var(--iris);
+      color: var(--base);
+    }
+    .btn-primary:hover { opacity: 0.88; color: var(--base); }
+
+    .btn-ghost {
+      background: var(--overlay);
+      color: var(--text);
+      border: 1px solid var(--highlight);
+    }
+    .btn-ghost:hover { background: var(--highlight); color: var(--text); }
+
+    /* ── Features ── */
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--iris);
+      margin-bottom: 12px;
+    }
+
+    .section-heading {
+      font-size: clamp(24px, 4vw, 34px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 48px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 2px;
+      background: var(--overlay);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--overlay);
+    }
+
+    .feature-card {
+      background: var(--surface);
+      padding: 28px 24px;
+      transition: background var(--transition);
+    }
+
+    .feature-card:hover {
+      background: var(--base);
+    }
+
+    .feature-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: var(--overlay);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 17px;
+    }
+
+    .feature-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--subtle);
+      line-height: 1.55;
+    }
+
+    /* ── CLI demo ── */
+    .cli-section {
+      padding: 80px 0;
+    }
+
+    .terminal {
+      background: var(--surface);
+      border: 1px solid var(--overlay);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .terminal-bar {
+      background: var(--overlay);
+      padding: 11px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .terminal-dot.red    { background: #eb6f92; }
+    .terminal-dot.yellow { background: #f6c177; }
+    .terminal-dot.green  { background: #31748f; }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .t-prompt   { color: var(--muted); }
+    .t-cmd      { color: var(--text); }
+    .t-out      { color: var(--subtle); }
+    .t-iris     { color: var(--iris); }
+    .t-pine     { color: var(--foam); }
+    .t-gold     { color: var(--gold); }
+    .t-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 14px;
+      background: var(--iris);
+      opacity: 0.7;
+      vertical-align: text-bottom;
+      animation: blink 1.1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 0.7; }
+      50%       { opacity: 0; }
+    }
+
+    /* ── Changelog ── */
+    #changelog {
+      padding: 80px 0;
+    }
+
+    .changelog-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .changelog-entry {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 32px;
+      padding: 32px 0;
+      border-top: 1px solid var(--overlay);
+    }
+
+    .changelog-entry:last-child {
+      border-bottom: 1px solid var(--overlay);
+    }
+
+    .changelog-meta {
+      padding-top: 2px;
+    }
+
+    .changelog-version {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--iris);
+      margin-bottom: 4px;
+    }
+
+    .changelog-date {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .changelog-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+    .changelog-tag.initial  { background: rgba(196,167,231,0.15); color: var(--iris); }
+    .changelog-tag.feature  { background: rgba(156,207,216,0.15); color: var(--foam); }
+    .changelog-tag.fix      { background: rgba(235,111,146,0.15); color: var(--love); }
+    .changelog-tag.perf     { background: rgba(246,193,119,0.15); color: var(--gold); }
+
+    .changelog-body h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .changelog-body p {
+      font-size: 14px;
+      color: var(--subtle);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+
+    .changelog-body ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .changelog-body li {
+      font-size: 14px;
+      color: var(--subtle);
+      padding-left: 18px;
+      position: relative;
+      line-height: 1.5;
+    }
+
+    .changelog-body li::before {
+      content: "·";
+      position: absolute;
+      left: 6px;
+      color: var(--iris);
+      font-weight: 700;
+    }
+
+    .changelog-body li strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .changelog-body code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--overlay);
+      color: var(--foam);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--overlay);
+      padding: 40px 0;
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .footer-name {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .footer-sub {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 13px;
+      color: var(--subtle);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--overlay);
+      margin: 0;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      section { padding: 60px 0; }
+      .hero    { padding: 64px 0 56px; }
+
+      .install-label { display: none; }
+
+      .changelog-entry {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .changelog-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .changelog-tag { margin-top: 0; }
+
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="nav-inner">
+      <span class="nav-logo">md<span>mini</span></span>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#changelog">Changelog</a></li>
+        <li><a href="https://github.com/malinborn/mdmini">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <div class="container">
+    <section class="hero">
+      <div class="hero-badge"><span class="dot"></span>macOS · free · open source</div>
+
+      <h1>mdmini</h1>
+
+      <p class="hero-tagline">
+        A minimalist live-preview markdown editor for macOS.
+        Native, fast, and keyboard-first.
+      </p>
+
+      <div class="install-block">
+        <span class="install-label">$ install</span>
+        <span class="install-cmd" id="install-text">
+          <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span class="pkg">malinborn/mdmini/mdmini</span>
+        </span>
+        <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard" aria-label="Copy install command">
+          <svg id="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <svg id="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+            <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="hero-links">
+        <a class="btn btn-primary" href="https://github.com/malinborn/mdmini/releases">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <path d="M7.5 1L7.5 11M7.5 11L4 7.5M7.5 11L11 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 13h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Download
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/malinborn/mdmini">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.5.85a6.65 6.65 0 00-2.102 12.96c.333.06.456-.144.456-.322v-1.129c-1.852.402-2.244-.893-2.244-.893-.303-.77-.74-1.006-.74-1.006-.603-.413.045-.404.045-.404.668.047 1.02.686 1.02.686.594 1.018 1.558.724 1.94.554.06-.43.232-.724.422-.89C5.03 9.95 3.55 9.375 3.55 6.982c0-.71.254-1.29.67-1.745-.067-.166-.29-.826.064-1.72 0 0 .546-.175 1.788.666A6.23 6.23 0 017.5 3.97c.552.002 1.108.075 1.627.22 1.24-.84 1.786-.666 1.786-.666.355.894.132 1.554.065 1.72.417.454.67 1.035.67 1.745 0 2.401-1.483 2.97-2.895 3.127.228.196.43.582.43 1.172v1.736c0 .18.121.385.46.32A6.652 6.652 0 007.5.85z"/>
+          </svg>
+          GitHub
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Features -->
+  <div class="container" id="features">
+    <section>
+      <div class="section-label">What it does</div>
+      <div class="section-heading">Everything you need,<br>nothing you don't</div>
+
+      <div class="features-grid">
+
+        <div class="feature-card">
+          <div class="feature-icon">✦</div>
+          <div class="feature-title">Live Preview</div>
+          <div class="feature-desc">Markdown renders inline as you type. No split pane, no preview toggle.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">▤</div>
+          <div class="feature-title">GFM Tables</div>
+          <div class="feature-desc">Create, edit, reorder, and delete table rows and columns. Drag to reorder.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">◧</div>
+          <div class="feature-title">Collapsible Headings</div>
+          <div class="feature-desc">Click any heading to fold the section below it. Keeps long docs navigable.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">◈</div>
+          <div class="feature-title">Syntax-Highlighted Code</div>
+          <div class="feature-desc">Fenced code blocks render with language-aware syntax highlighting.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">◉</div>
+          <div class="feature-title">Secret Masking</div>
+          <div class="feature-desc">Values in <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.env</code> files are blurred by default. Click to reveal.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⟳</div>
+          <div class="feature-title">File Watching</div>
+          <div class="feature-desc">External changes to open files are detected and reloaded automatically.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⌘</div>
+          <div class="feature-title">CLI Launcher</div>
+          <div class="feature-desc">Open files instantly from the terminal with <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">mdmini file.md</code>.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">↓</div>
+          <div class="feature-title">Dock Drop</div>
+          <div class="feature-desc">Drag any file onto the Dock icon to open it. Works with multiple files at once.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">◑</div>
+          <div class="feature-title">Dark &amp; Light Themes</div>
+          <div class="feature-desc">Rosé Pine dark and Rosé Pine Dawn. Switch with a single keypress.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⏺</div>
+          <div class="feature-title">Auto-Save &amp; Recovery</div>
+          <div class="feature-desc">Changes are saved continuously. Crash recovery restores your last session.</div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- CLI demo -->
+  <div class="container">
+    <section class="cli-section" style="text-align:center">
+      <div class="section-label">Quick start</div>
+      <div class="section-heading" style="margin-bottom:36px">Zero config, instant open</div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">zsh</span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew install malinborn/mdmini/mdmini</span></div>
+          <div><span class="t-out">==&gt; Downloading mdmini...</span></div>
+          <div><span class="t-out">==&gt; Installing mdmini</span></div>
+          <div><span class="t-out">✓  mdmini installed</span></div>
+          <br>
+          <div><span class="t-prompt">~ $</span> <span class="t-cmd">mdmini README.md</span></div>
+          <div><span class="t-pine"># Opens in a native macOS window</span></div>
+          <br>
+          <div><span class="t-prompt">~ $</span> <span class="t-cmd">mdmini *.md notes/*.md</span></div>
+          <div><span class="t-pine"># Each file gets its own window</span></div>
+          <br>
+          <div><span class="t-prompt">~ $</span> <span class="t-cursor"></span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Changelog -->
+  <div class="container">
+    <section id="changelog">
+      <div class="section-label">Releases</div>
+      <div class="section-heading">Changelog</div>
+
+      <div class="changelog-list">
+
+        <!-- ── TEMPLATE for new entries ──────────────────────────────────────
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.x.0</div>
+            <div class="changelog-date">YYYY-MM-DD</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Release title</h3>
+            <ul>
+              <li><strong>thing</strong> — description</li>
+            </ul>
+          </div>
+        </div>
+        ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.1.6</div>
+            <div class="changelog-date">2026-04-03</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Foreground windows</h3>
+            <ul>
+              <li><strong>Windows open in foreground</strong> — new windows from CLI now appear on top via NSApp activate</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.1.5</div>
+            <div class="changelog-date">2026-04-02</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>File associations &amp; smart windows</h3>
+            <ul>
+              <li><strong>Dock file drop</strong> — drag files onto the Dock icon to open</li>
+              <li><strong>File associations</strong> — macOS registers mdmini for .md, .txt, .json, .py, .rs, .yml, .toml, .sh</li>
+              <li><strong>Smart window reuse</strong> — drag-drop and Dock drop open in empty windows</li>
+              <li><strong>No white flash</strong> — dark background set before CSS loads</li>
+              <li><strong>Cmd+Z safety</strong> — undo no longer clears content after file open</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.1.4</div>
+            <div class="changelog-date">2026-04-02</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Text wrapping &amp; table alignment</h3>
+            <ul>
+              <li><strong>Text wrapping</strong> — long text wraps correctly even with wide tables</li>
+              <li><strong>Gutter cleanup</strong> — removed gray bar, auto-hides on horizontal scroll</li>
+              <li><strong>Table alignment</strong> — consistent column alignment across all rows</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.1.3</div>
+            <div class="changelog-date">2026-03-30</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Update checks &amp; theme fixes</h3>
+            <ul>
+              <li><strong>Update banner</strong> — correct brew command with <code>brew update</code> prefix</li>
+              <li><strong>Theme menu</strong> — single checkmark radio behavior</li>
+              <li><strong>Hourly update checks</strong> while app is open</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.1.0</div>
+            <div class="changelog-date">2026-03-30</div>
+            <span class="changelog-tag initial">initial</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Initial release</h3>
+            <ul>
+              <li><strong>Live preview</strong> — inline markdown rendering via CodeMirror 6 decorations</li>
+              <li><strong>GFM tables</strong> — create, edit, reorder rows/columns, drag-drop</li>
+              <li><strong>Collapsible headings</strong> — click to fold sections</li>
+              <li><strong>Syntax highlighting</strong> — fenced code blocks with language detection</li>
+              <li><strong>Secret masking</strong> — <code>.env</code> values blurred by default</li>
+              <li><strong>File watching</strong> — external edits reload automatically</li>
+              <li><strong>CLI launcher</strong> — <code>mdmini file.md</code> via Homebrew tap</li>
+              <li><strong>Themes</strong> — Rosé Pine dark &amp; dawn</li>
+              <li><strong>Auto-save &amp; crash recovery</strong></li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-left">
+          <span class="footer-name">mdmini</span>
+          <span class="footer-sub">GPL-3.0 · Tauri 2 · Svelte 5 · CodeMirror 6</span>
+        </div>
+        <ul class="footer-links">
+          <li>
+            <a href="https://github.com/malinborn/mdmini">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.5.85a6.65 6.65 0 00-2.102 12.96c.333.06.456-.144.456-.322v-1.129c-1.852.402-2.244-.893-2.244-.893-.303-.77-.74-1.006-.74-1.006-.603-.413.045-.404.045-.404.668.047 1.02.686 1.02.686.594 1.018 1.558.724 1.94.554.06-.43.232-.724.422-.89C5.03 9.95 3.55 9.375 3.55 6.982c0-.71.254-1.29.67-1.745-.067-.166-.29-.826.064-1.72 0 0 .546-.175 1.788.666A6.23 6.23 0 017.5 3.97c.552.002 1.108.075 1.627.22 1.24-.84 1.786-.666 1.786-.666.355.894.132 1.554.065 1.72.417.454.67 1.035.67 1.745 0 2.401-1.483 2.97-2.895 3.127.228.196.43.582.43 1.172v1.736c0 .18.121.385.46.32A6.652 6.652 0 007.5.85z"/>
+              </svg>
+              GitHub
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/malinborn/mdmini/releases">Releases</a>
+          </li>
+          <li>
+            <a href="https://github.com/malinborn/mdmini/blob/main/LICENSE">License</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall(btn) {
+      const text = 'brew install malinborn/mdmini/mdmini';
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('copy-icon').style.display = 'none';
+        document.getElementById('check-icon').style.display = 'block';
+        setTimeout(() => {
+          document.getElementById('copy-icon').style.display = 'block';
+          document.getElementById('check-icon').style.display = 'none';
+        }, 1800);
+      });
+    }
+  </script>
+
+</body>
+</html>
