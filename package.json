@@ -30,7 +30,8 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.3.5",
-    "markdown-table": "^3.0.4"
+    "markdown-table": "^3.0.4",
+    "mermaid": "^11.14.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
