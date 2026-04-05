@@ -905,3 +905,67 @@
   background: #f8f0f4;
   border-color: #e8dde4;
 }
+
+/* Mermaid diagrams */
+.cm-md-mermaid-line {
+  font-size: 0;
+  line-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.cm-md-mermaid-line-hidden {
+  font-size: 0;
+  line-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.cm-md-mermaid-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-code-bg);
+  border-radius: 6px;
+  padding: 16px;
+  margin: 4px 0;
+  overflow: hidden;
+}
+
+.cm-md-mermaid-svg {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cm-md-mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.cm-md-mermaid-placeholder {
+  color: var(--color-list-marker);
+  font-family: var(--font-code);
+  font-size: 0.85em;
+  padding: 24px;
+  text-align: center;
+}
+
+.cm-md-mermaid-error {
+  width: 100%;
+  font-family: var(--font-code);
+  font-size: 0.8em;
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.08);
+  padding: 6px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme='dark'] .cm-md-mermaid-error {
+  color: #f6c177;
+  background: rgba(246, 193, 119, 0.1);
+}
