@@ -129,7 +129,7 @@ export function requestRender(source: string, view: EditorView): void {
     source,
     setTimeout(() => {
       debounceTimers.delete(source);
-      new Promise<void>((resolve) => {
+      void new Promise<void>((resolve) => {
         queue.push({ source, view, resolve });
         processQueue();
       });
@@ -163,8 +163,7 @@ class MermaidWidget extends WidgetType {
   eq(other: MermaidWidget): boolean {
     return (
       this.source === other.source &&
-      (this.svg !== null) === (other.svg !== null) &&
-      (this.error !== null) === (other.error !== null) &&
+      this.svg === other.svg &&
       this.error === other.error
     );
   }
