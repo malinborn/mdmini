@@ -78,10 +78,10 @@ export const headingFoldClick: Extension = EditorView.domEventHandlers({
     const isHeading = Array.from(line.classList).some(c => /^cm-md-h[1-6]$/.test(c));
     if (!isHeading) return false;
 
-    // Check if click is in the left padding (::before area, 24px)
+    // Check if click is in the right area (::after toggle, last 32px)
     const lineRect = line.getBoundingClientRect();
-    const clickX = event.clientX - lineRect.left;
-    if (clickX > 24) return false; // clicked on text — let CM6 handle it
+    const clickX = lineRect.right - event.clientX;
+    if (clickX > 32) return false; // clicked on text — let CM6 handle it
 
     // Prevent CM6 from placing cursor
     event.preventDefault();

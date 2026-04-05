@@ -563,27 +563,21 @@
   min-width: 80px;
 }
 
-/* ===== Heading fold toggle (::before on heading lines) ===== */
+/* ===== Heading fold toggle (::after on heading lines, right side) ===== */
 .cm-md-h1, .cm-md-h2, .cm-md-h3,
 .cm-md-h4, .cm-md-h5, .cm-md-h6 {
   position: relative;
-  transition: padding-left 0.15s;
 }
 
-.cm-md-h1:hover, .cm-md-h2:hover, .cm-md-h3:hover,
-.cm-md-h4:hover, .cm-md-h5:hover, .cm-md-h6:hover {
-  padding-left: 24px;
-}
-
-.cm-md-h1::before, .cm-md-h2::before, .cm-md-h3::before,
-.cm-md-h4::before, .cm-md-h5::before, .cm-md-h6::before {
+.cm-md-h1::after, .cm-md-h2::after, .cm-md-h3::after,
+.cm-md-h4::after, .cm-md-h5::after, .cm-md-h6::after {
   content: '▾';
   position: absolute;
-  left: 0;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 1em;
-  color: var(--color-accent);
+  font-size: 0.6em;
+  color: var(--color-list-marker);
   opacity: 0;
   transition: opacity 0.15s;
   cursor: pointer;
@@ -591,13 +585,13 @@
   text-align: center;
 }
 
-.cm-md-h1:hover::before, .cm-md-h2:hover::before, .cm-md-h3:hover::before,
-.cm-md-h4:hover::before, .cm-md-h5:hover::before, .cm-md-h6:hover::before {
-  opacity: 0.7;
+.cm-md-h1:hover::after, .cm-md-h2:hover::after, .cm-md-h3:hover::after,
+.cm-md-h4:hover::after, .cm-md-h5:hover::after, .cm-md-h6:hover::after {
+  opacity: 0.5;
 }
 
-.cm-md-h1:hover::before:hover, .cm-md-h2:hover::before:hover, .cm-md-h3:hover::before:hover,
-.cm-md-h4:hover::before:hover, .cm-md-h5:hover::before:hover, .cm-md-h6:hover::before:hover {
+.cm-md-h1:hover::after:hover, .cm-md-h2:hover::after:hover, .cm-md-h3:hover::after:hover,
+.cm-md-h4:hover::after:hover, .cm-md-h5:hover::after:hover, .cm-md-h6:hover::after:hover {
   opacity: 1;
 }
 
