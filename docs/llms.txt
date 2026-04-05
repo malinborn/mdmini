@@ -1,0 +1,31 @@
+# mdmini
+
+> Minimalist live-preview markdown editor for macOS
+
+mdmini is a free, open-source markdown editor built with Tauri 2, Svelte 5, and CodeMirror 6. You edit raw markdown and see it rendered inline — no split panes, no mode switching.
+
+## Features
+
+- **Live preview** — markdown renders inline as you type
+- **Mermaid diagrams** — flowcharts, sequence, class, state, ER, Gantt, pie, gitgraph, mindmap render as inline SVG
+- **GFM tables** — interactive editing, drag to reorder rows/columns, inline formatting
+- **Syntax-highlighted code blocks** — 100+ languages with copy button
+- **Collapsible headings** — fold/unfold document sections
+- **.env secret masking** — sensitive values hidden by default
+- **File watching** — auto-reloads on external changes
+- **CLI launcher** — `mdmini file.md` from terminal
+- **Dark & Light themes** — Rosé Pine
+
+## Install
+
+```
+brew tap malinborn/mdmini
+brew install --cask mdmini
+```
+
+## Links
+
+- Website: https://malinborn.github.io/mdmini/
+- Source: https://github.com/malinborn/mdmini
+- Releases: https://github.com/malinborn/mdmini/releases
+- License: GPL-3.0
