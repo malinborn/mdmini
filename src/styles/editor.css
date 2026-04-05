@@ -95,11 +95,10 @@
   padding-left: 1em;
 }
 
-.cm-line.cm-md-code-block-start {
+.cm-md-code-block-start {
   border-top-left-radius: 6px;
   border-top-right-radius: 6px;
-  padding-top: 2.4em;
-  position: relative;
+  padding-top: 0.5em;
 }
 
 .cm-md-code-block-end {
@@ -110,23 +109,16 @@
 
 /* Code block header (language label + copy button) */
 .cm-md-code-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 12px;
+  padding: 4px 12px;
   font-family: var(--font-code);
   font-size: 0.75em;
   color: var(--color-list-marker);
-  background: var(--color-code-bg);
   border-bottom: 1px solid var(--color-table-border);
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
+  margin-bottom: 4px;
   user-select: none;
-  z-index: 1;
 }
 
 .cm-md-code-lang {
@@ -143,7 +135,6 @@
 .cm-md-code-copy {
   all: unset;
   cursor: pointer;
-  margin-left: auto;
   padding: 2px 8px;
   border-radius: 3px;
   font-size: 0.85em;
