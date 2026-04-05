@@ -54,7 +54,13 @@ const cache = new Map<string, MermaidCacheEntry>();
 const MAX_CACHE = 50;
 
 export function getCached(source: string): MermaidCacheEntry | undefined {
-  return cache.get(source);
+  const entry = cache.get(source);
+  if (entry !== undefined) {
+    // Promote to most-recently-used by re-inserting at tail
+    cache.delete(source);
+    cache.set(source, entry);
+  }
+  return entry;
 }
 
 function setCache(source: string, entry: MermaidCacheEntry): void {
