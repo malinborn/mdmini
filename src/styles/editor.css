@@ -563,27 +563,22 @@
   min-width: 80px;
 }
 
-/* ===== Heading fold toggle (::after on heading lines, right side) ===== */
-.cm-md-h1, .cm-md-h2, .cm-md-h3,
-.cm-md-h4, .cm-md-h5, .cm-md-h6 {
-  position: relative;
-}
-
+/* ===== Heading fold toggle (inline ::after, right of text) ===== */
 .cm-md-h1::after, .cm-md-h2::after, .cm-md-h3::after,
 .cm-md-h4::after, .cm-md-h5::after, .cm-md-h6::after {
-  content: '▾';
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.6em;
+  content: ' ▾';
   color: var(--color-list-marker);
   opacity: 0;
   transition: opacity 0.15s;
   cursor: pointer;
-  width: 24px;
-  text-align: center;
 }
+
+.cm-md-h1::after { font-size: 0.5em; }
+.cm-md-h2::after { font-size: 0.5em; }
+.cm-md-h3::after { font-size: 0.55em; }
+.cm-md-h4::after { font-size: 0.6em; }
+.cm-md-h5::after { font-size: 0.65em; }
+.cm-md-h6::after { font-size: 0.7em; }
 
 .cm-md-h1:hover::after, .cm-md-h2:hover::after, .cm-md-h3:hover::after,
 .cm-md-h4:hover::after, .cm-md-h5:hover::after, .cm-md-h6:hover::after {
