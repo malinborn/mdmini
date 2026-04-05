@@ -87,6 +87,12 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<(tauri::menu::Menu<Wry>, The
                 .accelerator("CmdOrCtrl+0")
                 .build(app)?,
         )
+        .separator()
+        .item(
+            &CheckMenuItemBuilder::with_id("toggle_line_glow", "Line Glow")
+                .checked(true)
+                .build(app)?,
+        )
         .build()?;
 
     let theme_light = CheckMenuItemBuilder::with_id("theme_light", "Light")

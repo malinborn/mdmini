@@ -54,6 +54,20 @@ export function createModeStore() {
   };
 }
 
+export function createLineGlowStore() {
+  let enabled = $state<boolean>(loadSetting('lineGlow', true));
+
+  return {
+    get enabled() {
+      return enabled;
+    },
+    toggle() {
+      enabled = !enabled;
+      saveSetting('lineGlow', enabled);
+    },
+  };
+}
+
 export function createZoomStore() {
   let level = $state<number>(loadSetting('zoomLevel', 1.0));
 

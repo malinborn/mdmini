@@ -20,11 +20,12 @@ import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from '.
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
+export const lineGlowCompartment = new Compartment();
 
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
-    highlightActiveLine(),
+    lineGlowCompartment.of(highlightActiveLine()),
     drawSelection(),
     listContinuation(),
     slashCommands(),

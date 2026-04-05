@@ -2,13 +2,14 @@
   import { onMount } from 'svelte';
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
-  import { createThemeStore, createModeStore, createZoomStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
+  import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
   import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
-  import { previewCompartment } from './lib/editor/setup';
+  import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
+  import { highlightActiveLine } from '@codemirror/view';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { reinitializeTheme } from './lib/editor/preview/mermaid';
@@ -20,6 +21,7 @@
   const theme = createThemeStore();
   const mode = createModeStore();
   const zoom = createZoomStore();
+  const lineGlow = createLineGlowStore();
   const fileState = createFileState();
   const recentFiles = createRecentFilesStore();
 
@@ -258,6 +260,9 @@
         case 'zoom_reset':
           zoom.reset();
           break;
+        case 'toggle_line_glow':
+          lineGlow.toggle();
+          break;
         case 'theme_light':
           theme.preference = 'light';
           break;
@@ -337,6 +342,17 @@
     // Sync to native Tauri window title bar
     import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
       getCurrentWindow().setTitle(title);
+    });
+  });
+
+  // Reconfigure line glow when toggled
+  $effect(() => {
+    const view = editorHandle?.view;
+    if (!view) return;
+    view.dispatch({
+      effects: lineGlowCompartment.reconfigure(
+        lineGlow.enabled ? highlightActiveLine() : []
+      ),
     });
   });
 
