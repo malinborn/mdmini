@@ -4,6 +4,8 @@ A minimalist live-preview markdown editor for macOS.
 
 You edit raw markdown and see it rendered inline — no split panes, no mode switching. Built with Tauri 2, Svelte 5, and CodeMirror 6.
 
+**[Website](https://malinborn.github.io/mdmini/)** · **[Releases](https://github.com/malinborn/mdmini/releases)**
+
 ![mdmini](docs/screenshot.png)
 
 ## Install
@@ -30,6 +32,8 @@ mdmini file1.md file2.md  # Open multiple files
 **Tables** — rendered as interactive widgets with aligned columns. Double-click to edit cells. Drag `⠿` handles to reorder rows and columns. Hover for `+`/`−` buttons. Inline `code`, **bold**, *italic* inside cells.
 
 **Code blocks** — syntax highlighting for 100+ languages with language label and Copy button. Click a code block to edit, click away to preview.
+
+**Mermaid diagrams** — flowcharts, sequence, class, state, ER, Gantt, pie, gitgraph, and mindmap render as inline SVG. Lazy-loaded, theme-aware, with error overlay while editing.
 
 **Collapsible headings** — hover any heading to reveal a fold toggle. Click to collapse the section.
 
