@@ -49,6 +49,7 @@ src/                    # Frontend (Svelte + TypeScript)
       lists.ts          # Lists, checkboxes, blockquotes
       blocks.ts         # Code blocks, HR
       tables.ts         # Table widget
+      mermaid.ts        # Mermaid diagram rendering (lazy-loaded, async SVG via StateEffect)
       utils.ts          # cursorInRange() helper
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
   lib/theme/            # CSS variables + CM6 theme
@@ -132,6 +133,8 @@ src/                    # Frontend (Svelte + TypeScript)
 - **CM6 CSS specificity:** CM6 uses generated selectors like `.ͼ1 .cm-line` (2 classes). To override, use `.cm-line.cm-md-table-line` (also 2 classes), not just `.cm-md-table-line` (1 class).
 - **CM6 `cm-widgetBuffer` images:** CM6 adds hidden `<img>` elements around widget decorations. In inline formatting context they add ~14px height per line. Use `display: flex` on parent line to eliminate this.
 - **CSS `contain: inline-size` for wide widgets:** Prevents wide tables/widgets from expanding `.cm-content` (which breaks `lineWrapping`). Apply on `.cm-line`, move visual styles (background, border) to widget wrapper so they match content width, not viewport width.
+- **CM6 widget-hosting line must stay visible:** When replacing a fenced block with a widget (`Decoration.replace`), the `.cm-line` that hosts the widget must NOT have `height: 0` or `overflow: hidden`. The widget is a child of `.cm-line` — hiding it clips the widget. Only hide subsequent lines.
+- **Mermaid render is async:** `mermaid.render()` returns a Promise but CM6 `WidgetType.toDOM()` is sync. Use placeholder widget + `StateEffect` to trigger decoration rebuild when SVG is ready. See `preview/mermaid.ts`.
 
 ## Workflow
 
