@@ -90,7 +90,6 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<(tauri::menu::Menu<Wry>, The
         .separator()
         .item(
             &CheckMenuItemBuilder::with_id("toggle_line_glow", "Line Glow")
-                .checked(true)
                 .build(app)?,
         )
         .build()?;

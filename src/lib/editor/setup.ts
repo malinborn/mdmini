@@ -25,7 +25,7 @@ export const lineGlowCompartment = new Compartment();
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
-    lineGlowCompartment.of(highlightActiveLine()),
+    lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),
     slashCommands(),
