@@ -11,6 +11,7 @@
   import { previewCompartment } from './lib/editor/setup';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
+  import { reinitializeTheme } from './lib/editor/preview/mermaid';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -327,6 +328,7 @@
 
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme.resolved);
+    reinitializeTheme();
   });
 
   $effect(() => {
