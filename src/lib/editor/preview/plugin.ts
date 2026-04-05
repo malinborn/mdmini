@@ -18,6 +18,7 @@ import {
 import { decorateListItem, decorateBlockquote } from './lists';
 import { decorateHorizontalRule, decorateFencedCode } from './blocks';
 import { decorateTable } from './tables';
+import { decorateMermaidBlock, mermaidRendered } from './mermaid';
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -48,9 +49,18 @@ function buildDecorations(view: EditorView): DecorationSet {
         case 'Link':
           decorateLink(view, node.node, builder);
           return false;
-        case 'FencedCode':
-          decorateFencedCode(view, node.node, builder);
+        case 'FencedCode': {
+          const doc = view.state.doc;
+          const fenceLine = doc.lineAt(node.from);
+          const fenceText = doc.sliceString(fenceLine.from, fenceLine.to);
+          const langMatch = fenceText.match(/^`{3,}(\w+)/);
+          if (langMatch && langMatch[1].toLowerCase() === 'mermaid') {
+            decorateMermaidBlock(view, node.node, builder);
+          } else {
+            decorateFencedCode(view, node.node, builder);
+          }
           return false;
+        }
         case 'Table':
           decorateTable(view, node.node, builder);
           return false;
@@ -85,7 +95,10 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
-      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged) {
+      const mermaidUpdate = update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(mermaidRendered))
+      );
+      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged || mermaidUpdate) {
         try {
           this.decorations = buildDecorations(update.view);
         } catch (e) {
