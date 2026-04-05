@@ -241,11 +241,7 @@ export function decorateMermaidBlock(
     const line = doc.line(i);
 
     if (i === startLine.number) {
-      builder.add(
-        line.from,
-        line.from,
-        Decoration.line({ class: 'cm-md-mermaid-line' })
-      );
+      // First line hosts the widget — do NOT hide it (no height:0 class)
       builder.add(
         line.from,
         line.to,

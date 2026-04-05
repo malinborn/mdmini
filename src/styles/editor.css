@@ -907,13 +907,6 @@
 }
 
 /* Mermaid diagrams */
-.cm-md-mermaid-line {
-  font-size: 0;
-  line-height: 0;
-  height: 0;
-  overflow: hidden;
-}
-
 .cm-md-mermaid-line-hidden {
   font-size: 0;
   line-height: 0;
