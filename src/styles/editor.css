@@ -956,3 +956,10 @@
   color: #f6c177;
   background: rgba(246, 193, 119, 0.1);
 }
+
+/* Active line glow — stronger in light theme */
+:root[data-theme='light'] .cm-activeLine {
+  background-color: rgba(124, 58, 237, 0.06) !important;
+  background-image: linear-gradient(90deg, rgba(124, 58, 237, 0.10) 0%, transparent 60%) !important;
+  box-shadow: 0 0 12px 4px rgba(124, 58, 237, 0.06) !important;
+}

@@ -19,7 +19,10 @@ export const editorTheme = EditorView.theme({
     backgroundColor: 'var(--color-selection) !important',
   },
   '.cm-activeLine': {
-    backgroundColor: 'var(--color-line-highlight)',
+    backgroundColor: 'rgba(var(--color-glow, 196, 167, 231), 0.04)',
+    backgroundImage: 'linear-gradient(90deg, rgba(var(--color-glow, 196, 167, 231), 0.06) 0%, transparent 60%)',
+    boxShadow: '0 0 12px 4px rgba(var(--color-glow, 196, 167, 231), 0.04)',
+    borderRadius: '2px',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--bg-base)',
