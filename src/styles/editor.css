@@ -567,18 +567,12 @@
 .cm-md-h1::after, .cm-md-h2::after, .cm-md-h3::after,
 .cm-md-h4::after, .cm-md-h5::after, .cm-md-h6::after {
   content: ' ▾';
-  color: var(--color-list-marker);
+  font-size: 1.3em;
+  color: var(--color-accent, #c4a7e7);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, text-shadow 0.15s;
   cursor: pointer;
 }
-
-.cm-md-h1::after { font-size: 0.5em; }
-.cm-md-h2::after { font-size: 0.5em; }
-.cm-md-h3::after { font-size: 0.55em; }
-.cm-md-h4::after { font-size: 0.6em; }
-.cm-md-h5::after { font-size: 0.65em; }
-.cm-md-h6::after { font-size: 0.7em; }
 
 .cm-md-h1:hover::after, .cm-md-h2:hover::after, .cm-md-h3:hover::after,
 .cm-md-h4:hover::after, .cm-md-h5:hover::after, .cm-md-h6:hover::after {
@@ -588,10 +582,21 @@
 .cm-md-h1:hover::after:hover, .cm-md-h2:hover::after:hover, .cm-md-h3:hover::after:hover,
 .cm-md-h4:hover::after:hover, .cm-md-h5:hover::after:hover, .cm-md-h6:hover::after:hover {
   opacity: 1;
+  text-shadow: 0 0 8px var(--color-accent, #c4a7e7), 0 0 20px var(--color-accent, #c4a7e7);
 }
 
-/* Placeholder widget rendered in place of folded content */
+/* Folded heading — show ▸ instead of ▾, always visible with glow */
+.cm-md-heading-folded.cm-md-h1::after, .cm-md-heading-folded.cm-md-h2::after,
+.cm-md-heading-folded.cm-md-h3::after, .cm-md-heading-folded.cm-md-h4::after,
+.cm-md-heading-folded.cm-md-h5::after, .cm-md-heading-folded.cm-md-h6::after {
+  content: ' ▸';
+  opacity: 0.7;
+  text-shadow: 0 0 6px var(--color-accent, #c4a7e7), 0 0 14px var(--color-accent, #c4a7e7);
+}
+
+/* Hide fold placeholder — fold state shown via heading ::after toggle */
 .cm-foldPlaceholder {
+  display: none;
   background: var(--color-code-bg);
   border: 1px solid var(--color-table-border);
   border-radius: 3px;

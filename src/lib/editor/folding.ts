@@ -1,7 +1,7 @@
 import { foldService, foldEffect, unfoldEffect, foldedRanges, foldable } from '@codemirror/language';
 import { syntaxTree } from '@codemirror/language';
-import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorState, RangeSetBuilder, type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 /**
  * Returns the ATX heading level (1–6) if the line contains an ATXHeading node,
@@ -126,3 +126,41 @@ export const headingFoldClick: Extension = EditorView.domEventHandlers({
     return true;
   },
 });
+
+/**
+ * ViewPlugin that adds `cm-md-heading-folded` line decoration
+ * to heading lines that have folded content below them.
+ */
+const foldedLine = Decoration.line({ class: 'cm-md-heading-folded' });
+
+function buildFoldedDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const folded = foldedRanges(view.state);
+  const doc = view.state.doc;
+
+  folded.between(0, doc.length, (from) => {
+    const line = doc.lineAt(from);
+    const level = getHeadingLevel(view.state, line.from, line.to);
+    if (level > 0) {
+      builder.add(line.from, line.from, foldedLine);
+    }
+  });
+
+  return builder.finish();
+}
+
+export const headingFoldStatePlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = buildFoldedDecorations(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged ||
+          update.transactions.some(tr => tr.effects.some(e => e.is(foldEffect) || e.is(unfoldEffect)))) {
+        this.decorations = buildFoldedDecorations(update.view);
+      }
+    }
+  },
+  { decorations: (v) => v.decorations }
+);

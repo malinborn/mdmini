@@ -16,7 +16,7 @@ import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
 import { hoverBlockMenu } from './hover-menu';
-import { markdownFoldService, headingFoldClick } from './folding';
+import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -48,6 +48,7 @@ export function createExtensions(): Extension[] {
     markdownFoldService,
     codeFolding(),
     headingFoldClick,
+    headingFoldStatePlugin,
     syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
     hoverBlockMenu(),
