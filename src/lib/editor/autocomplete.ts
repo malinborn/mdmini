@@ -1,5 +1,5 @@
 import { keymap } from '@codemirror/view';
-import type { ChangeSpec, Extension, Text } from '@codemirror/state';
+import { Prec, type ChangeSpec, type Extension, type Text } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
 function handleEnterInList(view: EditorView): boolean {
@@ -8,7 +8,6 @@ function handleEnterInList(view: EditorView): boolean {
   const line = state.doc.lineAt(from);
   const text = line.text;
 
-  // Check for list patterns
   const bulletMatch = text.match(/^(\s*)([-*+])\s(.*)$/);
   const numberedMatch = text.match(/^(\s*)(\d+)\.\s(.*)$/);
   const checkboxMatch = text.match(/^(\s*)([-*+])\s\[[ x]\]\s(.*)$/);
@@ -157,9 +156,16 @@ function renumberOrderedListAround(view: EditorView): void {
 }
 
 export function listContinuation(): Extension {
-  return keymap.of([
-    { key: 'Enter', run: handleEnterInList },
-    { key: 'Tab', run: (view) => handleTabInList(view, true) },
-    { key: 'Shift-Tab', run: (view) => handleTabInList(view, false) },
-  ]);
+  // Higher precedence than @codemirror/lang-markdown's insertNewlineContinueMarkup,
+  // which would otherwise intercept Enter and break list continuation at deeper
+  // nesting levels (CommonMark requires alignment past the parent marker; our
+  // 2-space indent doesn't satisfy that for level 3+, so the Lezer-driven
+  // continuation gives up while our regex still works).
+  return Prec.high(
+    keymap.of([
+      { key: 'Enter', run: handleEnterInList },
+      { key: 'Tab', run: (view) => handleTabInList(view, true) },
+      { key: 'Shift-Tab', run: (view) => handleTabInList(view, false) },
+    ])
+  );
 }

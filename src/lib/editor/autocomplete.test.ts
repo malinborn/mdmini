@@ -84,6 +84,27 @@ describe('computeOrderedListRenumberChanges', () => {
     expect(applyRenumber('1. A', 1)).toBe('1. A');
   });
 
+  it('renumbers a deeply nested list (3+ levels)', () => {
+    const doc = [
+      '1. a',
+      '  1. b',
+      '    5. c',
+      '    9. d',
+      '      2. e',
+      '      4. f',
+    ].join('\n');
+    expect(applyRenumber(doc, 3)).toBe(
+      [
+        '1. a',
+        '  1. b',
+        '    1. c',
+        '    2. d',
+        '      1. e',
+        '      2. f',
+      ].join('\n')
+    );
+  });
+
   it('produces no changes for non-list lines around the anchor', () => {
     const state = EditorState.create({ doc: 'just text\nno list here' });
     const changes = computeOrderedListRenumberChanges(state.doc, 1);
