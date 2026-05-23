@@ -507,8 +507,7 @@
 }
 
 /* Right-side row buttons — absolute so they don't affect wrapper width */
-.cm-md-table-btn-del-row,
-.cm-md-table-btn-add-row {
+.cm-md-table-btn-del-row {
   position: absolute;
   right: -34px;
   top: 50%;
