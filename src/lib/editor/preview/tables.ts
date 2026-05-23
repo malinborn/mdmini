@@ -541,21 +541,24 @@ function showCellEditor(view: EditorView, cellEl: HTMLElement, cell: CellInfo): 
   ta.addEventListener('input', grow);
 
   let committed = false;
-  const cleanup = (): void => {
+
+  const destroy = (): void => {
+    ta.removeEventListener('input', grow);
+    ta.remove();
     cellEl.style.color = originalColor;
+    view.focus();
   };
+
   const commit = (): void => {
     if (committed) return;
     committed = true;
     const newText = encodeForCommit(ta.value);
-    ta.remove();
-    cleanup();
     if (newText !== cell.text) {
       view.dispatch({
         changes: { from: cell.from, to: cell.to, insert: newText },
       });
     }
-    view.focus();
+    destroy();
   };
 
   ta.addEventListener('keydown', (e) => {
@@ -565,9 +568,7 @@ function showCellEditor(view: EditorView, cellEl: HTMLElement, cell: CellInfo): 
     } else if (e.key === 'Escape') {
       e.preventDefault();
       committed = true;
-      ta.remove();
-      cleanup();
-      view.focus();
+      destroy();
     } else if (e.key === 'Tab') {
       e.preventDefault();
       commit();
