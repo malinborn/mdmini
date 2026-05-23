@@ -261,6 +261,8 @@
 .cm-md-table .cm-md-table-row-ctrl {
   width: var(--table-row-gutter);
   vertical-align: middle;
+  white-space: nowrap;
+  text-align: center;
 }
 
 /* Row background styles */
