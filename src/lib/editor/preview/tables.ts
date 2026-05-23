@@ -308,6 +308,9 @@ function startColDrag(
       drag.indicator = createDropIndicator(true);
     }
 
+    // Header row contains both the leading ctrl-cell and data cells in the same
+    // table-row element, so closest('.cm-md-table-row-header') from any data cell
+    // resolves to the full row's bounding rect (correct height for col indicator).
     if (insertBefore < cells.length) {
       const targetRect = cells[insertBefore].getBoundingClientRect();
       const headerRect = cells[0].closest('.cm-md-table-row-header')?.getBoundingClientRect();
