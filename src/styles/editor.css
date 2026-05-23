@@ -314,7 +314,6 @@
   opacity: 1;
 }
 
-
 .cm-md-table-cell-header {
   font-weight: 600;
   color: var(--color-heading);
@@ -352,7 +351,6 @@
   text-decoration: line-through;
   opacity: 0.6;
 }
-
 
 /* Table control buttons */
 .cm-md-table-btn {
