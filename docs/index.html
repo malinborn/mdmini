@@ -190,6 +190,14 @@
       line-height: 1.6;
     }
 
+    .install-blocks {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      max-width: 100%;
+    }
+
     .install-block {
       display: inline-flex;
       align-items: center;
@@ -649,30 +657,41 @@
         Lightweight, fast, and distraction-free.
       </p>
 
-      <div class="install-block">
-        <span class="install-label">$ install</span>
-        <span class="install-cmd" id="install-text">
-          <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
-        </span>
-        <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard" aria-label="Copy install command">
-          <svg id="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-          <svg id="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
-            <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+      <div class="install-blocks">
+        <div class="install-block">
+          <span class="install-label">$ install</span>
+          <span class="install-cmd">
+            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
+          </span>
+          <button class="copy-btn" onclick="copyCmd(this, 'brew tap malinborn/mdmini &amp;&amp; brew install --cask mdmini')" title="Copy to clipboard" aria-label="Copy install command">
+            <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            <svg class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+              <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="install-block">
+          <span class="install-label">$ update</span>
+          <span class="install-cmd">
+            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">update</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">upgrade</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
+          </span>
+          <button class="copy-btn" onclick="copyCmd(this, 'brew update &amp;&amp; brew upgrade --cask mdmini')" title="Copy to clipboard" aria-label="Copy update command">
+            <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+            <svg class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
+              <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="hero-links">
-        <a class="btn btn-primary" href="https://github.com/malinborn/mdmini/releases">
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-            <path d="M7.5 1L7.5 11M7.5 11L4 7.5M7.5 11L11 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M2 13h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          Download
-        </a>
         <a class="btn btn-ghost" href="https://github.com/malinborn/mdmini">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
             <path fill-rule="evenodd" d="M7.5.85a6.65 6.65 0 00-2.102 12.96c.333.06.456-.144.456-.322v-1.129c-1.852.402-2.244-.893-2.244-.893-.303-.77-.74-1.006-.74-1.006-.603-.413.045-.404.045-.404.668.047 1.02.686 1.02.686.594 1.018 1.558.724 1.94.554.06-.43.232-.724.422-.89C5.03 9.95 3.55 9.375 3.55 6.982c0-.71.254-1.29.67-1.745-.067-.166-.29-.826.064-1.72 0 0 .546-.175 1.788.666A6.23 6.23 0 017.5 3.97c.552.002 1.108.075 1.627.22 1.24-.84 1.786-.666 1.786-.666.355.894.132 1.554.065 1.72.417.454.67 1.035.67 1.745 0 2.401-1.483 2.97-2.895 3.127.228.196.43.582.43 1.172v1.736c0 .18.121.385.46.32A6.652 6.652 0 007.5.85z"/>
@@ -1048,14 +1067,15 @@
   </footer>
 
   <script>
-    function copyInstall(btn) {
-      const text = 'brew tap malinborn/mdmini && brew install --cask mdmini';
+    function copyCmd(btn, text) {
       navigator.clipboard.writeText(text).then(() => {
-        document.getElementById('copy-icon').style.display = 'none';
-        document.getElementById('check-icon').style.display = 'block';
+        const copy = btn.querySelector('.copy-icon');
+        const check = btn.querySelector('.check-icon');
+        copy.style.display = 'none';
+        check.style.display = 'block';
         setTimeout(() => {
-          document.getElementById('copy-icon').style.display = 'block';
-          document.getElementById('check-icon').style.display = 'none';
+          copy.style.display = 'block';
+          check.style.display = 'none';
         }, 1800);
       });
     }
