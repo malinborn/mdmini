@@ -34,6 +34,12 @@ function findContainingTable(
 export const tableSelectionSnapOut = EditorView.updateListener.of(
   (update: ViewUpdate) => {
     if (!update.selectionSet) return;
+    // Guard against re-entry: our own dispatch carries this userEvent tag
+    if (
+      update.transactions.some((tr) => tr.isUserEvent('select.snapout'))
+    ) {
+      return;
+    }
 
     const state = update.state;
     const head = state.selection.main.head;
@@ -54,7 +60,9 @@ export const tableSelectionSnapOut = EditorView.updateListener.of(
       if (lastLineNo < state.doc.lines) {
         targetPos = state.doc.line(lastLineNo + 1).from;
       } else {
-        targetPos = headerLine.from;
+        // End of document — nowhere to go past the table; stay put rather
+        // than bounce back to the header
+        return;
       }
     } else {
       targetPos = headerLine.from;
