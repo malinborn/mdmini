@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { markdownTable } from 'markdown-table';
+import { toggleTableMode, getTableMode } from './table-state';
 
 export interface CellInfo {
   text: string;
@@ -660,6 +661,123 @@ function showCellEditor(view: EditorView, cellEl: HTMLElement, cell: CellInfo): 
   document.body.appendChild(input);
   input.focus();
   input.select();
+}
+
+// --- DOM builder helpers (used by TableWidget in Task 5) ---
+
+function buildCell(
+  cell: CellInfo,
+  colIndex: number,
+  isHeader: boolean,
+  ctx: TableContext,
+  view: EditorView
+): HTMLElement {
+  const cellEl = document.createElement('span');
+  cellEl.className = 'cm-md-table-cell';
+  if (isHeader) cellEl.classList.add('cm-md-table-cell-header');
+  renderCellContent(cellEl, cell.text);
+
+  cellEl.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showCellEditor(view, cellEl, cell);
+  });
+
+  if (isHeader) {
+    const ctrl = document.createElement('span');
+    ctrl.className = 'cm-md-table-col-ctrl';
+
+    const colDrag = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-col', () => {});
+    colDrag.addEventListener('mousedown', (e) => {
+      startColDrag(e, view, ctx, colIndex, cellEl);
+    });
+    ctrl.appendChild(colDrag);
+
+    if (ctx.colCount > 1) {
+      const del = mkBtn('−', 'cm-md-table-btn-del', () => deleteColumn(view, ctx, colIndex));
+      ctrl.appendChild(del);
+    }
+
+    cellEl.appendChild(ctrl);
+    cellEl.classList.add('cm-md-table-cell-has-ctrl');
+  }
+
+  return cellEl;
+}
+
+function buildHeaderCtrlCell(view: EditorView, ctx: TableContext): HTMLElement {
+  const cellEl = document.createElement('span');
+  cellEl.className = 'cm-md-table-cell cm-md-table-row-ctrl';
+
+  const toggleBtn = mkBtn('⇔', 'cm-md-table-btn-toggle', () => {
+    view.dispatch({ effects: toggleTableMode.of({ pos: ctx.nodeFrom }) });
+  });
+  toggleBtn.title = 'Toggle wrap / full width';
+  cellEl.appendChild(toggleBtn);
+
+  return cellEl;
+}
+
+function buildDataCtrlCell(
+  view: EditorView,
+  ctx: TableContext,
+  dataRowIndex: number,
+  rowEl: HTMLElement
+): HTMLElement {
+  const cellEl = document.createElement('span');
+  cellEl.className = 'cm-md-table-cell cm-md-table-row-ctrl';
+
+  const dataCount = ctx.rows.filter((r) => !r.isDelimiter && !r.isHeader).length;
+  if (dataCount > 1) {
+    const del = mkBtn('−', 'cm-md-table-btn-del cm-md-table-btn-del-row-left', () =>
+      deleteRow(view, ctx, dataRowIndex)
+    );
+    cellEl.appendChild(del);
+  }
+
+  const dragHandle = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-row', () => {});
+  dragHandle.addEventListener('mousedown', (e) => {
+    startRowDrag(e, view, ctx, dataRowIndex, rowEl);
+  });
+  cellEl.appendChild(dragHandle);
+
+  return cellEl;
+}
+
+function buildHeaderRow(
+  row: RowData,
+  ctx: TableContext,
+  view: EditorView
+): HTMLElement {
+  const tr = document.createElement('span');
+  tr.className = 'cm-md-table-row cm-md-table-row-header';
+
+  tr.appendChild(buildHeaderCtrlCell(view, ctx));
+
+  row.cells.forEach((cell, i) => {
+    tr.appendChild(buildCell(cell, i, true, ctx, view));
+  });
+
+  return tr;
+}
+
+function buildDataRow(
+  row: RowData,
+  dataRowIndex: number,
+  ctx: TableContext,
+  view: EditorView
+): HTMLElement {
+  const tr = document.createElement('span');
+  tr.className = 'cm-md-table-row cm-md-table-row-data';
+
+  const ctrlCell = buildDataCtrlCell(view, ctx, dataRowIndex, tr);
+  tr.appendChild(ctrlCell);
+
+  row.cells.forEach((cell, i) => {
+    tr.appendChild(buildCell(cell, i, false, ctx, view));
+  });
+
+  return tr;
 }
 
 // --- Main decoration function ---
