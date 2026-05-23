@@ -15,6 +15,7 @@ import { markdownKeybindings } from './keybindings';
 import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
+import { tableModeField } from './preview/table-state';
 import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
 
@@ -25,6 +26,7 @@ export const lineGlowCompartment = new Compartment();
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
+    tableModeField,
     lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),
