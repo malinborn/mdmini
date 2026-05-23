@@ -19,6 +19,7 @@ import { decorateListItem, decorateBlockquote } from './lists';
 import { decorateHorizontalRule, decorateFencedCode } from './blocks';
 import { decorateTable } from './tables';
 import { decorateMermaidBlock, mermaidRendered } from './mermaid';
+import { toggleTableMode } from './table-state';
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -100,7 +101,10 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       const mermaidUpdate = update.transactions.some((tr) =>
         tr.effects.some((e) => e.is(mermaidRendered))
       );
-      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged || mermaidUpdate) {
+      const tableModeUpdate = update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(toggleTableMode))
+      );
+      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged || mermaidUpdate || tableModeUpdate) {
         try {
           this.decorations = buildDecorations(update.view);
         } catch (e) {

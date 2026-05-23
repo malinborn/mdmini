@@ -394,153 +394,71 @@ function startColDrag(
 
 // --- Widgets ---
 
-class TableRowWidget extends WidgetType {
+class TableWidget extends WidgetType {
   constructor(
-    private cells: CellInfo[],
-    private widths: number[],
-    private isHeader: boolean,
-    private dataRowIndex: number,
     private ctx: TableContext,
-    private isLastDataRow: boolean
+    private mode: 'wrap' | 'full'
   ) {
     super();
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const wrapper = document.createElement('span');
-    wrapper.className = 'cm-md-table-row-wrap';
+    const wrap = document.createElement('span');
+    wrap.className = 'cm-md-table-wrap';
+    wrap.setAttribute('data-mode', this.mode);
 
-    // Row controls (data rows) or header spacer
-    if (!this.isHeader) {
-      const dataCount = this.ctx.rows.filter(r => !r.isDelimiter && !r.isHeader).length;
+    const table = document.createElement('span');
+    table.className = 'cm-md-table';
 
-      // Small circle delete button (leftmost, harder to accidentally click)
-      if (dataCount > 1) {
-        const delLeft = mkBtn('−', 'cm-md-table-btn-del cm-md-table-btn-del-row-left', () =>
-          deleteRow(view, this.ctx, this.dataRowIndex)
-        );
-        wrapper.appendChild(delLeft);
-      }
-
-      // Drag handle (after delete)
-      const dragHandle = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-row', () => {});
-      dragHandle.addEventListener('mousedown', (e) => {
-        startRowDrag(e, view, this.ctx, this.dataRowIndex, wrapper);
-      });
-      wrapper.appendChild(dragHandle);
-    } else {
-      // Header gets left padding via CSS --table-row-gutter to match data row controls
-      wrapper.classList.add('cm-md-table-row-wrap-header');
+    const headerRow = this.ctx.rows.find((r) => r.isHeader);
+    if (headerRow) {
+      table.appendChild(buildHeaderRow(headerRow, this.ctx, view));
     }
 
-    const row = document.createElement('span');
-    row.className = 'cm-md-table-row';
-    // Consistent min-width across all rows: cells + cell padding + separators
-    const totalCellCh = this.widths.reduce((sum, w) => sum + w + 2 + 1, 0);
-    const sepCount = this.widths.length - 1;
-    row.style.minWidth = `calc(${totalCellCh}ch + ${sepCount}px)`;
-
-    this.cells.forEach((cell, i) => {
-      if (i > 0) {
-        const sep = document.createElement('span');
-        sep.className = 'cm-md-table-sep';
-        row.appendChild(sep);
-      }
-
-      const cellEl = document.createElement('span');
-      cellEl.className = 'cm-md-table-cell';
-      if (this.isHeader) cellEl.classList.add('cm-md-table-cell-header');
-      cellEl.style.minWidth = `${(this.widths[i] ?? cell.text.length) + 2}ch`;
-      renderCellContent(cellEl, cell.text);
-
-      // Double-click to edit
-      const cellInfo = cell;
-      cellEl.addEventListener('dblclick', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showCellEditor(view, cellEl, cellInfo);
-      });
-
-      // Column controls on header cells
-      if (this.isHeader) {
-        const ctrl = document.createElement('span');
-        ctrl.className = 'cm-md-table-col-ctrl';
-
-        // Column drag handle — before delete
-        const colDrag = mkBtn('⠿', 'cm-md-table-btn-drag cm-md-table-btn-drag-col', () => {});
-        const colIdx = i;
-        colDrag.addEventListener('mousedown', (e) => {
-          startColDrag(e, view, this.ctx, colIdx, cellEl);
-        });
-        ctrl.appendChild(colDrag);
-
-        if (this.ctx.colCount > 1) {
-          const del = mkBtn('−', 'cm-md-table-btn-del', () => deleteColumn(view, this.ctx, i));
-          ctrl.appendChild(del);
-        }
-
-        cellEl.appendChild(ctrl);
-        cellEl.classList.add('cm-md-table-cell-has-ctrl');
-      }
-
-      row.appendChild(cellEl);
+    const dataRows = this.ctx.rows.filter((r) => !r.isDelimiter && !r.isHeader);
+    const dataCount = dataRows.length;
+    dataRows.forEach((row, i) => {
+      table.appendChild(buildDataRow(row, i, this.ctx, view, dataCount));
     });
 
-    wrapper.appendChild(row);
+    wrap.appendChild(table);
 
-    // "+" add column (right of header row, in wrapper so row width is consistent)
-    if (this.isHeader) {
-      const addCol = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-col', () => addColumn(view, this.ctx));
-      wrapper.appendChild(addCol);
-    }
+    // "+ add column" — absolutely positioned at right of the header row
+    const addCol = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-col', () =>
+      addColumn(view, this.ctx)
+    );
+    wrap.appendChild(addCol);
 
-    // "−" delete row (on data rows, if more than 1 data row)
-    if (!this.isHeader) {
-      const dataCount = this.ctx.rows.filter(r => !r.isDelimiter && !r.isHeader).length;
-      if (dataCount > 1) {
-        const del = mkBtn('−', 'cm-md-table-btn-del cm-md-table-btn-del-row', () =>
-          deleteRow(view, this.ctx, this.dataRowIndex)
-        );
-        wrapper.appendChild(del);
-      }
-    }
+    // "+ add row" — inline button at end of last data row plus floating "+" below
+    const addRowInline = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-row', () =>
+      addRow(view, this.ctx)
+    );
+    wrap.appendChild(addRowInline);
 
-    // Mark last data row for bottom border-radius
-    if (this.isLastDataRow) {
-      wrapper.classList.add('cm-md-table-row-wrap-last');
-    }
+    const bottomContainer = document.createElement('span');
+    bottomContainer.className = 'cm-md-table-add-row-bottom';
+    const addRowBottom = mkBtn('+', 'cm-md-table-btn-add', () => addRow(view, this.ctx));
+    bottomContainer.appendChild(addRowBottom);
+    wrap.appendChild(bottomContainer);
 
-    // "+" add row (inline, right of delete button on last data row)
-    if (this.isLastDataRow) {
-      const add = mkBtn('+', 'cm-md-table-btn-add cm-md-table-btn-add-row', () => addRow(view, this.ctx));
-      wrapper.appendChild(add);
-
-      // Floating "+" button centered below the table
-      const bottomContainer = document.createElement('span');
-      bottomContainer.className = 'cm-md-table-add-row-bottom';
-      const addBottom = mkBtn('+', 'cm-md-table-btn-add', () => addRow(view, this.ctx));
-      bottomContainer.appendChild(addBottom);
-      wrapper.appendChild(bottomContainer);
-      wrapper.style.overflow = 'visible';
-    }
-
-    return wrapper;
+    return wrap;
   }
 
-  eq(other: TableRowWidget): boolean {
-    return (
-      this.isHeader === other.isHeader &&
-      this.dataRowIndex === other.dataRowIndex &&
-      this.isLastDataRow === other.isLastDataRow &&
-      // Compare ctx to detect structural table changes (added/removed rows/cols)
-      this.ctx.nodeFrom === other.ctx.nodeFrom &&
-      this.ctx.nodeTo === other.ctx.nodeTo &&
-      this.ctx.rows.length === other.ctx.rows.length &&
-      this.ctx.colCount === other.ctx.colCount &&
-      this.cells.length === other.cells.length &&
-      this.cells.every((c, i) => c.text === other.cells[i].text && c.from === other.cells[i].from) &&
-      this.widths.every((w, i) => w === other.widths[i])
-    );
+  eq(other: TableWidget): boolean {
+    if (this.mode !== other.mode) return false;
+    if (this.ctx.nodeFrom !== other.ctx.nodeFrom) return false;
+    if (this.ctx.nodeTo !== other.ctx.nodeTo) return false;
+    if (this.ctx.rows.length !== other.ctx.rows.length) return false;
+    if (this.ctx.colCount !== other.ctx.colCount) return false;
+    return this.ctx.rows.every((r, i) => {
+      const o = other.ctx.rows[i];
+      return (
+        r.cells.length === o.cells.length &&
+        r.cells.every(
+          (c, j) => c.text === o.cells[j].text && c.from === o.cells[j].from
+        )
+      );
+    });
   }
 
   ignoreEvent(): boolean {
@@ -799,14 +717,16 @@ export function decorateTable(
   for (let i = startLine.number; i <= endLine.number; i++) {
     const line = doc.line(i);
     const isHeader = i === startLine.number;
-    // Delimiter is always the 2nd line (right after header) — don't use regex
-    // so users can freely type dashes in data cells
     const isDelimiter = i === startLine.number + 1;
     const cells = parseCellsWithPositions(line.text, line.from);
 
     rows.push({
-      from: line.from, to: line.to, text: line.text,
-      cells, isDelimiter, isHeader,
+      from: line.from,
+      to: line.to,
+      text: line.text,
+      cells,
+      isDelimiter,
+      isHeader,
       rowIndex: isDelimiter ? -1 : dataRowIndex++,
     });
 
@@ -817,38 +737,41 @@ export function decorateTable(
     }
   }
 
+  // Performance guard
+  if (rows.length > 500) return;
+
   const ctx: TableContext = {
-    rows, colWidths,
+    rows,
+    colWidths,
     colCount: colWidths.length,
     nodeFrom: node.from,
     nodeTo: node.to,
   };
 
-  const lastDataIdx = rows.reduce((acc, r, i) => (!r.isDelimiter && !r.isHeader ? i : acc), -1);
-  let dataIdx = 0;
+  const headerRow = rows.find((r) => r.isHeader);
+  if (!headerRow) return;
 
-  for (let ri = 0; ri < rows.length; ri++) {
-    const row = rows[ri];
+  const mode = getTableMode(view.state, ctx.nodeFrom);
 
-    if (row.isDelimiter) {
-      builder.add(row.from, row.from, Decoration.line({ class: 'cm-md-table-line cm-md-table-delimiter' }));
-      continue;
-    }
+  // Header line: host of the full-table widget
+  builder.add(
+    headerRow.from,
+    headerRow.from,
+    Decoration.line({ class: 'cm-md-table-line cm-md-table-header' })
+  );
+  builder.add(
+    headerRow.from,
+    headerRow.to,
+    Decoration.replace({ widget: new TableWidget(ctx, mode) })
+  );
 
-    const classes = ['cm-md-table-line'];
-    if (row.isHeader) classes.push('cm-md-table-header');
-    else if (dataIdx % 2 === 1) classes.push('cm-md-table-even');
-
-    builder.add(row.from, row.from, Decoration.line({ class: classes.join(' ') }));
-
-    const currentDataIdx = row.isHeader ? -1 : dataIdx;
-    if (!row.isHeader) dataIdx++;
-
-    builder.add(row.from, row.to, Decoration.replace({
-      widget: new TableRowWidget(
-        row.cells, colWidths, row.isHeader,
-        currentDataIdx, ctx, ri === lastDataIdx
-      ),
-    }));
+  // Hide all non-header lines (delimiter + data rows)
+  for (const row of rows) {
+    if (row.isHeader) continue;
+    builder.add(
+      row.from,
+      row.from,
+      Decoration.line({ class: 'cm-md-table-line cm-md-table-hidden' })
+    );
   }
 }
