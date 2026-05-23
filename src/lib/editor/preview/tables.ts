@@ -722,12 +722,12 @@ function buildDataCtrlCell(
   view: EditorView,
   ctx: TableContext,
   dataRowIndex: number,
-  rowEl: HTMLElement
+  rowEl: HTMLElement,
+  dataCount: number
 ): HTMLElement {
   const cellEl = document.createElement('span');
   cellEl.className = 'cm-md-table-cell cm-md-table-row-ctrl';
 
-  const dataCount = ctx.rows.filter((r) => !r.isDelimiter && !r.isHeader).length;
   if (dataCount > 1) {
     const del = mkBtn('−', 'cm-md-table-btn-del cm-md-table-btn-del-row-left', () =>
       deleteRow(view, ctx, dataRowIndex)
@@ -765,12 +765,13 @@ function buildDataRow(
   row: RowData,
   dataRowIndex: number,
   ctx: TableContext,
-  view: EditorView
+  view: EditorView,
+  dataCount: number
 ): HTMLElement {
   const tr = document.createElement('span');
   tr.className = 'cm-md-table-row cm-md-table-row-data';
 
-  const ctrlCell = buildDataCtrlCell(view, ctx, dataRowIndex, tr);
+  const ctrlCell = buildDataCtrlCell(view, ctx, dataRowIndex, tr, dataCount);
   tr.appendChild(ctrlCell);
 
   row.cells.forEach((cell, i) => {
