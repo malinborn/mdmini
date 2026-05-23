@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.3.1",
+    "softwareVersion": "0.3.2",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -831,6 +831,22 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.2</div>
+            <div class="changelog-date">2026-05-23</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Ordered lists that count themselves</h3>
+            <ul>
+              <li><strong>Tab restarts numbering</strong> — indenting a numbered item now opens a fresh sub-list starting at <code>1.</code></li>
+              <li><strong>Shift-Tab renumbers the parent</strong> — outdenting back to the previous level keeps the surrounding numbers sequential</li>
+              <li><strong>Works at any nesting depth</strong> — list continuation on Enter no longer breaks at the third level and beyond</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
