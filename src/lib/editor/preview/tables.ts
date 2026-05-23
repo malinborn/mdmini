@@ -4,6 +4,7 @@ import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { markdownTable } from 'markdown-table';
 import { toggleTableMode, getTableMode } from './table-state';
+import { encodeForCommit, decodeForEdit } from './table-encoding';
 
 export interface CellInfo {
   text: string;
@@ -524,40 +525,61 @@ function showCellEditor(view: EditorView, cellEl: HTMLElement, cell: CellInfo): 
   const originalColor = cellEl.style.color;
   cellEl.style.color = 'transparent';
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'cm-md-table-editor';
-  input.value = cell.text;
-  input.style.position = 'fixed';
-  input.style.left = `${rect.left}px`;
-  input.style.top = `${rect.top}px`;
-  input.style.width = `${Math.max(rect.width, 100)}px`;
-  input.style.height = `${rect.height}px`;
+  const ta = document.createElement('textarea');
+  ta.className = 'cm-md-table-editor';
+  ta.value = decodeForEdit(cell.text);
+  ta.rows = 1;
+  ta.style.position = 'fixed';
+  ta.style.left = `${rect.left}px`;
+  ta.style.top = `${rect.top}px`;
+  ta.style.width = `${Math.max(rect.width, 100)}px`;
+
+  const grow = (): void => {
+    ta.style.height = '0';
+    ta.style.height = `${Math.max(ta.scrollHeight, rect.height)}px`;
+  };
+  ta.addEventListener('input', grow);
 
   let committed = false;
-  const cleanup = () => { cellEl.style.color = originalColor; };
-  const commit = () => {
+  const cleanup = (): void => {
+    cellEl.style.color = originalColor;
+  };
+  const commit = (): void => {
     if (committed) return;
     committed = true;
-    const newText = input.value;
-    input.remove();
+    const newText = encodeForCommit(ta.value);
+    ta.remove();
     cleanup();
     if (newText !== cell.text) {
-      view.dispatch({ changes: { from: cell.from, to: cell.to, insert: newText } });
+      view.dispatch({
+        changes: { from: cell.from, to: cell.to, insert: newText },
+      });
     }
     view.focus();
   };
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    else if (e.key === 'Escape') { e.preventDefault(); committed = true; input.remove(); cleanup(); view.focus(); }
-    else if (e.key === 'Tab') { e.preventDefault(); commit(); }
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      committed = true;
+      ta.remove();
+      cleanup();
+      view.focus();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      commit();
+    }
+    // Plain Enter -> textarea default newline behavior
   });
-  input.addEventListener('blur', () => setTimeout(commit, 50));
+  ta.addEventListener('blur', () => setTimeout(commit, 50));
 
-  document.body.appendChild(input);
-  input.focus();
-  input.select();
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  grow(); // initial size
 }
 
 // --- DOM builder helpers (used by TableWidget in Task 5) ---
