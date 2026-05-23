@@ -1,5 +1,29 @@
 import { EditorView, type ViewUpdate } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
+import type { EditorState, Line } from '@codemirror/state';
+
+function findContainingTable(
+  state: EditorState,
+  line: Line
+): { from: number; to: number } | null {
+  let result: { from: number; to: number } | null = null;
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter(node) {
+      if (
+        node.name === 'Table' &&
+        node.from <= line.from &&
+        node.to >= line.to
+      ) {
+        result = { from: node.from, to: node.to };
+        return false;
+      }
+      return undefined;
+    },
+  });
+  return result;
+}
 
 /**
  * If the main selection lands inside a non-header table line (delimiter or
@@ -15,24 +39,10 @@ export const tableSelectionSnapOut = EditorView.updateListener.of(
     const head = state.selection.main.head;
     const line = state.doc.lineAt(head);
 
-    // Find a Table syntax node that contains this line
-    const tree = syntaxTree(state);
-    let tableNode: { from: number; to: number } | null = null;
-    tree.iterate({
-      from: line.from,
-      to: line.to,
-      enter(node) {
-        if (node.name === 'Table' && node.from <= line.from && node.to >= line.to) {
-          tableNode = { from: node.from, to: node.to };
-          return false;
-        }
-        return undefined;
-      },
-    });
+    const tableNode = findContainingTable(state, line);
     if (!tableNode) return;
 
-    const headerLine = state.doc.lineAt((tableNode as { from: number; to: number }).from);
-    // We only redirect when selection is on a NON-header table line
+    const headerLine = state.doc.lineAt(tableNode.from);
     if (line.from === headerLine.from) return;
 
     const prevHead = update.startState.selection.main.head;
@@ -40,17 +50,16 @@ export const tableSelectionSnapOut = EditorView.updateListener.of(
 
     let targetPos: number;
     if (movedDown) {
-      const lastLineNo = state.doc.lineAt((tableNode as { from: number; to: number }).to).number;
+      const lastLineNo = state.doc.lineAt(tableNode.to).number;
       if (lastLineNo < state.doc.lines) {
         targetPos = state.doc.line(lastLineNo + 1).from;
       } else {
-        targetPos = headerLine.from; // no line after — fall back to header
+        targetPos = headerLine.from;
       }
     } else {
       targetPos = headerLine.from;
     }
 
-    // Avoid infinite loops: only dispatch if target differs from current
     if (targetPos === head) return;
 
     queueMicrotask(() => {
