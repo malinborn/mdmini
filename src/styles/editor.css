@@ -206,6 +206,114 @@
   padding: 0;
 }
 
+.cm-md-table-hidden {
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+/* Widget wrapper for single-widget table */
+.cm-md-table-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.cm-md-table-wrap[data-mode="wrap"] .cm-md-table {
+  max-width: 100%;
+}
+
+.cm-md-table-wrap[data-mode="full"] .cm-md-table {
+  max-width: 9999px;
+  width: max-content;
+}
+
+/* Table/row/cell display rules */
+.cm-md-table {
+  display: table;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-code);
+  font-size: 0.9em;
+  line-height: 1.6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cm-md-table .cm-md-table-row {
+  display: table-row;
+}
+
+.cm-md-table .cm-md-table-cell {
+  display: table-cell;
+  padding: 0.2em 0.8ch;
+  cursor: default;
+  position: relative;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-table-border);
+}
+
+.cm-md-table .cm-md-table-row-ctrl {
+  width: var(--table-row-gutter);
+  vertical-align: middle;
+}
+
+/* Row background styles */
+.cm-md-table .cm-md-table-row-header {
+  background: linear-gradient(135deg, #302848 0%, #24203a 40%, #1f1d2e 70%, #282248 100%);
+}
+
+:root[data-theme='light'] .cm-md-table .cm-md-table-row-header {
+  background: linear-gradient(135deg, #e8e0f6 0%, #ede8f4 40%, #f5f3f8 70%, #e4ecf8 100%);
+}
+
+.cm-md-table .cm-md-table-row-header .cm-md-table-cell {
+  font-weight: 600;
+  color: var(--color-heading);
+  border-bottom: 2px solid var(--color-table-border);
+}
+
+:root[data-theme='light'] .cm-md-table .cm-md-table-row-header .cm-md-table-cell {
+  color: #44403c;
+}
+
+.cm-md-table .cm-md-table-row-data {
+  background: var(--color-code-bg);
+}
+
+.cm-md-table .cm-md-table-row-data:nth-child(even of .cm-md-table-row-data) {
+  background: var(--color-table-even-bg);
+}
+
+.cm-md-table .cm-md-table-row:last-child .cm-md-table-cell {
+  border-bottom: none;
+}
+
+/* Toggle button styles */
+.cm-md-table-btn-toggle {
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-size: 1em;
+  padding: 0 4px;
+}
+
+.cm-md-table-row:hover .cm-md-table-btn-toggle {
+  opacity: 0.5;
+}
+
+.cm-md-table-btn-toggle:hover {
+  opacity: 1;
+}
+
 /* Visual styles on widget wrapper (not .cm-line) so they match content width */
 .cm-md-table-row-wrap {
   display: inline-flex;
@@ -410,7 +518,12 @@
 }
 
 .cm-md-table-btn-add-row {
+  position: absolute;
   right: -68px;
+  bottom: 0.3em;
+  width: 30px;
+  border-radius: 11px;
+  z-index: 1;
 }
 
 /* Left-side delete button — small circle, before drag handle */
@@ -487,8 +600,7 @@
 .cm-md-table-btn-add-col {
   position: absolute;
   right: -28px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0.4em;
 }
 
 .cm-md-table-header:hover .cm-md-table-btn-add-col {
@@ -548,19 +660,35 @@
   width: 2px;
 }
 
+/* Show "+" buttons on table wrap hover (new single-widget structure) */
+.cm-md-table-wrap:hover .cm-md-table-btn-add-col,
+.cm-md-table-wrap:hover .cm-md-table-btn-add-row,
+.cm-md-table-wrap:hover .cm-md-table-add-row-bottom .cm-md-table-btn {
+  opacity: 0.5;
+}
+
+.cm-md-table-wrap .cm-md-table-btn-add-col:hover,
+.cm-md-table-wrap .cm-md-table-btn-add-row:hover,
+.cm-md-table-wrap .cm-md-table-add-row-bottom .cm-md-table-btn:hover {
+  opacity: 1;
+}
+
 .cm-md-table-editor {
-  box-sizing: border-box;
   font-family: var(--font-code);
   font-size: 0.9em;
-  background: var(--color-code-bg);
+  line-height: 1.6;
+  background: var(--color-bg);
   color: var(--color-text);
-  border: 2px solid var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 3px;
-  padding: 0.15em 0.5ch;
+  padding: 0.2em 0.8ch;
+  margin: 0;
   outline: none;
-  z-index: 100;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-  min-width: 80px;
+  z-index: 1000;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  white-space: pre-wrap;
 }
 
 /* ===== Heading fold toggle (inline ::after, right of text) ===== */
