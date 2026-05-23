@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.2.0",
+    "softwareVersion": "0.3.1",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -831,6 +831,39 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.1</div>
+            <div class="changelog-date">2026-05-23</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Tables that fit your viewport</h3>
+            <ul>
+              <li><strong>Auto-wrap by default</strong> — cells wrap their text to keep tables inside the editor width, no more sideways spillover</li>
+              <li><strong>Per-table toggle (⇔)</strong> — release any single table to its natural width when you want the overflow back</li>
+              <li><strong>Multi-line cells</strong> — double-click opens a growing textarea; Cmd+Enter to commit, Enter for a new line</li>
+              <li><strong>Pipe &amp; newline roundtrip</strong> — <code>|</code> and line breaks inside cells survive a save/reload via <code>\|</code> and <code>&lt;br&gt;</code></li>
+              <li><strong>Stable column alignment</strong> — switched to native CSS table layout so columns no longer drift on edit</li>
+              <li><strong>Cursor never gets stuck</strong> — arrow keys past a table snap to the next or previous visible line</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.0</div>
+            <div class="changelog-date">2026-05-23</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Inline markdown inside headings</h3>
+            <ul>
+              <li><strong>Code, bold, italic, strike, links inside headings</strong> — formatting now decorates correctly when used inside <code># H1</code>‑<code>###### H6</code></li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
