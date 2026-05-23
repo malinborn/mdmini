@@ -450,6 +450,7 @@ class TableWidget extends WidgetType {
     if (this.ctx.nodeTo !== other.ctx.nodeTo) return false;
     if (this.ctx.rows.length !== other.ctx.rows.length) return false;
     if (this.ctx.colCount !== other.ctx.colCount) return false;
+    if (!this.ctx.colWidths.every((w, i) => w === other.ctx.colWidths[i])) return false;
     return this.ctx.rows.every((r, i) => {
       const o = other.ctx.rows[i];
       return (
@@ -710,6 +711,9 @@ export function decorateTable(
   const startLine = doc.lineAt(node.from);
   const endLine = doc.lineAt(node.to);
 
+  // Performance guard — bail before parsing pathological tables
+  if (endLine.number - startLine.number + 1 > 500) return;
+
   const rows: RowData[] = [];
   const colWidths: number[] = [];
   let dataRowIndex = 0;
@@ -736,9 +740,6 @@ export function decorateTable(
       });
     }
   }
-
-  // Performance guard
-  if (rows.length > 500) return;
 
   const ctx: TableContext = {
     rows,
