@@ -16,6 +16,7 @@ import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
 import { tableModeField } from './preview/table-state';
+import { tableSelectionSnapOut } from './preview/table-selection';
 import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
 
@@ -55,6 +56,7 @@ export function createExtensions(): Extension[] {
     headingFoldStatePlugin,
     syntaxHighlighting(classHighlighter),
     previewCompartment.of(livePreviewPlugin),
+    tableSelectionSnapOut,
     hoverBlockMenu(),
     // Hide gutter when scrolled horizontally (buttons overlap content)
     ViewPlugin.fromClass(class {
