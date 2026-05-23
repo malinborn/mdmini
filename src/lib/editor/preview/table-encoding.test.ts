@@ -33,6 +33,14 @@ describe('encodeForCommit', () => {
   it('OnlyNewlines_ReturnsEmpty', () => {
     expect(encodeForCommit('\n\n')).toBe('');
   });
+
+  it('CRLF_NormalizedToLF', () => {
+    expect(encodeForCommit('a\r\nb\r\nc')).toBe('a<br>b<br>c');
+  });
+
+  it('LoneCR_NormalizedToLF', () => {
+    expect(encodeForCommit('a\rb')).toBe('a<br>b');
+  });
 });
 
 describe('decodeForEdit', () => {
@@ -63,5 +71,12 @@ describe('decodeForEdit', () => {
   it('RoundTrip_PreservesContent', () => {
     const input = 'hello|world\nsecond line';
     expect(decodeForEdit(encodeForCommit(input))).toBe(input);
+  });
+
+  // Documented tradeoff (see spec): literal "<br>" typed by user becomes a
+  // newline on next edit. Acceptable because GFM cells can't contain real
+  // newlines so <br> is the only sensible roundtrip path.
+  it('LiteralBrTagFromUser_BecomesNewline', () => {
+    expect(decodeForEdit('see <br> tag')).toBe('see \n tag');
   });
 });
