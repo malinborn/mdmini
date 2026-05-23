@@ -314,52 +314,6 @@
   opacity: 1;
 }
 
-/* Visual styles on widget wrapper (not .cm-line) so they match content width */
-.cm-md-table-row-wrap {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  width: max-content;
-  background: var(--color-code-bg);
-  padding: 0.2em 0.6em 0.2em 0;
-  border-bottom: 1px solid var(--color-table-border);
-  line-height: 1.6;
-}
-
-.cm-md-table-header .cm-md-table-row-wrap {
-  font-weight: 600;
-  background: linear-gradient(135deg, #302848 0%, #24203a 40%, #1f1d2e 70%, #282248 100%);
-  border-bottom: 2px solid var(--color-table-border);
-  border-radius: 4px 4px 0 0;
-}
-
-:root[data-theme='light'] .cm-md-table-header .cm-md-table-row-wrap {
-  background: linear-gradient(135deg, #e8e0f6 0%, #ede8f4 40%, #f5f3f8 70%, #e4ecf8 100%);
-}
-
-.cm-md-table-even .cm-md-table-row-wrap {
-  background: var(--color-table-even-bg);
-}
-
-.cm-md-table-row-wrap-last {
-  border-radius: 0 0 4px 4px;
-}
-
-.cm-md-table-row-wrap-header {
-  padding-left: var(--table-row-gutter);
-}
-
-.cm-md-table-row {
-  display: inline-flex;
-  align-items: center;
-}
-
-.cm-md-table-cell {
-  display: inline-block;
-  padding: 0 0.5ch;
-  cursor: default;
-  position: relative;
-}
 
 .cm-md-table-cell-header {
   font-weight: 600;
@@ -399,13 +353,6 @@
   opacity: 0.6;
 }
 
-.cm-md-table-sep {
-  display: inline-block;
-  width: 1px;
-  background: var(--color-table-border);
-  align-self: stretch;
-  opacity: 0.5;
-}
 
 /* Table control buttons */
 .cm-md-table-btn {
@@ -424,7 +371,7 @@
 }
 
 /* Delete button (−) — muted rose */
-.cm-md-table-row-wrap:hover .cm-md-table-btn-del,
+.cm-md-table-row:hover .cm-md-table-btn-del,
 .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-del {
   color: #c4657a;
   opacity: 0.5;
@@ -437,7 +384,7 @@
 }
 
 /* Add button (+) — muted teal */
-.cm-md-table-row-wrap:hover .cm-md-table-btn-add,
+.cm-md-table-row:hover .cm-md-table-btn-add,
 .cm-md-table-header:hover .cm-md-table-btn-add-col {
   color: #56a89e;
   opacity: 0.5;
@@ -450,7 +397,7 @@
 }
 
 /* Drag handle (⠿) — neutral */
-.cm-md-table-row-wrap:hover .cm-md-table-btn-drag-row,
+.cm-md-table-row:hover .cm-md-table-btn-drag-row,
 .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-drag {
   color: #6e6a86;
   opacity: 0.5;
@@ -476,7 +423,7 @@
   color: #c0415a !important;
 }
 
-:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-del,
+:root[data-theme='light'] .cm-md-table-row:hover .cm-md-table-btn-del,
 :root[data-theme='light'] .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-del {
   color: #c0415a;
 }
@@ -486,7 +433,7 @@
   color: #1a7a70 !important;
 }
 
-:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-add,
+:root[data-theme='light'] .cm-md-table-row:hover .cm-md-table-btn-add,
 :root[data-theme='light'] .cm-md-table-header:hover .cm-md-table-btn-add-col {
   color: #1a7a70;
 }
@@ -496,7 +443,7 @@
   color: #5c5882 !important;
 }
 
-:root[data-theme='light'] .cm-md-table-row-wrap:hover .cm-md-table-btn-drag-row,
+:root[data-theme='light'] .cm-md-table-row:hover .cm-md-table-btn-drag-row,
 :root[data-theme='light'] .cm-md-table-cell-has-ctrl:hover .cm-md-table-col-ctrl .cm-md-table-btn-drag {
   color: #a8a4c0;
 }
@@ -543,7 +490,7 @@
   z-index: 10;
 }
 
-.cm-md-table-row-wrap:hover .cm-md-table-add-row-bottom .cm-md-table-btn {
+.cm-md-table-row:hover .cm-md-table-add-row-bottom .cm-md-table-btn {
   opacity: 0.5;
 }
 
@@ -610,11 +557,11 @@
   opacity: 1;
 }
 
-.cm-md-table-row-wrap:hover .cm-md-table-btn-add-row {
+.cm-md-table-row:hover .cm-md-table-btn-add-row {
   opacity: 0.5;
 }
 
-.cm-md-table-row-wrap:hover .cm-md-table-btn-add-row:hover {
+.cm-md-table-row:hover .cm-md-table-btn-add-row:hover {
   opacity: 1;
 }
 
