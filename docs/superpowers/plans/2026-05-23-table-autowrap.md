@@ -944,7 +944,7 @@ Expected: no errors.
 - [ ] **Step 7: Visual smoke test**
 
 ```bash
-lsof -ti:1420 | xargs kill -9 2>/dev/null; npm run tauri dev
+lsof -ti:1420 | xargs kill -9 2>/dev/null; npm run dev
 ```
 
 Open a markdown file with a table. Verify:
@@ -1017,7 +1017,7 @@ Specifically:
 
 - [ ] **Step 4: Visual test drag&drop**
 
-Run: `npm run tauri dev`
+Run: `npm run dev` (browser at http://localhost:1420; or `npm run dev:app` for Tauri shell with renamed identifier)
 
 - Drag a row to reorder — works
 - Drag a column to reorder — works
@@ -1126,7 +1126,7 @@ Expected: no errors.
 
 - [ ] **Step 4: Visual test cell editor**
 
-Run: `npm run tauri dev`
+Run: `npm run dev` (browser at http://localhost:1420; or `npm run dev:app` for Tauri shell with renamed identifier)
 
 - Double-click a short cell → textarea opens, 1 line high
 - Type some text, press Enter → newline added, textarea grows; press Cmd+Enter → commits, markdown source contains `<br>`
@@ -1244,7 +1244,7 @@ Expected: no errors.
 
 - [ ] **Step 4: Visual test selection redirect**
 
-Run: `npm run tauri dev`
+Run: `npm run dev` (browser at http://localhost:1420; or `npm run dev:app` for Tauri shell with renamed identifier)
 
 - Open a file with a table, place cursor on the line above the table, press Down — cursor lands on header line (or skips to first line after table if Down again past header). Caret stays visible at all times.
 - Place cursor on the line after the table, press Up — cursor lands on header line.
@@ -1304,7 +1304,7 @@ Apply this rename across all `.cm-md-table-row-wrap` occurrences that remain.
 
 - [ ] **Step 3: Verify CSS still loads and tables look right**
 
-Run: `npm run tauri dev`
+Run: `npm run dev` (browser at http://localhost:1420; or `npm run dev:app` for Tauri shell with renamed identifier)
 
 - Hover over a row — del/drag buttons fade in
 - Hover over a header cell — col-ctrl appears
@@ -1417,7 +1417,7 @@ Run through every validation scenario from the spec. If anything fails, fix it; 
 - [ ] **Step 1: Start dev server**
 
 ```bash
-lsof -ti:1420 | xargs kill -9 2>/dev/null; npm run tauri dev
+lsof -ti:1420 | xargs kill -9 2>/dev/null; npm run dev
 ```
 
 - [ ] **Step 2: Run through validation plan**

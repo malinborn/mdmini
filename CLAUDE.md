@@ -9,14 +9,22 @@ Minimalist live-preview markdown editor for macOS. Tauri 2 + Svelte 5 + CodeMirr
 | Command | Description |
 |---------|-------------|
 | `npm install` | Install frontend dependencies |
-| `npm run tauri dev` | Start Tauri dev mode (frontend + native window) |
-| `npm run tauri build` | Production build (creates .dmg) |
-| `npm run dev` | Frontend only (Vite dev server, no Tauri) |
-| `npm run build` | Frontend build only |
+| `npm run dev` | **Default for visual checks.** Frontend only (Vite at http://localhost:1420). No Tauri shell — open the URL in any browser. |
+| `npm run dev:app` | Tauri dev with **renamed identifier** (`md-mini-dev` / `com.md-mini.dev`). Uses its own bundle ID + single-instance socket — does NOT conflict with an installed production md-mini. Use when you need Tauri IPC (file I/O, menu, native dialogs). |
 | `npm run check` | Svelte type checking |
-| `cd src-tauri && cargo test` | Run Rust tests |
 | `npm run test` | Run frontend tests (vitest) |
+| `cd src-tauri && cargo test` | Run Rust tests |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml` | Rust linter |
+| `npm run build:dev` | **Renamed dev .dmg** (`md-mini-dev`). Safe to install alongside production. |
+| `npm run tauri build` | **Production build (creates .dmg).** Replaces the user's installed md-mini if installed. **Explicit, owner-triggered only — do NOT run as part of routine dev/QA.** |
+| `npm run tauri dev` | Tauri dev with **production identifier**. Conflicts with running production md-mini (shares single-instance socket, app data, recovery files). **Avoid while the user is actively using md-mini — use `npm run dev` or `npm run dev:app` instead.** |
+| `npm run build` | Frontend build only (no Tauri bundle) |
+
+### Build / Test Policy While User Is Working
+
+- **Default for visual verification:** `npm run dev` (browser). Most md-mini features are frontend; the editor, CodeMirror, decorations, mermaid all run in the browser context.
+- **When Tauri features are needed:** `npm run dev:app`. Different identifier → different bundle ID → independent of the installed production app.
+- **NEVER run `npm run tauri dev` or `npm run tauri build` as part of routine development or QA.** Both share state with the installed production md-mini and can disrupt the user's active session. Production build is an **explicit owner-triggered action**, never an automated step.
 
 ## Architecture
 

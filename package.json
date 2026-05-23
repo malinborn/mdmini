@@ -10,7 +10,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dev:app": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "build:dev": "tauri build --config src-tauri/tauri.dev.conf.json"
   },
   "license": "GPL-3.0-only",
   "dependencies": {

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "md-mini-dev",
+  "identifier": "com.md-mini.dev",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Untitled — md-mini-dev"
+      }
+    ]
+  },
+  "bundle": {
+    "fileAssociations": []
+  }
+}
