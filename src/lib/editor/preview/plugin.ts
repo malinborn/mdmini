@@ -33,7 +33,9 @@ function buildDecorations(view: EditorView): DecorationSet {
         case 'ATXHeading5':
         case 'ATXHeading6':
           decorateHeading(view, node.node, builder);
-          return false;
+          // Descend into inline children (InlineCode, Emphasis, etc.)
+          // so they get decorated inside headings too.
+          break;
         case 'Emphasis':
           decorateEmphasis(view, node.node, builder);
           return false;
