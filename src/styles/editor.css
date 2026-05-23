@@ -306,7 +306,7 @@
   padding: 0 4px;
 }
 
-.cm-md-table-row:hover .cm-md-table-btn-toggle {
+.cm-md-table .cm-md-table-row:hover .cm-md-table-btn-toggle {
   opacity: 0.5;
 }
 
@@ -608,12 +608,6 @@
 
 .cm-md-table-header:hover .cm-md-table-btn-add-col:hover {
   opacity: 1;
-}
-
-/* Add row button (inline, right of delete row button) */
-.cm-md-table-btn-add-row {
-  margin-left: 4px;
-  flex-shrink: 0;
 }
 
 .cm-md-table-row-wrap:hover .cm-md-table-btn-add-row {
