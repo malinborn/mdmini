@@ -2,11 +2,22 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "md-mini-dev",
   "identifier": "com.md-mini.dev",
+  "build": {
+    "devUrl": "http://localhost:1430",
+    "beforeDevCommand": "VITE_PORT=1430 VITE_HMR_PORT=1431 npm run dev"
+  },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Untitled — md-mini-dev"
+        "title": "Untitled — md-mini-dev",
+        "width": 900,
+        "height": 700,
+        "minWidth": 400,
+        "minHeight": 300,
+        "decorations": true,
+        "transparent": false,
+        "backgroundColor": "#191724"
       }
     ]
   },

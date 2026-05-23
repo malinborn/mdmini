@@ -59,12 +59,19 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
     let label = format!("editor-{}", count);
     let offset = (count as f64) * CASCADE_OFFSET;
 
+    let product_name = app
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "md-mini".to_string());
+    let window_title = format!("Untitled — {}", product_name);
+
     let builder = WebviewWindowBuilder::new(
         app,
         &label,
         WebviewUrl::App("index.html".into()),
     )
-    .title("Untitled — md-mini")
+    .title(&window_title)
     .inner_size(DEFAULT_WIDTH, DEFAULT_HEIGHT)
     .min_inner_size(400.0, 300.0)
     .position(100.0 + offset, 100.0 + offset)
