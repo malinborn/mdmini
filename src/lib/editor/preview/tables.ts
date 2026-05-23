@@ -140,50 +140,25 @@ function removeDropIndicator(): void {
   drag.indicator = null;
 }
 
-function getRowWraps(tableWrapper: HTMLElement | null): HTMLElement[] {
-  if (!tableWrapper) return [];
-  const cmLine = tableWrapper.closest('.cm-line') as HTMLElement | null;
-  if (!cmLine) return [];
-
-  // Walk BACKWARD to find the first table line (header)
-  let firstLine: HTMLElement = cmLine;
-  let prev = cmLine.previousElementSibling as HTMLElement | null;
-  while (prev && prev.classList.contains('cm-md-table-line')) {
-    firstLine = prev;
-    prev = prev.previousElementSibling as HTMLElement | null;
-  }
-
-  // Walk FORWARD from the first line, collecting all data row wraps
-  const wraps: HTMLElement[] = [];
-  let el: HTMLElement | null = firstLine;
-  while (el) {
-    if (el.classList.contains('cm-line') && el.classList.contains('cm-md-table-line') &&
-        !el.classList.contains('cm-md-table-header') &&
-        !el.classList.contains('cm-md-table-delimiter')) {
-      const wrap = el.querySelector('.cm-md-table-row-wrap') as HTMLElement | null;
-      if (wrap) wraps.push(wrap);
-    } else if (!el.classList.contains('cm-md-table-line')) {
-      break; // left the table
-    }
-    el = el.nextElementSibling as HTMLElement | null;
-  }
-  return wraps;
+function getRowWraps(tableEl: HTMLElement | null): HTMLElement[] {
+  if (!tableEl) return [];
+  const table = tableEl.closest('.cm-md-table') as HTMLElement | null;
+  if (!table) return [];
+  return Array.from(
+    table.querySelectorAll('.cm-md-table-row-data')
+  ) as HTMLElement[];
 }
 
 function getHeaderCells(anyTableEl: HTMLElement | null): HTMLElement[] {
   if (!anyTableEl) return [];
-  const cmLine = anyTableEl.closest('.cm-line') as HTMLElement | null;
-  if (!cmLine) return [];
-
-  // Check current line first, then walk backward
-  let el: HTMLElement | null = cmLine;
-  while (el) {
-    if (el.classList.contains('cm-md-table-header')) {
-      return Array.from(el.querySelectorAll('.cm-md-table-cell')) as HTMLElement[];
-    }
-    el = el.previousElementSibling as HTMLElement | null;
-  }
-  return [];
+  const table = anyTableEl.closest('.cm-md-table') as HTMLElement | null;
+  if (!table) return [];
+  const header = table.querySelector('.cm-md-table-row-header');
+  if (!header) return [];
+  // Skip the leading ctrl-cell (first child)
+  return Array.from(
+    header.querySelectorAll('.cm-md-table-cell:not(.cm-md-table-row-ctrl)')
+  ) as HTMLElement[];
 }
 
 function startRowDrag(
@@ -311,7 +286,7 @@ function startColDrag(
   const onMove = (ev: MouseEvent): void => {
     if (!drag.active) return;
 
-    const cells = getHeaderCells(headerCellEl.closest('.cm-md-table-row-wrap') as HTMLElement | null);
+    const cells = getHeaderCells(headerCellEl.closest('.cm-md-table') as HTMLElement | null);
     if (cells.length === 0) return;
 
     let insertBefore = cells.length;
@@ -335,13 +310,13 @@ function startColDrag(
 
     if (insertBefore < cells.length) {
       const targetRect = cells[insertBefore].getBoundingClientRect();
-      const headerRect = cells[0].closest('.cm-line')?.getBoundingClientRect();
+      const headerRect = cells[0].closest('.cm-md-table-row-header')?.getBoundingClientRect();
       drag.indicator.style.left = `${targetRect.left}px`;
       drag.indicator.style.top = headerRect ? `${headerRect.top}px` : `${targetRect.top}px`;
       drag.indicator.style.height = headerRect ? `${headerRect.height}px` : `${targetRect.height}px`;
     } else {
       const lastRect = cells[cells.length - 1].getBoundingClientRect();
-      const headerRect = cells[0].closest('.cm-line')?.getBoundingClientRect();
+      const headerRect = cells[0].closest('.cm-md-table-row-header')?.getBoundingClientRect();
       drag.indicator.style.left = `${lastRect.right}px`;
       drag.indicator.style.top = headerRect ? `${headerRect.top}px` : `${lastRect.top}px`;
       drag.indicator.style.height = headerRect ? `${headerRect.height}px` : `${lastRect.height}px`;
