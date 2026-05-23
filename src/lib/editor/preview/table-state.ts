@@ -20,15 +20,13 @@ export const tableModeField = StateField.define<RangeSet<TableModeValue>>({
     for (const eff of tr.effects) {
       if (!eff.is(toggleTableMode)) continue;
       const pos = eff.value.pos;
-      let current: TableMode = 'wrap';
       const cur = value.iter(pos);
-      while (cur.value && cur.from <= pos) {
-        if (cur.from === pos) current = cur.value.mode;
-        cur.next();
-      }
+      const current: TableMode =
+        cur.value && cur.from === pos ? cur.value.mode : 'wrap';
       const next: TableMode = current === 'full' ? 'wrap' : 'full';
       value = value.update({
         filter: (from) => from !== pos,
+        // Point range (from === to) — TableModeValue is anchored at a single position.
         add: [new TableModeValue(next).range(pos)],
       });
     }
@@ -40,9 +38,5 @@ export function getTableMode(state: EditorState, pos: number): TableMode {
   const set = state.field(tableModeField, false);
   if (!set) return 'wrap';
   const cur = set.iter(pos);
-  while (cur.value && cur.from <= pos) {
-    if (cur.from === pos) return cur.value.mode;
-    cur.next();
-  }
-  return 'wrap';
+  return cur.value && cur.from === pos ? cur.value.mode : 'wrap';
 }
