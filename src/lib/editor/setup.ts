@@ -19,6 +19,7 @@ import { tableModeField } from './preview/table-state';
 import { tableSelectionSnapOut } from './preview/table-selection';
 import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
+import { headingSlugsField, navigateToHeading } from './heading-slugs';
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -28,6 +29,7 @@ export function createExtensions(): Extension[] {
   return [
     editorTheme,
     tableModeField,
+    headingSlugsField,
     lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),
@@ -105,6 +107,10 @@ export function createExtensions(): Extension[] {
         if (url) {
           event.preventDefault();
           event.stopPropagation();
+          if (url.startsWith('#')) {
+            navigateToHeading(view, url.slice(1));
+            return true;
+          }
           import('@tauri-apps/plugin-shell').then(({ open }) => {
             open(url);
           }).catch(() => {
