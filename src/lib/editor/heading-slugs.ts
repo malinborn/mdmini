@@ -1,18 +1,19 @@
 import { StateField, type EditorState, type StateEffect } from '@codemirror/state';
-import { syntaxTree } from '@codemirror/language';
+import { syntaxTree, foldedRanges, unfoldEffect } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
-import { foldedRanges, unfoldEffect } from '@codemirror/language';
 
 export function slugify(text: string): string {
   return text
-    .toLowerCase()
     .normalize('NFC')
+    .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .trim()
     .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
+// Only ATX headings (`# Foo`) are indexed; setext (`Foo\n===`) is not — matches
+// the rest of the editor (folding.ts, preview/headings.ts) which is also ATX-only.
 function buildIndex(state: EditorState): Map<string, number> {
   const map = new Map<string, number>();
   const counts = new Map<string, number>();
@@ -56,17 +57,18 @@ export function getHeadingPos(state: EditorState, slug: string): number | null {
   return map.get(slug) ?? null;
 }
 
-export function navigateToHeading(view: EditorView, rawSlug: string): boolean {
-  let slug: string;
+export function navigateToHeading(view: EditorView, rawSlug: string): void {
+  let decoded: string;
   try {
-    slug = decodeURIComponent(rawSlug);
+    decoded = decodeURIComponent(rawSlug);
   } catch {
-    slug = rawSlug;
+    decoded = rawSlug;
   }
-  slug = slug.toLowerCase();
+  const slug = slugify(decoded);
+  if (!slug) return;
 
   const pos = getHeadingPos(view.state, slug);
-  if (pos === null) return false;
+  if (pos === null) return;
 
   const effects: StateEffect<unknown>[] = [];
   const folded = foldedRanges(view.state);
@@ -75,5 +77,4 @@ export function navigateToHeading(view: EditorView, rawSlug: string): boolean {
   });
   effects.push(EditorView.scrollIntoView(pos, { y: 'start' }));
   view.dispatch({ effects });
-  return true;
 }
