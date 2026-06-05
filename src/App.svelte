@@ -145,7 +145,7 @@
         activePreview = 'env';
       } else if (!MD_EXTENSIONS.has(ext)) {
         editorHandle?.setEnvMode(false);
-        editorHandle?.setCodeMode(ext);
+        editorHandle?.setCodeMode(ext, basename);
         activePreview = 'code';
       } else {
         editorHandle?.setEnvMode(false);

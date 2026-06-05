@@ -5,6 +5,7 @@
   import { createExtensions, languageCompartment, previewCompartment } from './setup';
   import { languages } from '@codemirror/language-data';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+  import { findCodeLanguage } from './file-language';
   import { Strikethrough, Table } from '@lezer/markdown';
   import { livePreviewPlugin } from './preview/plugin';
   import { envPreviewPlugin } from './preview/env';
@@ -12,7 +13,7 @@
   export interface EditorHandle {
     view: EditorView | undefined;
     replaceContent: (newContent: string) => void;
-    setCodeMode: (ext: string | null) => void;
+    setCodeMode: (ext: string | null, basename?: string) => void;
     setEnvMode: (enabled: boolean) => void;
   }
 
@@ -41,7 +42,7 @@
           view.contentDOM.blur();
         }
       },
-      setCodeMode(ext: string | null) {
+      setCodeMode(ext: string | null, basename?: string) {
         if (!view) return;
         if (!ext) {
           // Back to markdown mode
@@ -60,10 +61,8 @@
           view.dom.classList.remove('cm-code-file-mode');
           return;
         }
-        // Find language by extension
-        const lang = languages.find(l =>
-          l.extensions.some(e => e === ext)
-        );
+        // Find language by basename (extensionless dotfiles) or extension
+        const lang = findCodeLanguage(basename ?? '', ext);
         if (lang) {
           lang.load().then(langSupport => {
             if (!view) return;
