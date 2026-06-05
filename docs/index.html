@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.3.2",
+    "softwareVersion": "0.3.4",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -754,7 +754,7 @@
         <div class="feature-card">
           <div class="feature-icon">◉</div>
           <div class="feature-title">Secret Masking</div>
-          <div class="feature-desc">Values in <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.env</code> files are blurred by default. Click to reveal.</div>
+          <div class="feature-desc">Secret values in <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.env</code> and shell configs (<code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.zshrc</code>, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.bashrc</code>) are masked by default. Cursor or Cmd+E to reveal.</div>
         </div>
 
         <div class="feature-card">
@@ -852,6 +852,38 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.4</div>
+            <div class="changelog-date">2026-06-05</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Shell configs come alive</h3>
+            <ul>
+              <li><strong>Syntax highlighting for shell configs</strong> — <code>.zshrc</code>, <code>.bashrc</code>, <code>.bash_profile</code>, <code>.profile</code> and friends now render as Shell code instead of plain text</li>
+              <li><strong>Inline secret masking</strong> — values in <code>export API_KEY=…</code>, <code>TOKEN=…</code> are masked to a <code>sk-…jkl</code> pill with a Copy button, while the key and the rest of the line stay highlighted</li>
+              <li><strong>Reveal on demand</strong> — put the cursor on the line, or press <code>Cmd+E</code>, to see the raw value; shell expansions (<code>$VAR</code>, <code>$(…)</code>) are left untouched</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.3</div>
+            <div class="changelog-date">2026-06-04</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>TOC links that actually jump</h3>
+            <ul>
+              <li><strong>In-document anchor links</strong> — clicking <code>[Section](#section)</code> now scrolls to the matching heading instead of doing nothing</li>
+              <li><strong>Cyrillic &amp; duplicates</strong> — percent-encoded and non-ASCII fragments resolve; duplicate headings disambiguate (<code>#section-2</code>)</li>
+              <li><strong>Folded sections auto-expand</strong> — a collapsed parent heading opens before scrolling to the target</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
