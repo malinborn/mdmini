@@ -12,6 +12,8 @@
   import { highlightActiveLine } from '@codemirror/view';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
+  import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
+  import { isShellConfig } from './lib/editor/file-language';
   import { reinitializeTheme } from './lib/editor/preview/mermaid';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
@@ -26,7 +28,7 @@
   const recentFiles = createRecentFilesStore();
 
   let showRecentFiles = $state(false);
-  let activePreview: 'markdown' | 'env' | 'code' = $state('markdown');
+  let activePreview: 'markdown' | 'env' | 'code' | 'shell' = $state('markdown');
 
   let editorHandle: EditorHandle | undefined = $state(undefined);
 
@@ -146,7 +148,7 @@
       } else if (!MD_EXTENSIONS.has(ext)) {
         editorHandle?.setEnvMode(false);
         editorHandle?.setCodeMode(ext, basename);
-        activePreview = 'code';
+        activePreview = isShellConfig(basename) ? 'shell' : 'code';
       } else {
         editorHandle?.setEnvMode(false);
         editorHandle?.setCodeMode(null);
@@ -364,7 +366,8 @@
     if (!v) return;
     if (m === 'live-preview') {
       // Restore the correct preview plugin for the current file type
-      const plugin = activePreview === 'env' ? envPreviewPlugin
+      const plugin = activePreview === 'shell' ? shellSecretsPlugin
+        : activePreview === 'env' ? envPreviewPlugin
         : activePreview === 'code' ? []
         : livePreviewPlugin;
       v.dispatch({ effects: previewCompartment.reconfigure(plugin) });

@@ -21,6 +21,14 @@ export const FILENAME_LANGUAGE: Record<string, string> = {
 };
 
 /**
+ * Returns true if the given basename (lowercase) maps to a shell config dotfile.
+ * Used to decide whether to activate shell secret masking.
+ */
+export function isShellConfig(basename: string): boolean {
+  return basename.toLowerCase() in FILENAME_LANGUAGE;
+}
+
+/**
  * Resolve a CodeMirror LanguageDescription for a file: special-case basename first
  * (extensionless shell configs), then fall back to extension lookup. Returns null
  * if neither matches. `basename`/`ext` are lowercased defensively.

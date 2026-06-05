@@ -43,7 +43,7 @@ const SECRET_KEY_PATTERNS = [
   /private/i,
 ];
 
-function isSecret(value: string, key?: string): boolean {
+export function isSecret(value: string, key?: string): boolean {
   if (!value) return false;
 
   // Check if the key name suggests a secret
@@ -67,7 +67,7 @@ function isSecret(value: string, key?: string): boolean {
   return false;
 }
 
-function maskSecret(value: string): string {
+export function maskSecret(value: string): string {
   // If fewer than 14 chars would be hidden, mask everything — too easy to bruteforce
   if (value.length < 20) return '••••••';
   const hidden = value.length - 6; // 3 shown at start + 3 at end
@@ -75,7 +75,7 @@ function maskSecret(value: string): string {
   return value.slice(0, 3) + '…' + value.slice(-3);
 }
 
-function stripQuotes(raw: string): string {
+export function stripQuotes(raw: string): string {
   if (
     (raw.startsWith('"') && raw.endsWith('"')) ||
     (raw.startsWith("'") && raw.endsWith("'"))

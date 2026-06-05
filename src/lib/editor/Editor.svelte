@@ -5,7 +5,8 @@
   import { createExtensions, languageCompartment, previewCompartment } from './setup';
   import { languages } from '@codemirror/language-data';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-  import { findCodeLanguage } from './file-language';
+  import { findCodeLanguage, isShellConfig } from './file-language';
+  import { shellSecretsPlugin } from './preview/shell-secrets';
   import { Strikethrough, Table } from '@lezer/markdown';
   import { livePreviewPlugin } from './preview/plugin';
   import { envPreviewPlugin } from './preview/env';
@@ -69,7 +70,9 @@
             view.dispatch({
               effects: [
                 languageCompartment.reconfigure(langSupport),
-                previewCompartment.reconfigure([]),
+                previewCompartment.reconfigure(
+                  isShellConfig(basename ?? '') ? shellSecretsPlugin : []
+                ),
               ],
             });
             view.dom.classList.add('cm-code-file-mode');

@@ -1,5 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import { findCodeLanguage, FILENAME_LANGUAGE } from './file-language';
+import { findCodeLanguage, FILENAME_LANGUAGE, isShellConfig } from './file-language';
+
+describe('isShellConfig', () => {
+  it('returns true for .zshrc', () => {
+    expect(isShellConfig('.zshrc')).toBe(true);
+  });
+
+  it('returns true for .bashrc', () => {
+    expect(isShellConfig('.bashrc')).toBe(true);
+  });
+
+  it('returns true for .profile', () => {
+    expect(isShellConfig('.profile')).toBe(true);
+  });
+
+  it('returns true for .bash_profile', () => {
+    expect(isShellConfig('.bash_profile')).toBe(true);
+  });
+
+  it('returns false for foo.py', () => {
+    expect(isShellConfig('foo.py')).toBe(false);
+  });
+
+  it('returns false for .env', () => {
+    expect(isShellConfig('.env')).toBe(false);
+  });
+
+  it('returns false for .gitignore', () => {
+    expect(isShellConfig('.gitignore')).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isShellConfig('.ZSHRC')).toBe(true);
+  });
+});
 
 describe('findCodeLanguage', () => {
   describe('extensionless shell config dotfiles', () => {
