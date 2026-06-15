@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseCellsWithPositions,
+  parseInlineMarkdown,
   tableToGrid,
   type CellInfo,
   type RowData,
@@ -445,5 +446,103 @@ describe('delimiter detection (position-based)', () => {
     expect(grid).toHaveLength(2);
     // 'Alice' (second row, treated as delimiter) must NOT appear in the grid
     expect(grid.flat()).not.toContain('Alice');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseInlineMarkdown
+// ---------------------------------------------------------------------------
+
+describe('parseInlineMarkdown', () => {
+  it('Empty_Empty_ReturnsEmptyArray', () => {
+    expect(parseInlineMarkdown('')).toEqual([]);
+  });
+
+  it('PlainText_NoMarkdown_ReturnsSingleTextToken', () => {
+    expect(parseInlineMarkdown('hello world')).toEqual([
+      { type: 'text', value: 'hello world' },
+    ]);
+  });
+
+  it('Link_BareLink_ReturnsLinkToken', () => {
+    expect(parseInlineMarkdown('[click](https://example.com)')).toEqual([
+      { type: 'link', text: 'click', url: 'https://example.com' },
+    ]);
+  });
+
+  it('Link_IssueShorthandWithHash_ReturnsLinkToken', () => {
+    // Real-world case from the bug report: `[#12480](https://github.com/.../issues/12480)`
+    expect(
+      parseInlineMarkdown('[#12480](https://github.com/dodobrands/dodo-mobile-ios/issues/12480)')
+    ).toEqual([
+      {
+        type: 'link',
+        text: '#12480',
+        url: 'https://github.com/dodobrands/dodo-mobile-ios/issues/12480',
+      },
+    ]);
+  });
+
+  it('Link_MultipleLinksSeparatedByText_ReturnsInterleavedTokens', () => {
+    expect(
+      parseInlineMarkdown('[#1](https://x.test/1), [#2](https://x.test/2)')
+    ).toEqual([
+      { type: 'link', text: '#1', url: 'https://x.test/1' },
+      { type: 'text', value: ', ' },
+      { type: 'link', text: '#2', url: 'https://x.test/2' },
+    ]);
+  });
+
+  it('Link_TextBeforeAndAfter_ReturnsTextLinkText', () => {
+    expect(parseInlineMarkdown('see [docs](https://example.com) now')).toEqual([
+      { type: 'text', value: 'see ' },
+      { type: 'link', text: 'docs', url: 'https://example.com' },
+      { type: 'text', value: ' now' },
+    ]);
+  });
+
+  it('Bold_DoubleAsterisk_ReturnsBoldToken', () => {
+    expect(parseInlineMarkdown('**bold**')).toEqual([
+      { type: 'bold', value: 'bold' },
+    ]);
+  });
+
+  it('Italic_SingleAsterisk_ReturnsItalicToken', () => {
+    expect(parseInlineMarkdown('*italic*')).toEqual([
+      { type: 'italic', value: 'italic' },
+    ]);
+  });
+
+  it('BoldItalic_TripleAsterisk_ReturnsBoldItalicToken', () => {
+    expect(parseInlineMarkdown('***both***')).toEqual([
+      { type: 'boldItalic', value: 'both' },
+    ]);
+  });
+
+  it('Strike_DoubleTilde_ReturnsStrikeToken', () => {
+    expect(parseInlineMarkdown('~~gone~~')).toEqual([
+      { type: 'strike', value: 'gone' },
+    ]);
+  });
+
+  it('Code_Backticks_ReturnsCodeToken', () => {
+    expect(parseInlineMarkdown('`code`')).toEqual([
+      { type: 'code', value: 'code' },
+    ]);
+  });
+
+  it('MalformedLink_MissingClosingParen_NotParsedAsLink', () => {
+    // Defensive: opener without closing must remain plain text, not swallow rest of cell.
+    expect(parseInlineMarkdown('[oops](https://x.test')).toEqual([
+      { type: 'text', value: '[oops](https://x.test' },
+    ]);
+  });
+
+  it('LinkWithBoldNeighbours_LinkBeforeBold_BothParsed', () => {
+    expect(parseInlineMarkdown('[a](https://x.test) and **b**')).toEqual([
+      { type: 'link', text: 'a', url: 'https://x.test' },
+      { type: 'text', value: ' and ' },
+      { type: 'bold', value: 'b' },
+    ]);
   });
 });

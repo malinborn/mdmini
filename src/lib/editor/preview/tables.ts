@@ -446,63 +446,140 @@ class TableWidget extends WidgetType {
   }
 }
 
-/** Render inline markdown (code, bold, italic, strikethrough) into a cell element. */
-function renderCellContent(cellEl: HTMLElement, text: string): void {
-  if (!text) return;
+export type InlineToken =
+  | { type: 'text'; value: string }
+  | { type: 'code'; value: string }
+  | { type: 'boldItalic'; value: string }
+  | { type: 'bold'; value: string }
+  | { type: 'italic'; value: string }
+  | { type: 'strike'; value: string }
+  | { type: 'link'; text: string; url: string };
 
-  // Regex for inline markdown tokens — order matters (longer patterns first)
-  const inlineRegex = /(`+)(.*?)\1|(\*\*\*|___)(.*?)\3|(\*\*|__)(.*?)\5|(\*|_)(.*?)\7|(~~)(.*?)\9/g;
+/**
+ * Parse a cell's text into inline markdown tokens.
+ *
+ * Supported: code, bold+italic, bold, italic, strikethrough, links `[text](url)`.
+ * Order matters — longer patterns are matched first to avoid emphasis swallowing link
+ * brackets. Unmatched text becomes `text` tokens.
+ */
+export function parseInlineMarkdown(text: string): InlineToken[] {
+  if (!text) return [];
 
+  // Order: code | link | ***bi*** | **b** | *i* | ~~s~~. Link before emphasis so the
+  // square brackets don't get treated as italic-eligible text.
+  const inlineRegex = /(`+)(.*?)\1|\[([^\]\n]+)\]\(([^)\s]+)\)|(\*\*\*|___)(.*?)\5|(\*\*|__)(.*?)\7|(\*|_)(.*?)\9|(~~)(.*?)\11/g;
+
+  const tokens: InlineToken[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = inlineRegex.exec(text)) !== null) {
-    // Append plain text before this match
     if (match.index > lastIndex) {
-      cellEl.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      tokens.push({ type: 'text', value: text.slice(lastIndex, match.index) });
     }
 
-    if (match[1]) {
-      // Code: `code` or ``code``
-      const code = document.createElement('code');
-      code.className = 'cm-md-table-inline-code';
-      code.textContent = match[2];
-      cellEl.appendChild(code);
-    } else if (match[3]) {
-      // Bold+italic: ***text*** or ___text___
-      const el = document.createElement('strong');
-      const em = document.createElement('em');
-      em.textContent = match[4];
-      el.appendChild(em);
-      cellEl.appendChild(el);
-    } else if (match[5]) {
-      // Bold: **text** or __text__
-      const el = document.createElement('strong');
-      el.textContent = match[6];
-      cellEl.appendChild(el);
-    } else if (match[7]) {
-      // Italic: *text* or _text_
-      const el = document.createElement('em');
-      el.textContent = match[8];
-      cellEl.appendChild(el);
-    } else if (match[9]) {
-      // Strikethrough: ~~text~~
-      const el = document.createElement('s');
-      el.textContent = match[10];
-      cellEl.appendChild(el);
+    if (match[1] !== undefined) {
+      tokens.push({ type: 'code', value: match[2] });
+    } else if (match[3] !== undefined) {
+      tokens.push({ type: 'link', text: match[3], url: match[4] });
+    } else if (match[5] !== undefined) {
+      tokens.push({ type: 'boldItalic', value: match[6] });
+    } else if (match[7] !== undefined) {
+      tokens.push({ type: 'bold', value: match[8] });
+    } else if (match[9] !== undefined) {
+      tokens.push({ type: 'italic', value: match[10] });
+    } else if (match[11] !== undefined) {
+      tokens.push({ type: 'strike', value: match[12] });
     }
 
     lastIndex = match.index + match[0].length;
   }
 
-  // Append remaining plain text
   if (lastIndex < text.length) {
-    cellEl.appendChild(document.createTextNode(text.slice(lastIndex)));
+    tokens.push({ type: 'text', value: text.slice(lastIndex) });
   }
 
-  // If nothing was parsed (no inline markdown), just set text
-  if (lastIndex === 0) {
+  return tokens;
+}
+
+/** Open a URL via the Tauri shell, falling back to `window.open` in non-Tauri builds. */
+function openUrl(url: string): void {
+  import('@tauri-apps/plugin-shell')
+    .then(({ open }) => open(url))
+    .catch(() => {
+      window.open(url, '_blank');
+    });
+}
+
+/** Render inline markdown (code, bold, italic, strikethrough, links) into a cell element. */
+function renderCellContent(cellEl: HTMLElement, text: string): void {
+  if (!text) return;
+
+  const tokens = parseInlineMarkdown(text);
+
+  if (tokens.length === 0) {
     cellEl.textContent = text;
+    return;
+  }
+
+  for (const token of tokens) {
+    switch (token.type) {
+      case 'text':
+        cellEl.appendChild(document.createTextNode(token.value));
+        break;
+      case 'code': {
+        const code = document.createElement('code');
+        code.className = 'cm-md-table-inline-code';
+        code.textContent = token.value;
+        cellEl.appendChild(code);
+        break;
+      }
+      case 'boldItalic': {
+        const strong = document.createElement('strong');
+        const em = document.createElement('em');
+        em.textContent = token.value;
+        strong.appendChild(em);
+        cellEl.appendChild(strong);
+        break;
+      }
+      case 'bold': {
+        const el = document.createElement('strong');
+        el.textContent = token.value;
+        cellEl.appendChild(el);
+        break;
+      }
+      case 'italic': {
+        const el = document.createElement('em');
+        el.textContent = token.value;
+        cellEl.appendChild(el);
+        break;
+      }
+      case 'strike': {
+        const el = document.createElement('s');
+        el.textContent = token.value;
+        cellEl.appendChild(el);
+        break;
+      }
+      case 'link': {
+        const a = document.createElement('a');
+        a.className = 'cm-md-link';
+        a.href = token.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = token.text;
+        // Open via Tauri shell. preventDefault so the <a> doesn't navigate the
+        // editor window; stopPropagation so the editor's global Link handler
+        // and the cell's dblclick-to-edit don't also fire.
+        a.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openUrl(token.url);
+        });
+        cellEl.appendChild(a);
+        break;
+      }
+    }
   }
 }
 
