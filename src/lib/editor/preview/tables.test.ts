@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { EditorState } from '@codemirror/state';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
+import { Strikethrough, Table } from '@lezer/markdown';
+import { EditorView } from '@codemirror/view';
+import { headingSlugsField } from '../heading-slugs';
 import {
   parseCellsWithPositions,
   parseInlineMarkdown,
+  routeLinkClick,
   tableToGrid,
   type CellInfo,
   type RowData,
@@ -544,5 +551,92 @@ describe('parseInlineMarkdown', () => {
       { type: 'text', value: ' and ' },
       { type: 'bold', value: 'b' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// routeLinkClick
+// ---------------------------------------------------------------------------
+
+// Structural mock — mirrors the pattern used in heading-slugs.test.ts. Only
+// `state` and `dispatch` are exercised by navigateToHeading, so a real
+// EditorView (which needs the DOM) isn't required.
+function makeMockView(doc: string): { view: EditorView; dispatch: ReturnType<typeof vi.fn> } {
+  const dispatch = vi.fn();
+  const state = EditorState.create({
+    doc,
+    extensions: [
+      markdown({
+        base: markdownLanguage,
+        codeLanguages: languages,
+        extensions: [Strikethrough, Table],
+      }),
+      headingSlugsField,
+    ],
+  });
+  const view = { state, dispatch } as unknown as EditorView;
+  return { view, dispatch };
+}
+
+describe('routeLinkClick', () => {
+  it('Anchor_KnownHeading_DispatchesScrollAndSkipsOpenExternal', () => {
+    const { view, dispatch } = makeMockView('# Hello\n\nbody\n');
+    const openExternal = vi.fn();
+
+    routeLinkClick('#hello', view, openExternal);
+
+    // navigateToHeading dispatches a single transaction with scrollIntoView effects.
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('Anchor_UnknownHeading_DispatchesNothingAndSkipsOpenExternal', () => {
+    const { view, dispatch } = makeMockView('# Hello\n');
+    const openExternal = vi.fn();
+
+    routeLinkClick('#nope', view, openExternal);
+
+    // navigateToHeading is a silent no-op for unknown slugs — must not fall
+    // through to the external opener.
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('Anchor_RepeatedClicks_RouteThroughDispatchEveryTime_NeverEscapesToExternal', () => {
+    // Repro for the regression: re-clicking the same in-document anchor used
+    // to escape through the native `<a href="#x">` activation and end up in
+    // the system browser. Routing must stay deterministic across N calls and
+    // openExternal must never be invoked for `#`-prefixed URLs.
+    const { view, dispatch } = makeMockView('# Hello\n\nbody\n');
+    const openExternal = vi.fn();
+
+    routeLinkClick('#hello', view, openExternal);
+    routeLinkClick('#hello', view, openExternal);
+    routeLinkClick('#hello', view, openExternal);
+
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('External_HttpUrl_InvokesOpenExternalAndSkipsDispatch', () => {
+    const { view, dispatch } = makeMockView('# Hello\n');
+    const openExternal = vi.fn();
+
+    routeLinkClick('https://example.com/path', view, openExternal);
+
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://example.com/path');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('External_DoesNotMistakeMidStringHashForAnchor', () => {
+    // Only a leading `#` marks an in-document anchor — full URLs with fragments
+    // (`https://x.test/page#section`) must still open externally.
+    const { view, dispatch } = makeMockView('# Hello\n');
+    const openExternal = vi.fn();
+
+    routeLinkClick('https://x.test/page#section', view, openExternal);
+
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://x.test/page#section');
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

@@ -512,6 +512,31 @@ function openUrl(url: string): void {
     });
 }
 
+/**
+ * Route a link click from inside a table cell.
+ *
+ * Anchor URLs (`#heading-slug`) jump within the document via `navigateToHeading`;
+ * everything else is opened externally through the supplied `openExternal` callback
+ * (Tauri shell in the live editor, injectable in tests).
+ *
+ * Pure — does not touch the click event itself. The DOM wiring layer is responsible
+ * for `preventDefault` / `stopPropagation` so the native `<a>` activation doesn't
+ * also fire. Without that, a re-click of the same anchor lets the browser's hash
+ * navigation kick in, which Tauri can then open in the system browser instead of
+ * scrolling the editor.
+ */
+export function routeLinkClick(
+  url: string,
+  view: EditorView,
+  openExternal: (url: string) => void
+): void {
+  if (url.startsWith('#')) {
+    navigateToHeading(view, url.slice(1));
+  } else {
+    openExternal(url);
+  }
+}
+
 /** Render inline markdown (code, bold, italic, strikethrough, links) into a cell element. */
 function renderCellContent(cellEl: HTMLElement, text: string, view: EditorView): void {
   if (!text) return;
@@ -565,24 +590,27 @@ function renderCellContent(cellEl: HTMLElement, text: string, view: EditorView):
         const a = document.createElement('a');
         a.className = 'cm-md-link';
         a.href = token.url;
-        a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.textContent = token.text;
-        // preventDefault so the <a> doesn't navigate the editor window;
-        // stopPropagation so the editor's global Link handler and the cell's
-        // dblclick-to-edit don't also fire. Anchor links (`#heading`) jump
-        // within the document via the same path as top-level links in setup.ts;
-        // everything else goes through the Tauri shell.
-        a.addEventListener('mousedown', (e) => {
+        // mousedown drives the actual routing — same trigger setup.ts uses for
+        // top-level Link nodes. The click handler is a backstop that kills the
+        // native `<a>` activation on every code path (keyboard activation,
+        // re-clicks after the widget has been re-rendered): without it, the
+        // webview honours the `href` and re-opens `#anchor` URLs in the system
+        // browser on the second click. No `target="_blank"` — it would route
+        // every click through the OS handler too.
+        const onMouseDown = (e: MouseEvent): void => {
           if (e.button !== 0) return;
           e.preventDefault();
           e.stopPropagation();
-          if (token.url.startsWith('#')) {
-            navigateToHeading(view, token.url.slice(1));
-          } else {
-            openUrl(token.url);
-          }
-        });
+          routeLinkClick(token.url, view, openUrl);
+        };
+        const onClick = (e: MouseEvent): void => {
+          e.preventDefault();
+          e.stopPropagation();
+        };
+        a.addEventListener('mousedown', onMouseDown);
+        a.addEventListener('click', onClick);
         cellEl.appendChild(a);
         break;
       }
