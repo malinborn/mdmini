@@ -5,6 +5,7 @@ import type { SyntaxNode } from '@lezer/common';
 import { markdownTable } from 'markdown-table';
 import { toggleTableMode, getTableMode } from './table-state';
 import { encodeForCommit, decodeForEdit } from './table-encoding';
+import { navigateToHeading } from '../heading-slugs';
 
 export interface CellInfo {
   text: string;
@@ -512,7 +513,7 @@ function openUrl(url: string): void {
 }
 
 /** Render inline markdown (code, bold, italic, strikethrough, links) into a cell element. */
-function renderCellContent(cellEl: HTMLElement, text: string): void {
+function renderCellContent(cellEl: HTMLElement, text: string, view: EditorView): void {
   if (!text) return;
 
   const tokens = parseInlineMarkdown(text);
@@ -567,14 +568,20 @@ function renderCellContent(cellEl: HTMLElement, text: string): void {
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         a.textContent = token.text;
-        // Open via Tauri shell. preventDefault so the <a> doesn't navigate the
-        // editor window; stopPropagation so the editor's global Link handler
-        // and the cell's dblclick-to-edit don't also fire.
+        // preventDefault so the <a> doesn't navigate the editor window;
+        // stopPropagation so the editor's global Link handler and the cell's
+        // dblclick-to-edit don't also fire. Anchor links (`#heading`) jump
+        // within the document via the same path as top-level links in setup.ts;
+        // everything else goes through the Tauri shell.
         a.addEventListener('mousedown', (e) => {
           if (e.button !== 0) return;
           e.preventDefault();
           e.stopPropagation();
-          openUrl(token.url);
+          if (token.url.startsWith('#')) {
+            navigateToHeading(view, token.url.slice(1));
+          } else {
+            openUrl(token.url);
+          }
         });
         cellEl.appendChild(a);
         break;
@@ -672,7 +679,7 @@ function buildCell(
   const cellEl = document.createElement('span');
   cellEl.className = 'cm-md-table-cell';
   if (isHeader) cellEl.classList.add('cm-md-table-cell-header');
-  renderCellContent(cellEl, cell.text);
+  renderCellContent(cellEl, cell.text, view);
 
   cellEl.addEventListener('dblclick', (e) => {
     e.preventDefault();
