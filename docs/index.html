@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.3.4",
+    "softwareVersion": "0.3.5",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -852,6 +852,22 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.3.5</div>
+            <div class="changelog-date">2026-06-16</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Links that work inside tables</h3>
+            <ul>
+              <li><strong>Markdown links in table cells</strong> — <code>[text](url)</code> inside a cell now renders as a clickable link instead of raw brackets and parens</li>
+              <li><strong>Anchor links scroll, not escape</strong> — in-cell <code>[Back to top](#heading)</code> jumps within the document; re-clicking the same anchor no longer leaks out to the system browser</li>
+              <li><strong>Mixed inline formatting</strong> — links coexist with bold, italic, code and strikethrough in the same cell</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
