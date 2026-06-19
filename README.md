@@ -12,6 +12,7 @@ You edit raw markdown and see it rendered inline — no split panes, no mode swi
 
 ```bash
 brew tap malinborn/mdmini
+brew trust malinborn/mdmini
 brew install --cask mdmini
 ```
 

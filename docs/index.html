@@ -663,9 +663,9 @@
         <div class="install-block">
           <span class="install-label">$ install</span>
           <span class="install-cmd">
-            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
+            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">trust</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
           </span>
-          <button class="copy-btn" onclick="copyCmd(this, 'brew tap malinborn/mdmini &amp;&amp; brew install --cask mdmini')" title="Copy to clipboard" aria-label="Copy install command">
+          <button class="copy-btn" onclick="copyCmd(this, 'brew tap malinborn/mdmini &amp;&amp; brew trust malinborn/mdmini &amp;&amp; brew install --cask mdmini')" title="Copy to clipboard" aria-label="Copy install command">
             <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -807,7 +807,7 @@
           <span class="terminal-title">zsh</span>
         </div>
         <div class="terminal-body">
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew tap malinborn/mdmini && brew install --cask mdmini</span></div>
+          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew tap malinborn/mdmini && brew trust malinborn/mdmini && brew install --cask mdmini</span></div>
           <div><span class="t-out">==&gt; Downloading mdmini...</span></div>
           <div><span class="t-out">==&gt; Installing mdmini</span></div>
           <div><span class="t-out">✓  mdmini installed</span></div>
