@@ -200,7 +200,7 @@
 
     .install-block {
       display: inline-flex;
-      align-items: center;
+      align-items: stretch;
       gap: 0;
       background: var(--surface);
       border: 1px solid var(--overlay);
@@ -216,7 +216,7 @@
       padding: 0 14px;
       white-space: nowrap;
       border-right: 1px solid var(--overlay);
-      height: 44px;
+      min-height: 44px;
       display: flex;
       align-items: center;
       min-width: 96px;
@@ -227,17 +227,20 @@
       font-family: var(--font-mono);
       font-size: 14px;
       color: var(--text);
-      padding: 0 16px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      height: 44px;
+      padding: 10px 16px;
+      line-height: 1.5;
+      min-height: 44px;
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
+      column-gap: 0.4em;
+      row-gap: 3px;
       flex: 1;
       min-width: 0;
+      box-sizing: border-box;
     }
 
+    .install-cmd .cmd-seg { white-space: nowrap; }
     .install-cmd .brew { color: var(--gold); }
     .install-cmd .pkg  { color: var(--iris); }
 
@@ -248,7 +251,7 @@
       color: var(--subtle);
       cursor: pointer;
       padding: 0 14px;
-      height: 44px;
+      min-height: 44px;
       display: flex;
       align-items: center;
       transition: color var(--transition), background var(--transition);
@@ -663,7 +666,7 @@
         <div class="install-block">
           <span class="install-label">$ install</span>
           <span class="install-cmd">
-            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">trust</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
+            <span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">trust</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span></span>
           </span>
           <button class="copy-btn" onclick="copyCmd(this, 'brew tap malinborn/mdmini &amp;&amp; brew trust malinborn/mdmini &amp;&amp; brew install --cask mdmini')" title="Copy to clipboard" aria-label="Copy install command">
             <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -679,7 +682,7 @@
         <div class="install-block">
           <span class="install-label">$ update</span>
           <span class="install-cmd">
-            <span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">update</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span>&nbsp;<span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">upgrade</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span>
+            <span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">update</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">upgrade</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span></span>
           </span>
           <button class="copy-btn" onclick="copyCmd(this, 'brew update &amp;&amp; brew upgrade --cask mdmini')" title="Copy to clipboard" aria-label="Copy update command">
             <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
