@@ -143,6 +143,19 @@ pub fn run() {
                     app.state::<SessionState>().remove(label);
                     window::untrack_window(app, label);
                 }
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    let app = window.app_handle();
+                    let label = window.label().to_string();
+                    if let (Ok(pos), Ok(size)) = (window.outer_position(), window.inner_size()) {
+                        app.state::<SessionState>().set_geometry(
+                            &label,
+                            pos.x,
+                            pos.y,
+                            size.width,
+                            size.height,
+                        );
+                    }
+                }
                 _ => {}
             }
         });
