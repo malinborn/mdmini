@@ -134,7 +134,9 @@ pub fn run() {
                 if state.take_dirty() {
                     let snapshot = state.snapshot(session::now_secs());
                     let _ = session::write_session(&snapshot);
-                    session::prune_untitled_files(&snapshot);
+                    // Must include the pending restore's buffers, not just the
+                    // live ones — see `referenced_untitled`.
+                    session::prune_untitled_files(&state.referenced_untitled());
                 }
             });
 
@@ -155,24 +157,9 @@ pub fn run() {
                 tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
                     let app = window.app_handle();
                     let label = window.label().to_string();
-                    // Store LOGICAL pixels: these getters answer in physical ones,
-                    // but `WebviewWindowBuilder::position` / `inner_size` consume
-                    // logical. Skipping the conversion doubles every restored
-                    // window on a 2x display.
-                    if let (Ok(pos), Ok(size), Ok(scale)) = (
-                        window.outer_position(),
-                        window.inner_size(),
-                        window.scale_factor(),
-                    ) {
-                        let pos = pos.to_logical::<f64>(scale);
-                        let size = size.to_logical::<f64>(scale);
-                        app.state::<SessionState>().set_geometry(
-                            &label,
-                            pos.x.round() as i32,
-                            pos.y.round() as i32,
-                            size.width.round() as u32,
-                            size.height.round() as u32,
-                        );
+                    if let Some((x, y, width, height)) = session::window_geometry(window) {
+                        app.state::<SessionState>()
+                            .set_geometry(&label, x, y, width, height);
                     }
                 }
                 _ => {}
@@ -273,6 +260,25 @@ fn save_session_on_exit(app: &tauri::AppHandle) {
     let _ = session::write_session(&snapshot);
 }
 
+/// Hand a file to the `main` window and register it as open.
+///
+/// `OpenFiles` is what every dedup check consults — `open_file_window`'s focus
+/// path and `open_restored_window`'s. Registering only in `PendingFiles`, as the
+/// CLI paths used to, leaves the file the app launched with invisible to both, so
+/// opening it a second time or restoring a session that contains it silently
+/// produces a duplicate window.
+fn assign_file_to_main(app: &tauri::AppHandle, path: String) {
+    let pending = app.state::<PendingFiles>();
+    pending
+        .0
+        .lock()
+        .unwrap()
+        .insert("main".to_string(), PendingOpen::from_path(path.clone()));
+
+    let open_files = app.state::<OpenFiles>();
+    open_files.0.lock().unwrap().insert(path, "main".to_string());
+}
+
 /// Resolve a potentially relative path to an absolute path.
 fn resolve_path(path: &str, cwd: Option<&str>) -> String {
     let p = std::path::Path::new(path);
@@ -337,9 +343,7 @@ fn load_pending_open_files(app: &tauri::AppHandle) {
         }
         if first {
             first = false;
-            let pending = app.state::<PendingFiles>();
-            let mut map = pending.0.lock().unwrap();
-            map.insert("main".to_string(), PendingOpen::from_path(file.to_string()));
+            assign_file_to_main(app, file.to_string());
         } else {
             window::open_file_window(app, Some(file.to_string()));
         }
@@ -362,10 +366,8 @@ fn handle_cli_args(app: &tauri::AppHandle) {
                         let abs_path = resolve_path(path.as_str(), None);
                         if first {
                             first = false;
-                            // Store in PendingFiles for the "main" window to pull on mount.
-                            let pending = app.state::<PendingFiles>();
-                            let mut map = pending.0.lock().unwrap();
-                            map.insert("main".to_string(), PendingOpen::from_path(abs_path));
+                            // The "main" window pulls this on mount.
+                            assign_file_to_main(app, abs_path);
                         } else {
                             // Additional files each get a new window.
                             window::open_file_window(app, Some(abs_path));

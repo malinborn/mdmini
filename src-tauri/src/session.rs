@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -236,6 +236,31 @@ impl SessionState {
     pub fn take_pending(&self) -> Vec<WindowSnapshot> {
         std::mem::take(&mut *self.pending.lock().unwrap())
     }
+
+    /// Sidecar file names referenced by either the live session or the restore
+    /// still on offer.
+    ///
+    /// Both halves matter. At startup the live session is deliberately empty — so
+    /// that the first write of the new run supersedes the file — while `pending`
+    /// still holds the previous run's windows. Collecting only the live half makes
+    /// the ticker delete exactly the unsaved buffers the user is about to reopen.
+    pub fn referenced_untitled(&self) -> HashSet<String> {
+        let mut names: HashSet<String> = self
+            .entries
+            .lock()
+            .unwrap()
+            .values()
+            .filter_map(|w| w.untitled.clone())
+            .collect();
+        names.extend(
+            self.pending
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|w| w.untitled.clone()),
+        );
+        names
+    }
 }
 
 impl Default for SessionState {
@@ -330,14 +355,12 @@ pub fn write_untitled(file_name: &str, content: &str) -> Result<(), String> {
     })
 }
 
-/// Delete Untitled sidecars no session entry refers to any more.
-pub fn prune_untitled_files(session: &Session) {
+/// Delete Untitled sidecars nothing refers to any more.
+///
+/// Take the names from `SessionState::referenced_untitled`, never from the live
+/// snapshot alone — see that method for why.
+pub fn prune_untitled_files(referenced: &HashSet<String>) {
     let Ok(dir) = session_dir() else { return };
-    let referenced: Vec<&str> = session
-        .windows
-        .iter()
-        .filter_map(|w| w.untitled.as_deref())
-        .collect();
     let Ok(entries) = fs::read_dir(&dir) else { return };
     for entry in entries.flatten() {
         let name = entry.file_name();
@@ -345,10 +368,29 @@ pub fn prune_untitled_files(session: &Session) {
         if !name.starts_with("untitled-") || !name.ends_with(".md") {
             continue;
         }
-        if !referenced.contains(&name) {
+        if !referenced.contains(name) {
             let _ = fs::remove_file(entry.path());
         }
     }
+}
+
+/// A window's position and size in **logical** pixels.
+///
+/// The getters answer in physical pixels, but `WebviewWindowBuilder::position`
+/// and `inner_size` consume logical ones — without the conversion every restored
+/// window comes back at double size and offset on a 2x display.
+pub fn window_geometry(window: &tauri::Window) -> Option<(i32, i32, u32, u32)> {
+    let pos = window.outer_position().ok()?;
+    let size = window.inner_size().ok()?;
+    let scale = window.scale_factor().ok()?;
+    let pos = pos.to_logical::<f64>(scale);
+    let size = size.to_logical::<f64>(scale);
+    Some((
+        pos.x.round() as i32,
+        pos.y.round() as i32,
+        size.width.round() as u32,
+        size.height.round() as u32,
+    ))
 }
 
 /// Frontend heartbeat: where the caret and viewport are, and the text of an
@@ -364,6 +406,13 @@ pub async fn update_session_document(
 ) -> Result<(), String> {
     let label = window.label().to_string();
     state.set_document(&label, path.clone(), cursor, top_line);
+
+    // Geometry also rides the heartbeat, because `Moved`/`Resized` never fire for
+    // a window the user does not touch — leaving it recorded at 0x0 and restored
+    // into the top-left corner under the menu bar.
+    if let Some((x, y, width, height)) = window_geometry(&window) {
+        state.set_geometry(&label, x, y, width, height);
+    }
 
     match (path, content) {
         // Untitled window with text — mirror it to a sidecar file.
@@ -525,6 +574,29 @@ mod tests {
         };
         let pruned = prune_missing(session, |_| true);
         assert!(pruned.windows.is_empty());
+    }
+
+    #[test]
+    fn referenced_untitled_covers_the_pending_restore() {
+        // Regression: the live session starts empty at launch while `pending`
+        // still holds the previous run, so pruning on the live set alone deleted
+        // the very buffer the user was about to reopen.
+        let state = SessionState::new();
+        let mut pending = snap(None);
+        pending.untitled = Some("untitled-main.md".to_string());
+        state.set_pending(vec![pending]);
+        assert!(state.snapshot(0).windows.is_empty(), "live session is empty");
+
+        let referenced = state.referenced_untitled();
+        assert!(referenced.contains("untitled-main.md"));
+    }
+
+    #[test]
+    fn referenced_untitled_covers_live_windows_too() {
+        let state = SessionState::new();
+        state.set_untitled("editor-2", Some("untitled-editor-2.md".to_string()));
+        let referenced = state.referenced_untitled();
+        assert!(referenced.contains("untitled-editor-2.md"));
     }
 
     #[test]
