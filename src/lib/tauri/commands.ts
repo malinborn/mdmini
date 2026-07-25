@@ -36,3 +36,11 @@ export async function showSaveDialog(defaultName?: string): Promise<string | nul
   });
   return result as string | null;
 }
+
+/** Matches `PendingOpen` in src-tauri/src/window.rs. */
+export interface PendingOpen {
+  path: string | null;
+  content: string | null;
+  cursor: number;
+  topLine: number;
+}

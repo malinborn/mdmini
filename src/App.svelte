@@ -3,7 +3,7 @@
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
-  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog } from './lib/tauri/commands';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, type PendingOpen } from './lib/tauri/commands';
   import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
@@ -218,9 +218,14 @@
   onMount(() => {
     // Pull any file path stored by the backend for this window (CLI args or new-window open).
     // This avoids the race condition of the push-based emit approach.
-    invoke<string | null>('get_pending_file').then((pendingFile) => {
-      if (pendingFile) {
-        handleOpenFilePath(pendingFile);
+    invoke<PendingOpen | null>('get_pending_file').then((pending) => {
+      if (!pending) return;
+      if (pending.path) {
+        handleOpenFilePath(pending.path);
+      } else if (pending.content !== null) {
+        // Restored Untitled window — no file on disk, just the buffer.
+        editorHandle?.replaceContent(pending.content);
+        fileState.isDirty = true;
       }
     });
 

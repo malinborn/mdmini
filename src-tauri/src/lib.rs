@@ -8,7 +8,7 @@ mod window;
 use tauri::{Emitter, Manager};
 use tauri_plugin_cli::CliExt;
 use session::SessionState;
-use window::{FileWatchers, OpenFiles, PendingFiles};
+use window::{FileWatchers, OpenFiles, PendingFiles, PendingOpen};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -191,7 +191,10 @@ pub fn run() {
                                 // Reuse "main" — store in PendingFiles + OpenFiles
                                 let pending = _app_handle.state::<window::PendingFiles>();
                                 let mut pmap = pending.0.lock().unwrap();
-                                pmap.insert("main".to_string(), file_path.clone());
+                                pmap.insert(
+                                    "main".to_string(),
+                                    PendingOpen::from_path(file_path.clone()),
+                                );
                                 drop(pmap);
                                 let open_files = _app_handle.state::<window::OpenFiles>();
                                 let mut map = open_files.0.lock().unwrap();
@@ -327,7 +330,7 @@ fn load_pending_open_files(app: &tauri::AppHandle) {
             first = false;
             let pending = app.state::<PendingFiles>();
             let mut map = pending.0.lock().unwrap();
-            map.insert("main".to_string(), file.to_string());
+            map.insert("main".to_string(), PendingOpen::from_path(file.to_string()));
         } else {
             window::open_file_window(app, Some(file.to_string()));
         }
@@ -353,7 +356,7 @@ fn handle_cli_args(app: &tauri::AppHandle) {
                             // Store in PendingFiles for the "main" window to pull on mount.
                             let pending = app.state::<PendingFiles>();
                             let mut map = pending.0.lock().unwrap();
-                            map.insert("main".to_string(), abs_path);
+                            map.insert("main".to_string(), PendingOpen::from_path(abs_path));
                         } else {
                             // Additional files each get a new window.
                             window::open_file_window(app, Some(abs_path));

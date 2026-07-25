@@ -14,19 +14,41 @@ impl OpenFiles {
     }
 }
 
-/// Stores a pending file path per window label, to be pulled by the frontend on mount.
-pub struct PendingFiles(pub Mutex<HashMap<String, String>>);
+/// What a freshly created window should load once its frontend mounts.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingOpen {
+    pub path: Option<String>,
+    /// Text for an Untitled window being restored.
+    pub content: Option<String>,
+    pub cursor: usize,
+    pub top_line: usize,
+}
 
-/// Holds active file watchers keyed by window label. Dropping a watcher stops watching.
-pub struct FileWatchers(pub Mutex<HashMap<String, RecommendedWatcher>>);
+impl PendingOpen {
+    pub fn from_path(path: String) -> Self {
+        Self {
+            path: Some(path),
+            content: None,
+            cursor: 0,
+            top_line: 1,
+        }
+    }
+}
 
-impl FileWatchers {
+/// Stores a pending payload per window label, pulled by the frontend on mount.
+pub struct PendingFiles(pub Mutex<HashMap<String, PendingOpen>>);
+
+impl PendingFiles {
     pub fn new() -> Self {
         Self(Mutex::new(HashMap::new()))
     }
 }
 
-impl PendingFiles {
+/// Holds active file watchers keyed by window label. Dropping a watcher stops watching.
+pub struct FileWatchers(pub Mutex<HashMap<String, RecommendedWatcher>>);
+
+impl FileWatchers {
     pub fn new() -> Self {
         Self(Mutex::new(HashMap::new()))
     }
@@ -96,7 +118,7 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
 
                 let pending = app.state::<PendingFiles>();
                 let mut pending_map = pending.0.lock().unwrap();
-                pending_map.insert(label.clone(), file_path.clone());
+                pending_map.insert(label.clone(), PendingOpen::from_path(file_path.clone()));
 
                 // Start watching the file for external changes
                 if let Ok(watcher) = crate::watcher::watch_file(app, label.clone(), file_path.clone()) {

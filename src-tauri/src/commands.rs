@@ -2,13 +2,14 @@ use std::fs;
 use std::path::Path;
 use tauri::command;
 
-/// Returns and removes the pending file path for the calling window, if any.
-/// Called by the frontend in onMount to pick up files passed via CLI args.
+/// Returns and removes the pending payload for the calling window, if any.
+/// Called by the frontend in onMount to pick up files passed via CLI args,
+/// a new-window open, or a session restore.
 #[command]
 pub async fn get_pending_file(
     window: tauri::Window,
     state: tauri::State<'_, crate::window::PendingFiles>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<crate::window::PendingOpen>, String> {
     let mut map = state.0.lock().map_err(|e| e.to_string())?;
     Ok(map.remove(window.label()))
 }
