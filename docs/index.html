@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.3.5",
+    "softwareVersion": "0.4.0",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -751,7 +751,7 @@
         <div class="feature-card">
           <div class="feature-icon">◇</div>
           <div class="feature-title">Mermaid Diagrams</div>
-          <div class="feature-desc">Flowcharts, sequence, class, Gantt, ER, pie, mindmap — all render inline as SVG.</div>
+          <div class="feature-desc">Flowcharts, sequence, class, Gantt, ER, pie, mindmap — all render inline as SVG. Pinch to zoom, swipe to pan around the big ones.</div>
         </div>
 
         <div class="feature-card">
@@ -855,6 +855,24 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.4.0</div>
+            <div class="changelog-date">2026-07-25</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Big diagrams, finally navigable</h3>
+            <ul>
+              <li><strong>Pinch to zoom</strong> — two fingers on the trackpad zoom around the cursor; <code>Cmd</code>+scroll does the same for a mouse</li>
+              <li><strong>Swipe to pan</strong> — a two-finger swipe moves around a zoomed diagram; at full view it scrolls the document exactly as before</li>
+              <li><strong>Gestures that don't yank the page</strong> — running into an edge mid-swipe springs back instead of throwing you down the document; lift your fingers and swipe again to scroll on</li>
+              <li><strong>Back to full view</strong> — the <code>⤢</code> button or a double-click refits; drag the bottom edge to resize the frame</li>
+              <li><strong>Zoom sticks around</strong> — scrolling a diagram off screen, or editing text above it, no longer resets what you were looking at</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
