@@ -113,8 +113,8 @@ pub fn run() {
             // Handle files from CLI wrapper (written to temp file before `open`)
             load_pending_open_files(app.handle());
 
-            // Crash-safety net. The authoritative save happens in ExitRequested;
-            // this only catches a hard kill between changes.
+            // Crash-safety net. The authoritative save happens on the way out
+            // (see `save_session_on_exit`); this only catches a hard kill.
             let ticker_handle = app.handle().clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -146,13 +146,23 @@ pub fn run() {
                 tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
                     let app = window.app_handle();
                     let label = window.label().to_string();
-                    if let (Ok(pos), Ok(size)) = (window.outer_position(), window.inner_size()) {
+                    // Store LOGICAL pixels: these getters answer in physical ones,
+                    // but `WebviewWindowBuilder::position` / `inner_size` consume
+                    // logical. Skipping the conversion doubles every restored
+                    // window on a 2x display.
+                    if let (Ok(pos), Ok(size), Ok(scale)) = (
+                        window.outer_position(),
+                        window.inner_size(),
+                        window.scale_factor(),
+                    ) {
+                        let pos = pos.to_logical::<f64>(scale);
+                        let size = size.to_logical::<f64>(scale);
                         app.state::<SessionState>().set_geometry(
                             &label,
-                            pos.x,
-                            pos.y,
-                            size.width,
-                            size.height,
+                            pos.x.round() as i32,
+                            pos.y.round() as i32,
+                            size.width.round() as u32,
+                            size.height.round() as u32,
                         );
                     }
                 }
@@ -210,18 +220,45 @@ pub fn run() {
                 // Open any pending files from CLI wrapper in new windows
                 open_pending_files(_app_handle);
             }
+            // Both quit paths must be handled, and they are NOT interchangeable:
+            //   * `ExitRequested` only fires from `app.exit()` or after the last
+            //     window is destroyed.
+            //   * Cmd+Q and the AppleEvent `quit` that Homebrew sends go through
+            //     `NSApp terminate:` -> `applicationWillTerminate` -> tao's
+            //     `LoopDestroyed` -> `RunEvent::Exit`, and never emit
+            //     `ExitRequested` at all.
+            // Handling only the former would lose the session on exactly the
+            // upgrade path this feature exists for.
             tauri::RunEvent::ExitRequested { .. } => {
-                // Fires while the windows still exist. Freeze first so the
-                // Destroyed events that follow cannot empty the session, then
-                // write what was actually open.
-                let state = _app_handle.state::<SessionState>();
-                let snapshot = state.snapshot(session::now_secs());
-                state.mark_quitting();
-                let _ = session::write_session(&snapshot);
+                save_session_on_exit(_app_handle);
+            }
+            tauri::RunEvent::Exit => {
+                save_session_on_exit(_app_handle);
             }
             _ => {}
         }
     });
+}
+
+/// Snapshot and persist the session on the way out, then freeze it.
+///
+/// Freezing first is what makes the following `Destroyed` storm harmless: a quit
+/// destroys every window, and `SessionState::remove` is a no-op once quitting.
+/// Whichever quit path fires first wins; the second call returns immediately.
+fn save_session_on_exit(app: &tauri::AppHandle) {
+    let state = app.state::<SessionState>();
+    if state.is_quitting() {
+        return;
+    }
+    let snapshot = state.snapshot(session::now_secs());
+    state.mark_quitting();
+    // A quit records the session, it never erases it. An empty snapshot here
+    // means the windows were already gone before we were called — not that the
+    // user had nothing open — so the last good file on disk is the better answer.
+    if snapshot.windows.is_empty() {
+        return;
+    }
+    let _ = session::write_session(&snapshot);
 }
 
 /// Resolve a potentially relative path to an absolute path.
