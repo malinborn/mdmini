@@ -176,6 +176,74 @@ text wrapping). If styles were on the line, they'd extend to viewport width.
 - Right-side buttons (add-col, add-row): `position: absolute` against
   `.cm-md-table-wrap`, so they don't affect column layout
 
+## Mermaid Pan/Zoom (`mermaid-viewport.ts`, `mermaid-state.ts`)
+
+Rendered diagrams sit in a fixed-height frame and can be zoomed and panned.
+See `docs/superpowers/specs/2026-07-25-mermaid-pan-zoom-design.md` for the
+full design.
+
+### File Split
+
+| File | Responsibility |
+|------|----------------|
+| `mermaid-viewport.ts` | Pure geometry (`fitScale`, `computeFit`, `clampPan`, `panBy`, `zoomAt`, `wheelIntent`, `autoHeight`) plus `createViewport()`, the DOM controller |
+| `mermaid-state.ts` | `StateField<RangeSet<MermaidViewValue>>` holding per-diagram scale/pan/height |
+| `mermaid.ts` | Widget; builds a viewport, restores state, commits on settle |
+
+The geometry knows nothing about CodeMirror or the DOM, which is why it is
+directly unit-testable (`mermaid-viewport.test.ts`).
+
+### Interaction Rules
+
+- Pinch (`wheel` + `ctrlKey`) and `Cmd`+`wheel` always zoom around the pointer
+- Plain `wheel` pans **only when zoomed past fit**; at fit the event is left
+  alone so the document scrolls
+- At a pan boundary the event is also released to the document (scroll
+  chaining) — otherwise a tall diagram becomes a scroll trap
+- Left-drag always pans; double click toggles fit ↔ 2× at the pointer
+- The bottom handle resizes the frame; double click on it restores auto height
+
+### Do NOT Dispatch a Transaction per Frame
+
+Pan/zoom writes `transform` straight to the DOM. `setMermaidView` is dispatched
+only on a 150 ms trailing debounce. Dispatching per `wheel` event would run
+`livePreviewPlugin.update` → a full decoration rebuild of the document on every
+frame.
+
+Corollary: `livePreviewPlugin` must **not** rebuild on `setMermaidView` (unlike
+`toggleTableMode`). The visual result is already in the DOM.
+
+### Why State Survives
+
+During pan/zoom `eq()` returns `true`, so CM6 reuses the DOM and the transform
+persists on its own. The `StateField` covers the two cases where the DOM is
+genuinely rebuilt: the widget scrolled out of the editor viewport and back, or
+an edit/theme switch produced a new SVG.
+
+### Widget `eq()` Excludes `pos`
+
+Including `pos` would rebuild the DOM — reparsing the SVG — on every keystroke
+above the diagram. Instead commits resolve the live position through
+`view.posAtDOM(dom)`, snapped to its line start so it matches the key the
+restore path reads.
+
+### Frame Sizing
+
+- `autoHeight` = content height scaled to fit the frame width, capped at 60vh
+- For a width-constrained diagram, fit and auto height agree exactly, so the
+  whole diagram is visible with no letterboxing
+- A tall diagram is capped at 60vh and fit scales it down — small but complete.
+  Zoom in or drag the handle from there.
+- `fitScale` never exceeds 1: small diagrams are not upscaled
+
+### The Host Line Needs `contain: inline-size`
+
+The SVG is given its **natural** width so the zoom math and the rendered pixels
+agree — which means it will stretch `.cm-content` and break line wrapping across
+the whole document unless contained. The fence line therefore carries
+`cm-md-mermaid-host-line` with `contain: inline-size` (and `display: flex`, to
+drop the `cm-widgetBuffer` height). This is the same fix tables use.
+
 ## Dependencies
 
 - `markdown-table` — serializes 2D array → GFM markdown table string

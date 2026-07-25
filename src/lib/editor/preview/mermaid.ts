@@ -4,6 +4,8 @@ import { StateEffect } from '@codemirror/state';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { cursorInRange } from './utils';
+import { createViewport, type ViewportController } from './mermaid-viewport';
+import { getMermaidView, setMermaidView } from './mermaid-state';
 
 // -- Types --
 
@@ -152,14 +154,23 @@ export function reinitializeTheme(): void {
 // -- Widget --
 
 class MermaidWidget extends WidgetType {
+  private controller: ViewportController | null = null;
+
   constructor(
     private source: string,
     private svg: string | null,
-    private error: string | null
+    private error: string | null,
+    /** Start of the fenced block — the key under which view state is stored. */
+    private pos: number
   ) {
     super();
   }
 
+  /**
+   * `pos` is deliberately excluded: an edit elsewhere in the document shifts it,
+   * but rebuilding the DOM would reparse the SVG on every keystroke. Commits
+   * resolve the live position from the DOM instead (see `commitPos`).
+   */
   eq(other: MermaidWidget): boolean {
     return (
       this.source === other.source &&
@@ -168,15 +179,34 @@ class MermaidWidget extends WidgetType {
     );
   }
 
-  toDOM(): HTMLElement {
+  /**
+   * Live document position of this widget, snapped to its line start so it
+   * matches the key `decorateMermaidBlock` restores from.
+   */
+  private commitPos(view: EditorView): number {
+    if (!this.controller) return this.pos;
+    try {
+      return view.state.doc.lineAt(view.posAtDOM(this.controller.dom)).from;
+    } catch {
+      return this.pos;
+    }
+  }
+
+  toDOM(view: EditorView): HTMLElement {
     const container = document.createElement('div');
     container.className = 'cm-md-mermaid-container';
 
     if (this.svg) {
-      const svgWrapper = document.createElement('div');
-      svgWrapper.className = 'cm-md-mermaid-svg';
-      svgWrapper.innerHTML = this.svg;
-      container.appendChild(svgWrapper);
+      this.controller = createViewport(
+        this.svg,
+        getMermaidView(view.state, this.pos),
+        (state) => {
+          view.dispatch({
+            effects: setMermaidView.of({ pos: this.commitPos(view), view: state }),
+          });
+        }
+      );
+      container.appendChild(this.controller.dom);
     }
 
     if (this.error) {
@@ -195,6 +225,11 @@ class MermaidWidget extends WidgetType {
     }
 
     return container;
+  }
+
+  destroy(): void {
+    this.controller?.destroy();
+    this.controller = null;
   }
 
   ignoreEvent(): boolean {
@@ -241,12 +276,20 @@ export function decorateMermaidBlock(
     const line = doc.line(i);
 
     if (i === startLine.number) {
-      // First line hosts the widget — do NOT hide it (no height:0 class)
+      // First line hosts the widget — do NOT hide it (no height:0 class).
+      // The line class carries `contain: inline-size`, which keeps the
+      // natural-width SVG from stretching .cm-content and breaking wrapping.
+      // Line decoration goes before replace at the same position (lower startSide).
+      builder.add(
+        line.from,
+        line.from,
+        Decoration.line({ class: 'cm-md-mermaid-host-line' })
+      );
       builder.add(
         line.from,
         line.to,
         Decoration.replace({
-          widget: new MermaidWidget(source, svg, error),
+          widget: new MermaidWidget(source, svg, error, startLine.from),
         })
       );
     } else {

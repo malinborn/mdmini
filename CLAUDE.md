@@ -58,6 +58,8 @@ src/                    # Frontend (Svelte + TypeScript)
       blocks.ts         # Code blocks, HR
       tables.ts         # Table widget
       mermaid.ts        # Mermaid diagram rendering (lazy-loaded, async SVG via StateEffect)
+      mermaid-viewport.ts # Pan/zoom geometry (pure) + frame DOM controller
+      mermaid-state.ts  # Per-diagram scale/pan/height (StateField, in-memory)
       utils.ts          # cursorInRange() helper
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
   lib/theme/            # CSS variables + CM6 theme
@@ -143,6 +145,12 @@ src/                    # Frontend (Svelte + TypeScript)
 - **CSS `contain: inline-size` for wide widgets:** Prevents wide tables/widgets from expanding `.cm-content` (which breaks `lineWrapping`). Apply on `.cm-line`, move visual styles (background, border) to widget wrapper so they match content width, not viewport width.
 - **CM6 widget-hosting line must stay visible:** When replacing a fenced block with a widget (`Decoration.replace`), the `.cm-line` that hosts the widget must NOT have `height: 0` or `overflow: hidden`. The widget is a child of `.cm-line` — hiding it clips the widget. Only hide subsequent lines.
 - **Mermaid render is async:** `mermaid.render()` returns a Promise but CM6 `WidgetType.toDOM()` is sync. Use placeholder widget + `StateEffect` to trigger decoration rebuild when SVG is ready. See `preview/mermaid.ts`.
+- **Natural-size SVG needs a contained host line:** giving a widget SVG its intrinsic width (required for exact zoom math) stretches `.cm-content` and breaks line wrapping *document-wide*, even with `overflow: hidden` on an inner wrapper. Put `contain: inline-size` on the hosting `.cm-line` via a line decoration. Symptom: `.cm-scroller` gains horizontal overflow.
+- **Never dispatch a CM6 transaction per animation frame:** interactive gestures (pan/zoom) must write to the DOM directly and commit to a `StateField` on a trailing debounce. A dispatch per `wheel` event triggers a full decoration rebuild each frame.
+- **Widget `eq()` should exclude the document position** when the widget is expensive to build: including it rebuilds the DOM on every keystroke elsewhere in the file. Resolve the live position at commit time with `view.posAtDOM(dom)`, snapped to `doc.lineAt(...).from`.
+- **Reach the EditorView from the DOM in browser tests:** `document.querySelector('.cm-content').cmTile.root.view`. Useful with `npm run dev` + Playwright, since Tauri file I/O is unavailable there.
+- **Playwright in this repo:** the cached chromium build lags the current Playwright CLI. Launch with `chromium.launch({ channel: 'chrome' })` to use the installed Google Chrome instead of downloading a browser.
+- **Don't run `npm init` with `--prefix`:** it writes to the project's `package.json`, not the target directory. `cd` into the scratchpad instead.
 
 ## Workflow
 

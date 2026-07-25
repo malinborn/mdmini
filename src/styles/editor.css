@@ -1016,7 +1016,17 @@
   overflow: hidden;
 }
 
+/* The line hosting the widget. `contain: inline-size` stops the natural-width
+   SVG from expanding .cm-content, which would break line wrapping everywhere
+   else; `display: flex` removes the height added by CM6's cm-widgetBuffer. */
+.cm-line.cm-md-mermaid-host-line {
+  contain: inline-size;
+  display: flex;
+}
+
 .cm-md-mermaid-container {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1027,15 +1037,131 @@
   overflow: hidden;
 }
 
-.cm-md-mermaid-svg {
+/* Pan/zoom frame. `position: relative` anchors the controls and resize handle;
+   the frame is the reference box the viewport geometry measures. */
+.cm-md-mermaid-frame {
+  position: relative;
   width: 100%;
-  display: flex;
-  justify-content: center;
 }
 
-.cm-md-mermaid-svg svg {
-  max-width: 100%;
-  height: auto;
+/* The clipping window. `overflow: hidden` is what keeps a natural-size SVG from
+   stretching .cm-content and breaking line wrapping. */
+.cm-md-mermaid-viewport {
+  width: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* Only promise panning when there is something to pan */
+.cm-md-mermaid-frame.is-zoomed .cm-md-mermaid-viewport {
+  cursor: grab;
+}
+
+.cm-md-mermaid-frame.is-grabbing .cm-md-mermaid-viewport {
+  cursor: grabbing;
+}
+
+.cm-md-mermaid-canvas {
+  transform-origin: 0 0;
+}
+
+/* Scoped to active interaction — a permanent will-change would pin a GPU layer
+   per diagram in documents that have many of them. */
+.cm-md-mermaid-frame.is-zoomed .cm-md-mermaid-canvas,
+.cm-md-mermaid-frame.is-grabbing .cm-md-mermaid-canvas {
+  will-change: transform;
+}
+
+/* Natural size — the zoom math and the rendered pixels must agree. */
+.cm-md-mermaid-canvas svg {
+  display: block;
+  max-width: none;
+}
+
+.cm-md-mermaid-controls {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--color-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cm-md-mermaid-container:hover .cm-md-mermaid-controls,
+.cm-md-mermaid-frame.is-zoomed .cm-md-mermaid-controls {
+  opacity: 0.6;
+}
+
+.cm-md-mermaid-controls:hover {
+  opacity: 1 !important;
+}
+
+.cm-md-mermaid-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-ui, inherit);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cm-md-mermaid-btn:hover {
+  background: var(--color-code-bg);
+}
+
+.cm-md-mermaid-zoom-readout {
+  min-width: 34px;
+  text-align: center;
+  font-family: var(--font-code);
+  font-size: 10px;
+  color: var(--color-list-marker);
+  user-select: none;
+}
+
+.cm-md-mermaid-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.cm-md-mermaid-resize::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 28px;
+  height: 2px;
+  margin-left: -14px;
+  border-radius: 1px;
+  background: var(--color-list-marker);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cm-md-mermaid-container:hover .cm-md-mermaid-resize::after,
+.cm-md-mermaid-frame.is-resizing .cm-md-mermaid-resize::after {
+  opacity: 0.5;
+}
+
+.cm-md-mermaid-resize:hover::after {
+  opacity: 1;
 }
 
 .cm-md-mermaid-placeholder {

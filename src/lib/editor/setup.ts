@@ -16,6 +16,7 @@ import { listContinuation } from './autocomplete';
 import { slashCommands } from './slash-commands';
 import { livePreviewPlugin } from './preview/plugin';
 import { tableModeField } from './preview/table-state';
+import { mermaidViewField } from './preview/mermaid-state';
 import { tableSelectionSnapOut } from './preview/table-selection';
 import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
@@ -29,6 +30,7 @@ export function createExtensions(): Extension[] {
   return [
     editorTheme,
     tableModeField,
+    mermaidViewField,
     headingSlugsField,
     lineGlowCompartment.of([]),
     drawSelection(),
