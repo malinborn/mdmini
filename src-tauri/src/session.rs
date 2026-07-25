@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
@@ -241,6 +244,113 @@ impl Default for SessionState {
     }
 }
 
+/// Parse `session.json`. Returns `None` for anything unusable — a corrupt or
+/// newer-format file must never take the app down or be half-applied.
+pub fn parse_session(data: &str) -> Option<Session> {
+    let session: Session = serde_json::from_str(data).ok()?;
+    if session.version != SESSION_VERSION {
+        return None;
+    }
+    let Session {
+        version,
+        saved_at,
+        windows,
+    } = session;
+    Some(Session {
+        version,
+        saved_at,
+        windows: windows.iter().map(|w| w.normalized()).collect(),
+    })
+}
+
+/// `~/Library/Application Support/md-mini/`
+fn app_data_dir() -> Result<PathBuf, String> {
+    let base = dirs::data_dir().ok_or("Cannot determine application data directory")?;
+    let dir = base.join("md-mini");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
+    }
+    Ok(dir)
+}
+
+fn session_file() -> Result<PathBuf, String> {
+    Ok(app_data_dir()?.join("session.json"))
+}
+
+/// `~/Library/Application Support/md-mini/session/` — holds Untitled buffers.
+pub fn session_dir() -> Result<PathBuf, String> {
+    let dir = app_data_dir()?.join("session");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create session dir: {}", e))?;
+    }
+    Ok(dir)
+}
+
+pub fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Atomic write, same tmp+rename shape as `recovery.rs` and `commands::write_file`.
+pub fn write_session(session: &Session) -> Result<(), String> {
+    let path = session_file()?;
+    let tmp = path.with_extension("json.tmp");
+    let data = serde_json::to_string_pretty(session)
+        .map_err(|e| format!("Failed to serialize session: {}", e))?;
+    fs::write(&tmp, &data).map_err(|e| format!("Failed to write session: {}", e))?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("Failed to save session: {}", e)
+    })
+}
+
+/// Read the session, dropping windows whose file has since disappeared.
+pub fn read_session() -> Option<Session> {
+    let path = session_file().ok()?;
+    let data = fs::read_to_string(path).ok()?;
+    let session = parse_session(&data)?;
+    Some(prune_missing(session, |p| std::path::Path::new(p).exists()))
+}
+
+pub fn read_untitled(file_name: &str) -> Option<String> {
+    let dir = session_dir().ok()?;
+    fs::read_to_string(dir.join(file_name)).ok()
+}
+
+pub fn write_untitled(file_name: &str, content: &str) -> Result<(), String> {
+    let dir = session_dir()?;
+    let path = dir.join(file_name);
+    let tmp = dir.join(format!("{}.tmp", file_name));
+    fs::write(&tmp, content).map_err(|e| format!("Failed to write untitled buffer: {}", e))?;
+    fs::rename(&tmp, &path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("Failed to save untitled buffer: {}", e)
+    })
+}
+
+/// Delete Untitled sidecars no session entry refers to any more.
+pub fn prune_untitled_files(session: &Session) {
+    let Ok(dir) = session_dir() else { return };
+    let referenced: Vec<&str> = session
+        .windows
+        .iter()
+        .filter_map(|w| w.untitled.as_deref())
+        .collect();
+    let Ok(entries) = fs::read_dir(&dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.starts_with("untitled-") || !name.ends_with(".md") {
+            continue;
+        }
+        if !referenced.contains(&name) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,5 +487,40 @@ mod tests {
     fn untitled_file_name_is_derived_from_label() {
         assert_eq!(untitled_file_name("editor-3"), "untitled-editor-3.md");
         assert_eq!(untitled_file_name("main"), "untitled-main.md");
+    }
+
+    #[test]
+    fn parse_session_accepts_current_version() {
+        let json = r#"{"version":1,"savedAt":7,"windows":[
+            {"path":"/tmp/a.md","untitled":null,"x":1,"y":2,"width":900,"height":700,
+             "cursor":4,"topLine":5}
+        ]}"#;
+        let session = parse_session(json).expect("should parse");
+        assert_eq!(session.saved_at, 7);
+        assert_eq!(session.windows[0].cursor, 4);
+    }
+
+    #[test]
+    fn parse_session_rejects_future_version() {
+        let json = r#"{"version":99,"savedAt":0,"windows":[]}"#;
+        assert!(
+            parse_session(json).is_none(),
+            "a newer on-disk format must be ignored, not misread"
+        );
+    }
+
+    #[test]
+    fn parse_session_rejects_garbage() {
+        assert!(parse_session("not json at all").is_none());
+        assert!(parse_session("").is_none());
+    }
+
+    #[test]
+    fn parse_session_normalizes_entries() {
+        let json = r#"{"version":1,"savedAt":0,"windows":[
+            {"path":"/tmp/a.md","x":0,"y":0,"width":900,"height":700,"topLine":0}
+        ]}"#;
+        let session = parse_session(json).unwrap();
+        assert_eq!(session.windows[0].top_line, 1);
     }
 }
