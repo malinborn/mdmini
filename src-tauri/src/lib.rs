@@ -1,6 +1,7 @@
 mod commands;
 mod menu;
 mod recovery;
+mod session;
 mod watcher;
 mod window;
 
