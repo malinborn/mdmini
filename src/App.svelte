@@ -4,10 +4,12 @@
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
   import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, type PendingOpen } from './lib/tauri/commands';
-  import { onMenuEvent, onOpenFile, onFileChangedExternally } from './lib/tauri/events';
+  import { onMenuEvent, onOpenFile, onFileChangedExternally, onSessionRestored } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
+  import ToastStack from './lib/ToastStack.svelte';
+  import { createToastStore } from './lib/toasts.svelte';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
   import { highlightActiveLine } from '@codemirror/view';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
@@ -26,6 +28,7 @@
   const lineGlow = createLineGlowStore();
   const fileState = createFileState();
   const recentFiles = createRecentFilesStore();
+  const toasts = createToastStore();
 
   let showRecentFiles = $state(false);
   let activePreview: 'markdown' | 'env' | 'code' | 'shell' = $state('markdown');
@@ -349,7 +352,23 @@
     // Check for updates: first after 15s, then every hour
     let stopUpdateChecker: (() => void) | null = null;
     import('./lib/updater').then(({ startUpdateChecker }) => {
-      stopUpdateChecker = startUpdateChecker();
+      stopUpdateChecker = startUpdateChecker((latest, current) => {
+        toasts.push({ kind: 'update', latest, current });
+      });
+    });
+
+    // Offer the previous session, but only in the window that exists at launch —
+    // showing it in every window would be noise.
+    import('@tauri-apps/api/window').then(async ({ getCurrentWindow }) => {
+      if (getCurrentWindow().label !== 'main') return;
+      const count = await invoke<number>('pending_session_count').catch(() => 0);
+      if (count > 0) {
+        toasts.push({ kind: 'session', count });
+      }
+    });
+
+    const unlistenSessionRestored = onSessionRestored(() => {
+      toasts.dismissKind('session');
     });
 
     // Register this window in the session right away, not 5s later.
@@ -361,6 +380,7 @@
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
+      unlistenSessionRestored.then((fn) => fn());
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
       if (recoveryInterval !== null) clearInterval(recoveryInterval);
@@ -422,6 +442,8 @@
     onclose={() => { showRecentFiles = false; }}
   />
 {/if}
+
+<ToastStack store={toasts} />
 
 <style>
   main {

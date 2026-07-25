@@ -35,3 +35,10 @@ export function onFileChangedExternally(handler: (path: string) => void): Promis
     handler(event.payload);
   });
 }
+
+/** Emitted by Rust after windows from the previous session have been reopened. */
+export function onSessionRestored(handler: (count: number) => void): Promise<() => void> {
+  return listen<number>('session-restored', (event) => {
+    handler(event.payload);
+  });
+}
