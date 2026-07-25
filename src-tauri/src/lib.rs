@@ -73,7 +73,7 @@ pub fn run() {
                 }
             };
 
-            let (menu, theme_items) = menu::build_menu(app.handle())?;
+            let (menu, theme_items) = menu::build_menu(app.handle(), pending_count)?;
             app.set_menu(menu)?;
 
             let app_handle = app.handle().clone();
@@ -83,6 +83,12 @@ pub fn run() {
                 // Handle "new" menu action: open a new empty window
                 if id == "new" {
                     window::open_file_window(&app_handle, None);
+                    return;
+                }
+
+                // Restore windows in Rust, like "new" — it creates windows.
+                if id == "reopen_session" {
+                    session::restore_pending(&app_handle);
                     return;
                 }
 

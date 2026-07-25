@@ -9,7 +9,10 @@ pub struct ThemeMenuItems {
     pub system: CheckMenuItem<Wry>,
 }
 
-pub fn build_menu(app: &AppHandle) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems)> {
+pub fn build_menu(
+    app: &AppHandle,
+    pending_session_count: usize,
+) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems)> {
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(
             &MenuItemBuilder::with_id("new", "New")
@@ -42,6 +45,20 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<(tauri::menu::Menu<Wry>, The
         .item(
             &MenuItemBuilder::with_id("recent_files", "Recent Files...")
                 .build(app)?,
+        )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id(
+                "reopen_session",
+                if pending_session_count == 1 {
+                    "Reopen 1 Window from Last Session".to_string()
+                } else {
+                    format!("Reopen {} Windows from Last Session", pending_session_count)
+                },
+            )
+            .accelerator("CmdOrCtrl+Shift+T")
+            .enabled(pending_session_count > 0)
+            .build(app)?,
         )
         .build()?;
 
