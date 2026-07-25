@@ -7,6 +7,7 @@ mod window;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_cli::CliExt;
+use session::SessionState;
 use window::{FileWatchers, OpenFiles, PendingFiles};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -42,6 +43,7 @@ pub fn run() {
         .manage(OpenFiles::new())
         .manage(PendingFiles::new())
         .manage(FileWatchers::new())
+        .manage(SessionState::new())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -54,6 +56,20 @@ pub fn run() {
             watcher::start_watching,
         ])
         .setup(|app| {
+            // Load the previous session before the menu is built — the menu item's
+            // enabled state depends on whether there is anything to restore.
+            let pending_count = {
+                let state = app.state::<SessionState>();
+                match session::read_session() {
+                    Some(loaded) => {
+                        let count = loaded.windows.len();
+                        state.set_pending(loaded.windows);
+                        count
+                    }
+                    None => 0,
+                }
+            };
+
             let (menu, theme_items) = menu::build_menu(app.handle())?;
             app.set_menu(menu)?;
 
@@ -97,6 +113,22 @@ pub fn run() {
             // Handle files from CLI wrapper (written to temp file before `open`)
             load_pending_open_files(app.handle());
 
+            // Crash-safety net. The authoritative save happens in ExitRequested;
+            // this only catches a hard kill between changes.
+            let ticker_handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                let state = ticker_handle.state::<SessionState>();
+                if state.is_quitting() {
+                    return;
+                }
+                if state.take_dirty() {
+                    let snapshot = state.snapshot(session::now_secs());
+                    let _ = session::write_session(&snapshot);
+                    session::prune_untitled_files(&snapshot);
+                }
+            });
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -107,6 +139,8 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     let app = window.app_handle();
                     let label = window.label();
+                    // No-op while quitting, so an exit keeps every window.
+                    app.state::<SessionState>().remove(label);
                     window::untrack_window(app, label);
                 }
                 _ => {}
@@ -162,6 +196,15 @@ pub fn run() {
                 // App re-activated (Dock click, `open` while running)
                 // Open any pending files from CLI wrapper in new windows
                 open_pending_files(_app_handle);
+            }
+            tauri::RunEvent::ExitRequested { .. } => {
+                // Fires while the windows still exist. Freeze first so the
+                // Destroyed events that follow cannot empty the session, then
+                // write what was actually open.
+                let state = _app_handle.state::<SessionState>();
+                let snapshot = state.snapshot(session::now_secs());
+                state.mark_quitting();
+                let _ = session::write_session(&snapshot);
             }
             _ => {}
         }
