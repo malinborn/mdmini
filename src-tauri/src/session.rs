@@ -351,6 +351,33 @@ pub fn prune_untitled_files(session: &Session) {
     }
 }
 
+/// Frontend heartbeat: where the caret and viewport are, and the text of an
+/// Untitled buffer. Called on the existing 5s recovery cadence.
+#[tauri::command]
+pub async fn update_session_document(
+    window: tauri::Window,
+    state: tauri::State<'_, SessionState>,
+    path: Option<String>,
+    cursor: usize,
+    top_line: usize,
+    content: Option<String>,
+) -> Result<(), String> {
+    let label = window.label().to_string();
+    state.set_document(&label, path.clone(), cursor, top_line);
+
+    match (path, content) {
+        // Untitled window with text — mirror it to a sidecar file.
+        (None, Some(text)) => {
+            let file_name = untitled_file_name(&label);
+            write_untitled(&file_name, &text)?;
+            state.set_untitled(&label, Some(file_name));
+        }
+        // Saved file, or an empty Untitled window — no sidecar needed.
+        _ => state.set_untitled(&label, None),
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

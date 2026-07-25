@@ -53,6 +53,7 @@ pub fn run() {
             recovery::save_recovery,
             recovery::delete_recovery,
             recovery::check_recovery,
+            session::update_session_document,
             watcher::start_watching,
         ])
         .setup(|app| {

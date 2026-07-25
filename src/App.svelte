@@ -205,7 +205,33 @@
           console.error('Recovery save failed:', err);
         });
       }
+      reportSession();
     }, 5000);
+  }
+
+  // --- Session heartbeat (rides the recovery interval) ---
+  function topVisibleLine(): number {
+    const view = editorHandle?.view;
+    if (!view) return 1;
+    // posAtCoords against the top edge of the scroller is stable across font
+    // size and zoom changes, unlike a raw pixel offset.
+    const rect = view.scrollDOM.getBoundingClientRect();
+    const pos = view.posAtCoords({ x: rect.left + 1, y: rect.top + 1 });
+    if (pos === null) return 1;
+    return view.state.doc.lineAt(pos).number;
+  }
+
+  function reportSession(): void {
+    const view = editorHandle?.view;
+    if (!view) return;
+    invoke('update_session_document', {
+      path: fileState.filePath,
+      cursor: view.state.selection.main.head,
+      topLine: topVisibleLine(),
+      content: fileState.filePath ? null : view.state.doc.toString(),
+    }).catch(() => {
+      // Session tracking is best-effort; never surface it to the user.
+    });
   }
 
   // --- Save on blur ---
@@ -325,6 +351,9 @@
     import('./lib/updater').then(({ startUpdateChecker }) => {
       stopUpdateChecker = startUpdateChecker();
     });
+
+    // Register this window in the session right away, not 5s later.
+    reportSession();
 
     return () => {
       if (stopUpdateChecker) stopUpdateChecker();
