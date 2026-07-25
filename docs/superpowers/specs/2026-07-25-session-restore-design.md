@@ -64,9 +64,18 @@ places:
 
 - **A ticker thread**, every 500 ms, if the state is dirty and has settled for
   1 s. This is the crash-safety net.
-- **Immediately on `RunEvent::ExitRequested`**, which fires while the windows
-  still exist. This is the authoritative save, and the one the upgrade path
-  depends on.
+- **Immediately on the way out**, which is the authoritative save and the one the
+  upgrade path depends on.
+
+  > **Correction, found during implementation.** This section originally named
+  > `RunEvent::ExitRequested` as the single hook. That is wrong for the very path
+  > this feature exists for. `tauri-runtime-wry` emits `ExitRequested` only from
+  > `Message::RequestExit` (`app.exit()`) and from the `Destroyed` arm once the
+  > last window is gone. Cmd+Q and the `quit` AppleEvent that Homebrew sends both
+  > go through `NSApp terminate:` → `applicationWillTerminate` → tao
+  > `LoopDestroyed` → **`RunEvent::Exit`**. Measured against a real bundle, the
+  > AppleEvent quit produced `Exit` only — no `ExitRequested`, and no `Destroyed`
+  > either. Both events are therefore handled, via `save_session_on_exit`.
 
 Sources of updates: `WindowEvent::Moved` / `Resized` for geometry, and an IPC
 command from the frontend for cursor, scroll line and Untitled content (driven
@@ -80,8 +89,10 @@ at exactly the moment it matters — the feature would appear to simply not work
 
 Two independent barriers:
 
-1. A `quitting` flag, set in `ExitRequested` before any window is destroyed.
-   While it is set, `SessionState::remove` is a no-op.
+1. A `quitting` flag, set on the way out before any window is destroyed. While it
+   is set, `SessionState::remove` is a no-op. (In practice the macOS terminate
+   path does not emit `Destroyed` at all, so this barrier is insurance rather
+   than load-bearing — but the close-last-window path does emit it.)
 2. The write debounce itself. A quit destroys all windows within milliseconds, so
    a pending ticker write never lands and the on-disk state survives regardless.
 

@@ -63,7 +63,7 @@ typecheck is a usable signal for the rest of this plan.
 **Files:**
 - Modify: `src/lib/tauri/events.ts`
 
-- [ ] **Step 1: Confirm the current failure**
+- [x] **Step 1: Confirm the current failure**
 
 Run: `npm run check 2>&1 | tail -4`
 
@@ -73,7 +73,7 @@ ERROR "src/App.svelte" 242:14 "Type '"select_all"' is not comparable to type 'Me
 ERROR "src/App.svelte" 265:14 "Type '"toggle_line_glow"' is not comparable to type 'MenuAction'."
 ```
 
-- [ ] **Step 2: Add the missing members to the union**
+- [x] **Step 2: Add the missing members to the union**
 
 In `src/lib/tauri/events.ts`, replace the `MenuAction` type with:
 
@@ -97,12 +97,12 @@ export type MenuAction =
   | 'recent_files';
 ```
 
-- [ ] **Step 3: Verify the typecheck is clean**
+- [x] **Step 3: Verify the typecheck is clean**
 
 Run: `npm run check 2>&1 | tail -3`
 Expected: `COMPLETED 416 FILES 0 ERRORS 0 WARNINGS`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/tauri/events.ts
@@ -117,7 +117,7 @@ git commit -m "fix(types): add select_all and toggle_line_glow to MenuAction"
 - Create: `src-tauri/src/session.rs`
 - Modify: `src-tauri/src/lib.rs` (add `mod session;`)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src-tauri/src/session.rs` with only the test module and the imports it
 needs, so the compile failure is about missing items:
@@ -269,7 +269,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Register the module and run the tests to see them fail**
+- [x] **Step 2: Register the module and run the tests to see them fail**
 
 In `src-tauri/src/lib.rs`, add `mod session;` after `mod recovery;`:
 
@@ -285,7 +285,7 @@ mod window;
 Run: `cd src-tauri && cargo test session::`
 Expected: compile errors — `cannot find type 'WindowSnapshot'`, `cannot find type 'Session'`, `cannot find function 'prune_missing'`, etc.
 
-- [ ] **Step 3: Implement the types and state**
+- [x] **Step 3: Implement the types and state**
 
 Insert this **above** the `#[cfg(test)] mod tests` block in `src-tauri/src/session.rs`:
 
@@ -528,17 +528,17 @@ impl Default for SessionState {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd src-tauri && cargo test session::`
 Expected: `test result: ok. 10 passed`
 
-- [ ] **Step 5: Lint**
+- [x] **Step 5: Lint**
 
 Run: `cargo clippy --manifest-path src-tauri/Cargo.toml 2>&1 | grep -A 3 "session.rs" | head -20`
 Expected: no warnings pointing at `session.rs`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/session.rs src-tauri/src/lib.rs
@@ -552,7 +552,7 @@ git commit -m "feat(session): add session snapshot types and in-memory state"
 **Files:**
 - Modify: `src-tauri/src/session.rs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append these tests inside the existing `mod tests` block in
 `src-tauri/src/session.rs`:
@@ -594,12 +594,12 @@ Append these tests inside the existing `mod tests` block in
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd src-tauri && cargo test session::parse_session`
 Expected: compile error — `cannot find function 'parse_session' in this scope`.
 
-- [ ] **Step 3: Implement parsing and disk IO**
+- [x] **Step 3: Implement parsing and disk IO**
 
 Add these imports at the top of `src-tauri/src/session.rs`, joining the existing
 ones:
@@ -721,12 +721,12 @@ pub fn prune_untitled_files(session: &Session) {
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd src-tauri && cargo test session::`
 Expected: `test result: ok. 14 passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/session.rs
@@ -743,7 +743,7 @@ This is the task the whole feature hinges on. Read the two barriers in the spec
 **Files:**
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Register the state and load the previous session**
+- [x] **Step 1: Register the state and load the previous session**
 
 In `src-tauri/src/lib.rs`, add to the imports at the top:
 
@@ -762,7 +762,7 @@ state:
         .manage(SessionState::new())
 ```
 
-- [ ] **Step 2: Load the file into `pending_restore` at the start of `setup`**
+- [x] **Step 2: Load the file into `pending_restore` at the start of `setup`**
 
 In the `.setup(|app| { ... })` closure, insert this as the **first** statement,
 before `menu::build_menu`:
@@ -783,7 +783,7 @@ before `menu::build_menu`:
             };
 ```
 
-- [ ] **Step 3: Start the ticker thread at the end of `setup`**
+- [x] **Step 3: Start the ticker thread at the end of `setup`**
 
 Still inside `.setup(...)`, immediately before the final `Ok(())`:
 
@@ -805,7 +805,7 @@ Still inside `.setup(...)`, immediately before the final `Ok(())`:
             });
 ```
 
-- [ ] **Step 4: Freeze and save on exit**
+- [x] **Step 4: Freeze and save on exit**
 
 In the `app.run(|_app_handle, event| { ... })` match block, add a new arm
 alongside `RunEvent::Opened` and `RunEvent::Reopen`:
@@ -822,7 +822,7 @@ alongside `RunEvent::Opened` and `RunEvent::Reopen`:
             }
 ```
 
-- [ ] **Step 5: Forget windows the user closes deliberately**
+- [x] **Step 5: Forget windows the user closes deliberately**
 
 In the `.on_window_event(|window, event| { ... })` block, extend the `Destroyed`
 arm (currently lines ~106-110):
@@ -837,13 +837,13 @@ arm (currently lines ~106-110):
                 }
 ```
 
-- [ ] **Step 6: Build and check it compiles**
+- [x] **Step 6: Build and check it compiles**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -5`
 Expected: `Finished` with no errors. `pending_count` is unused for now — if
 clippy complains, leave it; Task 9 consumes it.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/lib.rs
@@ -857,7 +857,7 @@ git commit -m "feat(session): load, tick and freeze the session across app lifec
 **Files:**
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Record moves and resizes**
+- [x] **Step 1: Record moves and resizes**
 
 In `.on_window_event(...)`, add two arms before the `_ => {}` catch-all:
 
@@ -881,12 +881,12 @@ Note: `outer_position` is paired with `inner_size` on purpose — that is the pa
 `WebviewWindowBuilder::position` / `inner_size` consumes when the window is
 rebuilt, so a restored window lands where it was.
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -3`
 Expected: `Finished`
 
-- [ ] **Step 3: Verify geometry actually reaches the session file**
+- [x] **Step 3: Verify geometry actually reaches the session file**
 
 ```bash
 pkill -f "debug/md-mini" 2>/dev/null
@@ -901,7 +901,7 @@ Run: `cat ~/Library/Application\ Support/md-mini/session.json`
 Expected: JSON with one window whose `x`/`y` match where you dragged it, `width`
 and `height` around 900×700.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src-tauri/src/lib.rs
@@ -922,7 +922,7 @@ scroll line and Untitled content as well.
 - Modify: `src/lib/tauri/commands.ts`
 - Modify: `src/App.svelte`
 
-- [ ] **Step 1: Define the payload struct**
+- [x] **Step 1: Define the payload struct**
 
 In `src-tauri/src/window.rs`, replace the `PendingFiles` declaration and its
 `impl` (currently lines ~18-20 and ~30-34) with:
@@ -960,7 +960,7 @@ impl PendingFiles {
 }
 ```
 
-- [ ] **Step 2: Update the one insertion site inside `open_file_window`**
+- [x] **Step 2: Update the one insertion site inside `open_file_window`**
 
 In `src-tauri/src/window.rs`, inside `open_file_window`, replace:
 
@@ -978,7 +978,7 @@ with:
                 pending_map.insert(label.clone(), PendingOpen::from_path(file_path.clone()));
 ```
 
-- [ ] **Step 3: Update the command's return type**
+- [x] **Step 3: Update the command's return type**
 
 In `src-tauri/src/commands.rs`, change `get_pending_file`:
 
@@ -996,7 +996,7 @@ pub async fn get_pending_file(
 }
 ```
 
-- [ ] **Step 4: Update the `RunEvent::Opened` insertion site**
+- [x] **Step 4: Update the `RunEvent::Opened` insertion site**
 
 In `src-tauri/src/lib.rs`, in the `RunEvent::Opened` arm, replace:
 
@@ -1015,12 +1015,12 @@ with:
                                 );
 ```
 
-- [ ] **Step 5: Build the Rust side**
+- [x] **Step 5: Build the Rust side**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -5`
 Expected: `Finished`
 
-- [ ] **Step 6: Mirror the type on the frontend**
+- [x] **Step 6: Mirror the type on the frontend**
 
 In `src/lib/tauri/commands.ts`, add at the end of the file:
 
@@ -1034,7 +1034,7 @@ export interface PendingOpen {
 }
 ```
 
-- [ ] **Step 7: Adapt the single consumer**
+- [x] **Step 7: Adapt the single consumer**
 
 In `src/App.svelte`, add `PendingOpen` to the existing import from
 `./lib/tauri/commands`:
@@ -1059,12 +1059,12 @@ lines ~221-225) with:
     });
 ```
 
-- [ ] **Step 8: Typecheck**
+- [x] **Step 8: Typecheck**
 
 Run: `npm run check 2>&1 | tail -3`
 Expected: `0 ERRORS`
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src-tauri/src/window.rs src-tauri/src/commands.rs src-tauri/src/lib.rs src/lib/tauri/commands.ts src/App.svelte
@@ -1082,7 +1082,7 @@ git commit -m "refactor(window): carry cursor, scroll and content through Pendin
 - Modify: `src-tauri/src/lib.rs` (register it)
 - Modify: `src/App.svelte`
 
-- [ ] **Step 1: Write the failing test for the pure helpers**
+- [x] **Step 1: Write the failing test for the pure helpers**
 
 Create `src/lib/session-position.test.ts`:
 
@@ -1130,12 +1130,12 @@ describe('clampTopLine', () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run src/lib/session-position.test.ts`
 Expected: FAIL — `Failed to resolve import "./session-position"`
 
-- [ ] **Step 3: Implement the helpers**
+- [x] **Step 3: Implement the helpers**
 
 Create `src/lib/session-position.ts`:
 
@@ -1159,12 +1159,12 @@ export function clampTopLine(topLine: number, docLines: number): number {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run src/lib/session-position.test.ts`
 Expected: `8 passed`
 
-- [ ] **Step 5: Add the IPC command on the Rust side**
+- [x] **Step 5: Add the IPC command on the Rust side**
 
 Append to `src-tauri/src/session.rs`, above the test module:
 
@@ -1197,7 +1197,7 @@ pub async fn update_session_document(
 }
 ```
 
-- [ ] **Step 6: Register the command**
+- [x] **Step 6: Register the command**
 
 In `src-tauri/src/lib.rs`, add to the `invoke_handler` list after
 `recovery::check_recovery,`:
@@ -1206,7 +1206,7 @@ In `src-tauri/src/lib.rs`, add to the `invoke_handler` list after
             session::update_session_document,
 ```
 
-- [ ] **Step 7: Report from the frontend**
+- [x] **Step 7: Report from the frontend**
 
 In `src/App.svelte`, add this function next to `startRecoveryInterval` (around
 line 199):
@@ -1263,12 +1263,12 @@ never edited still lands in the session — insert immediately before the
     reportSession();
 ```
 
-- [ ] **Step 8: Typecheck and test**
+- [x] **Step 8: Typecheck and test**
 
 Run: `npm run check 2>&1 | tail -3 && npx vitest run src/lib/session-position.test.ts`
 Expected: `0 ERRORS`, then `8 passed`
 
-- [ ] **Step 9: Verify the heartbeat reaches disk**
+- [x] **Step 9: Verify the heartbeat reaches disk**
 
 ```bash
 pkill -f "debug/md-mini" 2>/dev/null
@@ -1283,7 +1283,7 @@ Run: `cat ~/Library/Application\ Support/md-mini/session.json`
 Expected: one window with `"path"` ending in `mermaid-pan-zoom.md`, a non-zero
 `cursor`, and a `topLine` greater than 1 if you scrolled.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/lib/session-position.ts src/lib/session-position.test.ts src-tauri/src/session.rs src-tauri/src/lib.rs src/App.svelte
@@ -1299,7 +1299,7 @@ git commit -m "feat(session): report caret, scroll line and untitled buffers"
 - Modify: `src-tauri/src/session.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add a restore-aware window builder**
+- [x] **Step 1: Add a restore-aware window builder**
 
 Append to `src-tauri/src/window.rs`:
 
@@ -1408,7 +1408,7 @@ pub fn open_restored_window(app: &AppHandle, snapshot: &crate::session::WindowSn
 Note the unused-import risk: `PendingOpen` is already declared in this file, so
 no new `use` is needed.
 
-- [ ] **Step 2: Add the restore entry point and the count command**
+- [x] **Step 2: Add the restore entry point and the count command**
 
 Append to `src-tauri/src/session.rs`, above the test module:
 
@@ -1444,7 +1444,7 @@ pub async fn restore_session(app: tauri::AppHandle) -> Result<usize, String> {
 }
 ```
 
-- [ ] **Step 3: Register both commands**
+- [x] **Step 3: Register both commands**
 
 In `src-tauri/src/lib.rs`, add to `invoke_handler` after
 `session::update_session_document,`:
@@ -1454,17 +1454,17 @@ In `src-tauri/src/lib.rs`, add to `invoke_handler` after
             session::restore_session,
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -5`
 Expected: `Finished`
 
-- [ ] **Step 5: Run all Rust tests**
+- [x] **Step 5: Run all Rust tests**
 
 Run: `cd src-tauri && cargo test 2>&1 | tail -5`
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/window.rs src-tauri/src/session.rs src-tauri/src/lib.rs
@@ -1479,7 +1479,7 @@ git commit -m "feat(session): restore windows with saved geometry and payload"
 - Modify: `src-tauri/src/menu.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Take the pending count as a parameter**
+- [x] **Step 1: Take the pending count as a parameter**
 
 In `src-tauri/src/menu.rs`, change the signature:
 
@@ -1490,7 +1490,7 @@ pub fn build_menu(
 ) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems)> {
 ```
 
-- [ ] **Step 2: Add the item to the File submenu**
+- [x] **Step 2: Add the item to the File submenu**
 
 In the same function, replace the `recent_files` item block and the `.build()?`
 that follows it with:
@@ -1517,7 +1517,7 @@ that follows it with:
         .build()?;
 ```
 
-- [ ] **Step 3: Pass the count and handle the event**
+- [x] **Step 3: Pass the count and handle the event**
 
 In `src-tauri/src/lib.rs`, update the `build_menu` call inside `.setup(...)` —
 it must come *after* the `pending_count` block added in Task 4:
@@ -1537,12 +1537,12 @@ existing `new` handler:
                 }
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 Run: `cd src-tauri && cargo build 2>&1 | tail -3`
 Expected: `Finished`
 
-- [ ] **Step 5: Verify end-to-end restore without any UI**
+- [x] **Step 5: Verify end-to-end restore without any UI**
 
 ```bash
 pkill -f "debug/md-mini" 2>/dev/null
@@ -1570,7 +1570,7 @@ Expected: three windows reappear at their saved positions and sizes. Check that
 `File → Reopen 3 Windows from Last Session` was enabled before you pressed it,
 and that pressing it a second time does nothing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/menu.rs src-tauri/src/lib.rs
@@ -1588,7 +1588,7 @@ Note the filename: **`toasts.svelte.ts`**, not `toasts.ts`. Runes in a plain
 - Create: `src/lib/toasts.svelte.ts`
 - Create: `src/lib/toasts.svelte.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/lib/toasts.svelte.test.ts`:
 
@@ -1661,12 +1661,12 @@ describe('createToastStore', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run src/lib/toasts.svelte.test.ts`
 Expected: FAIL — `Failed to resolve import "./toasts.svelte"`
 
-- [ ] **Step 3: Implement the store**
+- [x] **Step 3: Implement the store**
 
 Create `src/lib/toasts.svelte.ts`:
 
@@ -1732,12 +1732,12 @@ export function createToastStore() {
 export type ToastStore = ReturnType<typeof createToastStore>;
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `npx vitest run src/lib/toasts.svelte.test.ts`
 Expected: `8 passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/toasts.svelte.ts src/lib/toasts.svelte.test.ts
@@ -1752,7 +1752,7 @@ git commit -m "feat(toasts): add toast store with explicit stack ordering"
 - Create: `src/lib/ToastStack.svelte`
 - Modify: `src/styles/global.css` (~lines 123-160)
 
-- [ ] **Step 1: Read the styles you are replacing**
+- [x] **Step 1: Read the styles you are replacing**
 
 Run: `sed -n '120,175p' src/styles/global.css`
 
@@ -1771,7 +1771,7 @@ The real variables (see `src/lib/theme/dark.css`) are `--text-primary`,
 `--text-muted`, `--bg-base`, `--bg-surface`, `--color-code-bg` and
 `--color-table-border`. The CSS in Step 3 already uses the correct ones.
 
-- [ ] **Step 2: Create the component**
+- [x] **Step 2: Create the component**
 
 Create `src/lib/ToastStack.svelte`:
 
@@ -1822,7 +1822,7 @@ Create `src/lib/ToastStack.svelte`:
 {/if}
 ```
 
-- [ ] **Step 3: Replace the banner CSS with the stack CSS**
+- [x] **Step 3: Replace the banner CSS with the stack CSS**
 
 In `src/styles/global.css`, replace the whole block from `.md-update-banner {`
 through the last `.md-update-*` rule with:
@@ -1923,19 +1923,19 @@ through the last `.md-update-*` rule with:
 }
 ```
 
-- [ ] **Step 4: Confirm no stale references remain**
+- [x] **Step 4: Confirm no stale references remain**
 
 Run: `grep -rn "md-update" src/ || echo "no md-update references left"`
 
 Expected: matches only inside `src/lib/updater.ts` (cleaned up in Task 12). If
 `global.css` still matches, you missed a rule in Step 3.
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npm run check 2>&1 | tail -3`
 Expected: `0 ERRORS`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/ToastStack.svelte src/styles/global.css
@@ -1949,7 +1949,7 @@ git commit -m "feat(toasts): add ToastStack component and generalize banner CSS"
 **Files:**
 - Modify: `src/lib/updater.ts`
 
-- [ ] **Step 1: Replace DOM building with a callback**
+- [x] **Step 1: Replace DOM building with a callback**
 
 Rewrite `src/lib/updater.ts` in full:
 
@@ -2016,7 +2016,7 @@ export function startUpdateChecker(onUpdate: UpdateHandler): () => void {
 }
 ```
 
-- [ ] **Step 2: Add a regression test for the version comparison**
+- [x] **Step 2: Add a regression test for the version comparison**
 
 Create `src/lib/updater.test.ts`:
 
@@ -2051,12 +2051,12 @@ describe('isNewer', () => {
 });
 ```
 
-- [ ] **Step 3: Run the test**
+- [x] **Step 3: Run the test**
 
 Run: `npx vitest run src/lib/updater.test.ts`
 Expected: `6 passed`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/lib/updater.ts src/lib/updater.test.ts
@@ -2071,7 +2071,7 @@ git commit -m "refactor(updater): report updates through a callback instead of D
 - Modify: `src/App.svelte`
 - Modify: `src/lib/tauri/events.ts`
 
-- [ ] **Step 1: Add a listener for the restore event**
+- [x] **Step 1: Add a listener for the restore event**
 
 Append to `src/lib/tauri/events.ts`:
 
@@ -2084,7 +2084,7 @@ export function onSessionRestored(handler: (count: number) => void): Promise<() 
 }
 ```
 
-- [ ] **Step 2: Import the store and component**
+- [x] **Step 2: Import the store and component**
 
 In `src/App.svelte`, add to the imports:
 
@@ -2103,7 +2103,7 @@ Then create the store next to the others (after `const recentFiles = ...`):
   const toasts = createToastStore();
 ```
 
-- [ ] **Step 3: Offer the restore, and drop the toast once used**
+- [x] **Step 3: Offer the restore, and drop the toast once used**
 
 In `onMount`, replace the update-checker block (currently around lines 318-322):
 
@@ -2137,7 +2137,7 @@ Then add the new unlisten to the cleanup return block:
       unlistenSessionRestored.then((fn) => fn());
 ```
 
-- [ ] **Step 4: Render the stack**
+- [x] **Step 4: Render the stack**
 
 Find the markup section of `src/App.svelte` where `RecentFilesPanel` is rendered
 and add the stack next to it, as a sibling:
@@ -2146,12 +2146,12 @@ and add the stack next to it, as a sibling:
 <ToastStack store={toasts} />
 ```
 
-- [ ] **Step 5: Typecheck and run the whole suite**
+- [x] **Step 5: Typecheck and run the whole suite**
 
 Run: `npm run check 2>&1 | tail -3 && npm run test -- --run 2>&1 | tail -5`
 Expected: `0 ERRORS`, and every Vitest file passing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/App.svelte src/lib/tauri/events.ts
@@ -2165,7 +2165,7 @@ git commit -m "feat(session): offer the previous session through a toast"
 **Files:**
 - Modify: `src/App.svelte`
 
-- [ ] **Step 1: Add the apply helper**
+- [x] **Step 1: Add the apply helper**
 
 In `src/App.svelte`, add near `handleOpenFilePath`:
 
@@ -2187,7 +2187,7 @@ In `src/App.svelte`, add near `handleOpenFilePath`:
   }
 ```
 
-- [ ] **Step 2: Call it after the restored content is in the editor**
+- [x] **Step 2: Call it after the restored content is in the editor**
 
 Replace the `get_pending_file` block written in Task 6 with:
 
@@ -2207,12 +2207,12 @@ Replace the `get_pending_file` block written in Task 6 with:
     });
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npm run check 2>&1 | tail -3`
 Expected: `0 ERRORS`
 
-- [ ] **Step 4: Verify by hand**
+- [x] **Step 4: Verify by hand**
 
 ```bash
 pkill -f "debug/md-mini" 2>/dev/null
@@ -2232,7 +2232,7 @@ Press `Cmd+Shift+T` in the new window.
 Expected: the file reopens already scrolled to where you were, with the caret on
 the line you clicked — not at the top.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/App.svelte
@@ -2252,7 +2252,7 @@ are `list_windows`, `execute_js` (`{script, windowLabel}`) and
 `capture_native_screenshot`. If the port is taken it falls back to `9224` —
 check the `MCP Bridge plugin initialized` line in the dev log.
 
-- [ ] **Step 1: Untitled windows survive a quit**
+- [x] **Step 1: Untitled windows survive a quit**
 
 Start clean, then in the launched window type some text without saving. Open a
 second window with `Cmd+N` and type different text. Wait 7 seconds.
@@ -2270,14 +2270,14 @@ matching `untitled-*.md` files whose contents are your two drafts.
 Relaunch and press `Cmd+Shift+T`. Expected: both drafts come back as dirty
 Untitled windows.
 
-- [ ] **Step 2: Deliberately closing a window forgets it**
+- [x] **Step 2: Deliberately closing a window forgets it**
 
 Start clean, open three windows, wait 7 seconds. Close one with `Cmd+W`, then
 **wait 3 seconds** (longer than the ticker) and quit.
 
 Expected: `session.json` holds two windows, not three.
 
-- [ ] **Step 3: A file deleted while closed is dropped**
+- [x] **Step 3: A file deleted while closed is dropped**
 
 Create a scratch file, open it, wait 7 seconds, quit, delete the file, relaunch.
 
@@ -2290,7 +2290,7 @@ rm /tmp/session-scratch.md
 Expected: the menu item counts one fewer window, and restoring does not create an
 empty window for the missing file.
 
-- [ ] **Step 4: No duplicate window for an already-open file**
+- [x] **Step 4: No duplicate window for an already-open file**
 
 Quit with `notes.md` open, then relaunch with that same file as an argument:
 
@@ -2301,7 +2301,7 @@ npm run dev:app -- -- -- "$(pwd)/test-fixtures/mermaid-pan-zoom.md" > /tmp/sessi
 Press `Cmd+Shift+T`. Expected: the existing window is focused; no second window
 for the same path.
 
-- [ ] **Step 5: Toast stacking with a gap**
+- [x] **Step 5: Toast stacking with a gap**
 
 Both toasts have to be on screen at once, which needs the update check to report
 a hit. Force it with a temporary edit to `src/lib/updater.ts`:
@@ -2346,7 +2346,7 @@ as separate and the text is legible in both themes.
 Run: `git diff src/lib/updater.ts`
 Expected: no output.
 
-- [ ] **Step 6: A hard kill still leaves a usable session**
+- [x] **Step 6: A hard kill still leaves a usable session**
 
 Start clean, open two windows, wait 7 seconds, then `pkill -9 -f "debug/md-mini"`.
 Delete the stale socket only after confirming no process survives:
@@ -2360,7 +2360,7 @@ cat ~/Library/Application\ Support/md-mini/session.json
 
 Expected: the ticker had already written both windows, so the file is intact.
 
-- [ ] **Step 7: Commit nothing, but record what you found**
+- [x] **Step 7: Commit nothing, but record what you found**
 
 If any step failed, fix it and note the cause in the commit message. If all
 passed, no commit is needed for this task.
@@ -2373,7 +2373,7 @@ passed, no commit is needed for this task.
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/plans/2026-07-25-session-restore.md` (tick the boxes)
 
-- [ ] **Step 1: Add the architecture entries**
+- [x] **Step 1: Add the architecture entries**
 
 In `CLAUDE.md`, in the `src-tauri/src/` block of the Architecture section, add
 after the `recovery.rs` line:
@@ -2389,7 +2389,7 @@ And in the `src/` block, after `lib/stores.svelte.ts`:
   lib/ToastStack.svelte # Bottom-right toast stack
 ```
 
-- [ ] **Step 2: Add the gotchas**
+- [x] **Step 2: Add the gotchas**
 
 In the `Gotchas` section of `CLAUDE.md`, add:
 
@@ -2401,12 +2401,12 @@ In the `Gotchas` section of `CLAUDE.md`, add:
 - **The update notification is `src/lib/updater.ts` + the toast stack**, not a Tauri updater plugin. It polls the GitHub releases API and compares versions.
 ```
 
-- [ ] **Step 3: Update the preview guide if you touched it**
+- [x] **Step 3: Update the preview guide if you touched it**
 
 No change is required in `src/lib/editor/preview/CLAUDE.md` — this feature does
 not touch decorations.
 
-- [ ] **Step 4: Final full verification**
+- [x] **Step 4: Final full verification**
 
 Run:
 ```bash
@@ -2418,7 +2418,7 @@ cd src-tauri && cargo test 2>&1 | tail -5 && cargo clippy 2>&1 | tail -5
 Expected: `0 ERRORS`, all Vitest files passing, all Rust tests passing, no new
 clippy warnings.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md docs/superpowers/plans/2026-07-25-session-restore.md
@@ -2426,6 +2426,43 @@ git commit -m "docs: record session restore architecture and lifecycle gotchas"
 ```
 
 ---
+
+## What the plan got wrong (recorded after implementation)
+
+All 16 tasks are done. Five defects were found that a plan review could not have
+caught, because they only appear in a running app. Each is fixed and covered by a
+test or a documented gotcha.
+
+1. **`RunEvent::ExitRequested` never fires on the upgrade path.** The plan's
+   Task 4 treated it as the authoritative save. Cmd+Q and Homebrew's `quit`
+   AppleEvent go through `NSApp terminate:` → `RunEvent::Exit` instead; measured
+   on a real bundle, the AppleEvent quit emitted `Exit` only. Both events now run
+   `save_session_on_exit`. The spec has been corrected.
+2. **Geometry was stored in physical pixels.** `outer_position()`/`inner_size()`
+   answer in physical, `WebviewWindowBuilder::position`/`inner_size` consume
+   logical, so every restored window came back at 2× size and offset on a Retina
+   display (observed: 820×640 recorded as 1640×1280).
+3. **`Moved`/`Resized` never fire for an untouched window**, so it was recorded at
+   0×0 and would restore into the corner under the menu bar. Geometry now also
+   rides the frontend heartbeat.
+4. **The ticker's sidecar GC deleted the pending restore's unsaved buffers.**
+   Pruning used the live session, which is deliberately empty at startup while
+   `pending` still references the previous run. Observed directly: `session/` was
+   empty and the Untitled window never came back.
+5. **CLI-opened files were invisible to the dedup check.** `handle_cli_args` and
+   `load_pending_open_files` registered only `PendingFiles`, never `OpenFiles`, so
+   Task 15's Step 4 failed — restore opened a second window for a file the app was
+   launched with. This was also a pre-existing bug for opening the same file twice.
+
+Also worth noting: the plan's Task 6 named one `PendingFiles` insertion site to
+convert; there were four. And the ticker cadence is 1 s with a dirty flag, not the
+spec's "500 ms with a 1 s settle" — the plan's code is what was implemented.
+
+Runtime verification was consolidated into Task 15 rather than run per-task, so
+that only one process at a time owned the dev app's single-instance socket and
+bridge port. Task 15 additionally required building `md-mini-dev.app` and running
+its inner binary from a terminal, because the MCP bridge is debug-only while
+AppleScript can only address a registered bundle.
 
 ## Out of scope, deliberately
 

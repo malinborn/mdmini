@@ -36,6 +36,7 @@ src-tauri/src/          # Rust (Tauri backend)
   menu.rs               # macOS native app menu
   window.rs             # Window creation with cascade + file dedup
   recovery.rs           # Crash recovery (temp files)
+  session.rs            # Session restore (window list, geometry, caret, untitled buffers)
   watcher.rs            # File watcher (notify crate)
 
 src/                    # Frontend (Svelte + TypeScript)
@@ -62,6 +63,9 @@ src/                    # Frontend (Svelte + TypeScript)
       mermaid-state.ts  # Per-diagram scale/pan/height (StateField, in-memory)
       utils.ts          # cursorInRange() helper
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
+  lib/toasts.svelte.ts  # Toast stack store (update + session notifications)
+  lib/ToastStack.svelte # Bottom-right toast stack
+  lib/session-position.ts # Clamps for a restored caret and scroll line
   lib/theme/            # CSS variables + CM6 theme
   lib/tauri/            # Tauri IPC wrappers + event listeners
   styles/               # Global CSS, editor decoration styles
@@ -151,6 +155,17 @@ src/                    # Frontend (Svelte + TypeScript)
 - **Reach the EditorView from the DOM in browser tests:** `document.querySelector('.cm-content').cmTile.root.view`. Useful with `npm run dev` + Playwright, since Tauri file I/O is unavailable there.
 - **Playwright in this repo:** the cached chromium build lags the current Playwright CLI. Launch with `chromium.launch({ channel: 'chrome' })` to use the installed Google Chrome instead of downloading a browser.
 - **Don't run `npm init` with `--prefix`:** it writes to the project's `package.json`, not the target directory. `cd` into the scratchpad instead.
+- **`RunEvent::ExitRequested` does NOT fire on Cmd+Q or an AppleEvent quit — `RunEvent::Exit` does.** `tauri-runtime-wry` emits `ExitRequested` from only two places: `Message::RequestExit` (i.e. `app.exit()`) and the `Destroyed` arm once the *last* window is gone. `NSApp terminate:` — which is what the predefined Quit item, Cmd+Q, and the `quit` AppleEvent Homebrew sends all do — goes `applicationWillTerminate` → tao `LoopDestroyed` → `RunEvent::Exit` instead. Measured on a real bundle: the AppleEvent quit logged `Exit` only, with **no `ExitRequested` and no `Destroyed`**. Any save-on-exit must handle both events (`save_session_on_exit` in `lib.rs`).
+- **Quitting can destroy every window before the process exits,** so per-window cleanup in `WindowEvent::Destroyed` may run for all of them. Session restore guards this with a `quitting` flag that makes `SessionState::remove` a no-op, plus a rule that a quit never writes an *empty* window list over a good file. On macOS terminate the `Destroyed` storm turns out not to happen, but the close-last-window path does emit it.
+- **Window geometry getters answer in PHYSICAL pixels; the builder consumes LOGICAL ones.** `outer_position()` / `inner_size()` return physical, while `WebviewWindowBuilder::position` / `inner_size` are documented "in logical pixels". Without `to_logical(scale_factor())` every restored window comes back at double size and offset on a 2× display. Use `session::window_geometry`.
+- **`Moved`/`Resized` never fire for a window nobody touches,** so geometry cannot be collected from those events alone — an untouched window stays at 0×0 and restores into the top-left corner under the menu bar. Geometry therefore also rides the frontend heartbeat (`update_session_document`).
+- **A file opened via CLI args must be registered in `OpenFiles`, not just `PendingFiles`.** `OpenFiles` is what every dedup check consults, so registering only the pending payload makes the launch file invisible: opening it again, or restoring a session containing it, silently produces a duplicate window. See `assign_file_to_main` in `lib.rs`.
+- **Untitled sidecar GC must consider the pending restore.** The live session is deliberately empty at startup so the first write supersedes the file, but `pending` still references the previous run's buffers — pruning on the live set alone deletes exactly the unsaved drafts the user is about to reopen. Use `SessionState::referenced_untitled()`.
+- **The update notification is `src/lib/updater.ts` + the toast stack**, not a Tauri updater plugin. It polls the GitHub releases API and compares versions; rendering goes through `toasts.svelte.ts` so it stacks with the session toast instead of overlapping it.
+- **Verifying quit/exit behaviour needs both build flavours:** the MCP bridge exists only in debug (`#[cfg(debug_assertions)]`), while AppleScript can only address a registered `.app` bundle — `tauri dev`'s bare binary is invisible to `quit app id "..."`. Build with `npm run build:dev` and launch `md-mini-dev.app/Contents/MacOS/md-mini` **directly from a terminal**: that registers the bundle id *and* keeps stderr attached.
+- **`pkill -f "src-tauri/target/debug/md-mini"` does not match the dev app:** its cmdline holds the relative path `target/debug/md-mini`. Use `pkill -f "debug/md-mini"`.
+- **Never delete `/tmp/com_md_mini_dev_si.sock` while the dev app is alive:** the single-instance plugin then lets a second instance start alongside the first, and you end up with two dev apps on bridge ports 9223 and 9224.
+- **`npm run test` overcounts:** vitest picks up stale copies under `.claude/worktrees/`. Use `npx vitest run --dir src` for a true count (252 at the time of writing).
 
 ## Workflow
 

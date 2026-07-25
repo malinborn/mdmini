@@ -230,7 +230,7 @@ pub fn open_restored_window(app: &AppHandle, snapshot: &crate::session::WindowSn
             let _ = window.set_focus();
             #[cfg(target_os = "macos")]
             unsafe {
-                use cocoa::appkit::{NSApplication, NSApplicationActivationPolicy};
+                use cocoa::appkit::NSApplication;
                 let ns_app = cocoa::appkit::NSApp();
                 ns_app.activateIgnoringOtherApps_(true);
             }
