@@ -54,6 +54,8 @@ pub fn run() {
             recovery::delete_recovery,
             recovery::check_recovery,
             session::update_session_document,
+            session::pending_session_count,
+            session::restore_session,
             watcher::start_watching,
         ])
         .setup(|app| {

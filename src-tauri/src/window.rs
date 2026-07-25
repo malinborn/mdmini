@@ -168,3 +168,103 @@ pub async fn open_file_window_cmd(app: AppHandle, path: Option<String>) -> Resul
     open_file_window(&app, path);
     Ok(())
 }
+
+/// Recreate a window from a session snapshot: saved geometry, and a payload the
+/// frontend picks up on mount.
+///
+/// Files already open are focused rather than duplicated, reusing the dedup in
+/// `open_file_window`.
+pub fn open_restored_window(app: &AppHandle, snapshot: &crate::session::WindowSnapshot) {
+    if let Some(path) = &snapshot.path {
+        let already_open = {
+            let open_files = app.state::<OpenFiles>();
+            let map = open_files.0.lock().unwrap();
+            map.get(path).and_then(|label| app.get_webview_window(label))
+        };
+        if let Some(window) = already_open {
+            let _ = window.set_focus();
+            return;
+        }
+    }
+
+    let content = snapshot
+        .untitled
+        .as_deref()
+        .and_then(crate::session::read_untitled);
+
+    // An Untitled snapshot whose sidecar has gone is not worth an empty window.
+    if snapshot.path.is_none() && content.is_none() {
+        return;
+    }
+
+    let count = WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let label = format!("editor-{}", count);
+
+    let product_name = app
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "md-mini".to_string());
+    let window_title = format!("Untitled — {}", product_name);
+
+    let width = if snapshot.width >= 400 {
+        snapshot.width as f64
+    } else {
+        DEFAULT_WIDTH
+    };
+    let height = if snapshot.height >= 300 {
+        snapshot.height as f64
+    } else {
+        DEFAULT_HEIGHT
+    };
+
+    let builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+        .title(&window_title)
+        .inner_size(width, height)
+        .min_inner_size(400.0, 300.0)
+        .position(snapshot.x as f64, snapshot.y as f64)
+        .background_color(tauri::utils::config::Color(25, 23, 36, 255));
+
+    match builder.build() {
+        Ok(window) => {
+            let _ = window.set_focus();
+            #[cfg(target_os = "macos")]
+            unsafe {
+                use cocoa::appkit::{NSApplication, NSApplicationActivationPolicy};
+                let ns_app = cocoa::appkit::NSApp();
+                ns_app.activateIgnoringOtherApps_(true);
+            }
+
+            let pending = app.state::<PendingFiles>();
+            let mut pending_map = pending.0.lock().unwrap();
+            pending_map.insert(
+                label.clone(),
+                PendingOpen {
+                    path: snapshot.path.clone(),
+                    content,
+                    cursor: snapshot.cursor,
+                    top_line: snapshot.top_line.max(1),
+                },
+            );
+            drop(pending_map);
+
+            if let Some(path) = &snapshot.path {
+                let open_files = app.state::<OpenFiles>();
+                let mut map = open_files.0.lock().unwrap();
+                map.insert(path.clone(), label.clone());
+                drop(map);
+
+                if let Ok(watcher) =
+                    crate::watcher::watch_file(app, label.clone(), path.clone())
+                {
+                    let watchers = app.state::<FileWatchers>();
+                    let mut wmap = watchers.0.lock().unwrap();
+                    wmap.insert(label.clone(), watcher);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to restore window: {}", e);
+        }
+    }
+}

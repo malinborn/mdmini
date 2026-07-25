@@ -386,6 +386,36 @@ pub async fn update_session_document(
     Ok(())
 }
 
+/// Reopen every window from the previous session. Returns how many were opened.
+/// The pending list is consumed, so a second call is a no-op.
+pub fn restore_pending(app: &tauri::AppHandle) -> usize {
+    use tauri::{Emitter, Manager};
+
+    let snapshots = app.state::<SessionState>().take_pending();
+    let count = snapshots.len();
+    for snapshot in &snapshots {
+        crate::window::open_restored_window(app, snapshot);
+    }
+    if count > 0 {
+        // Let open windows drop the "restore available" toast.
+        let _ = app.emit("session-restored", count);
+    }
+    count
+}
+
+/// How many windows the previous session had. Drives the toast.
+#[tauri::command]
+pub async fn pending_session_count(
+    state: tauri::State<'_, SessionState>,
+) -> Result<usize, String> {
+    Ok(state.pending_count())
+}
+
+#[tauri::command]
+pub async fn restore_session(app: tauri::AppHandle) -> Result<usize, String> {
+    Ok(restore_pending(&app))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
