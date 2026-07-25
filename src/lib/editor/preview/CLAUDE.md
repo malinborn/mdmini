@@ -198,10 +198,46 @@ directly unit-testable (`mermaid-viewport.test.ts`).
 - Pinch (`wheel` + `ctrlKey`) and `Cmd`+`wheel` always zoom around the pointer
 - Plain `wheel` pans **only when zoomed past fit**; at fit the event is left
   alone so the document scrolls
-- At a pan boundary the event is also released to the document (scroll
-  chaining) — otherwise a tall diagram becomes a scroll trap
 - Left-drag always pans; double click toggles fit ↔ 2× at the pointer
 - The bottom handle resizes the frame; double click on it restores auto height
+
+### Gesture Latching (`GESTURE_GAP_MS`)
+
+Ownership of a wheel gesture is decided **once, at its start**, and held until
+the gesture ends — a gap longer than 120 ms with no wheel event. Trackpads emit
+a dense stream during a swipe, including inertia, so the gap only elapses once
+fingers have actually stopped.
+
+This matters because the naive alternative — deciding per event — hands the
+scroll to the document the instant a pan hits an edge, in the middle of a swipe.
+That reads as the page lurching out from under you. Instead:
+
+- Mid-gesture at an edge → the diagram keeps the event and rubber-bands
+- A **new** gesture at an edge → the document owns it, which is how the user
+  scrolls past a diagram
+- Cursor outside the diagram → the handler never runs at all
+
+`overscroll-behavior: contain` on a native scroller does the same thing; we
+reimplement it because the pan is a transform, not a scroll.
+
+### Rubber Band
+
+`panLeftover()` reports the part of a pan the clamp refused; the raw total is
+accumulated and displayed through `rubberBand()`, which damps it asymptotically
+toward `OVERSCROLL_LIMIT` (72px). On gesture end a `requestAnimationFrame`
+ease-out returns it to zero. Applies to both wheel and drag panning.
+
+Note that `view` itself always stays clamped — the overscroll lives only in
+`apply()`, so nothing invalid is ever committed to the state field.
+
+### `userZoomed` Is Tracked, Not Derived
+
+Whether the user has zoomed away from the full view is an explicit flag, **not**
+`scale > fitScale`. Shrinking the frame raises the fit scale, which would make
+an untouched diagram look zoomed and strand it there permanently — it would
+never re-fit, and its wheel events would never pass through to the document
+again. The flag is set by `zoom()`, cleared by `fit()`, and derived once on
+restore.
 
 ### Do NOT Dispatch a Transaction per Frame
 
@@ -230,6 +266,9 @@ restore path reads.
 ### Frame Sizing
 
 - `autoHeight` = content height scaled to fit the frame width, capped at 60vh
+- A `ResizeObserver` on the frame only reports **width**. Auto height depends on
+  `window.innerHeight`, so a `resize` listener is required too, and `remeasure`
+  compares the target height as well as the width before bailing out.
 - For a width-constrained diagram, fit and auto height agree exactly, so the
   whole diagram is visible with no letterboxing
 - A tall diagram is capped at 60vh and fit scales it down — small but complete.

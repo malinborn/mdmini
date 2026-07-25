@@ -9,8 +9,11 @@ import {
   zoomAt,
   wheelIntent,
   isAtFit,
+  rubberBand,
+  panLeftover,
   MAX_SCALE,
   MIN_FRAME_HEIGHT,
+  OVERSCROLL_LIMIT,
 } from './mermaid-viewport';
 
 const frame = { width: 800, height: 400 };
@@ -247,5 +250,92 @@ describe('wheelIntent', () => {
   it('ZoomedInAtTopEdge_ScrollingUpPassesThrough', () => {
     const atTop = clampPan({ scale: 2, tx: -400, ty: 99999 }, content, frame);
     expect(wheelIntent({ ctrlKey: false, metaKey: false, deltaX: 0, deltaY: -40 }, atTop, content, frame)).toBe('passthrough');
+  });
+
+  it('NotUserZoomed_PassesThroughEvenWhenScaleExceedsFit', () => {
+    // A frame that just shrank leaves scale above fit without the user zooming;
+    // the document must still own the gesture.
+    const zoomed = clampPan({ scale: 2, tx: -400, ty: -300 }, content, frame);
+    expect(wheelIntent({ ctrlKey: false, metaKey: false, deltaX: 0, deltaY: 40 }, zoomed, content, frame, false))
+      .toBe('passthrough');
+  });
+
+  it('UserZoomed_PansEvenWhenScaleLooksLikeFit', () => {
+    const fitView = computeFit(content, frame);
+    // scale === fit, but nothing to pan → still passthrough
+    expect(wheelIntent({ ctrlKey: false, metaKey: false, deltaX: 0, deltaY: 40 }, fitView, content, frame, true))
+      .toBe('passthrough');
+  });
+
+  it('CtrlKeyZoomsRegardlessOfUserZoomed', () => {
+    const fitView = computeFit(content, frame);
+    expect(wheelIntent({ ctrlKey: true, metaKey: false, deltaX: 0, deltaY: -5 }, fitView, content, frame, false))
+      .toBe('zoom');
+  });
+});
+
+describe('rubberBand', () => {
+  it('ZeroOverscroll_ZeroOffset', () => {
+    expect(rubberBand(0)).toBe(0);
+  });
+
+  it('NeverReachesTheLimit', () => {
+    for (const raw of [10, 100, 1000, 100000]) {
+      expect(Math.abs(rubberBand(raw, OVERSCROLL_LIMIT))).toBeLessThan(OVERSCROLL_LIMIT);
+    }
+  });
+
+  it('MonotonicallyIncreasing', () => {
+    let prev = 0;
+    for (let raw = 5; raw <= 500; raw += 5) {
+      const cur = rubberBand(raw);
+      expect(cur).toBeGreaterThan(prev);
+      prev = cur;
+    }
+  });
+
+  it('Antisymmetric', () => {
+    expect(rubberBand(-120)).toBeCloseTo(-rubberBand(120));
+  });
+
+  it('SmallOverscrollBarelyDamped', () => {
+    // the first few pixels should still feel responsive
+    expect(rubberBand(8)).toBeGreaterThan(4);
+  });
+
+  it('ZeroLimit_NoOffset', () => {
+    expect(rubberBand(500, 0)).toBe(0);
+  });
+});
+
+describe('panLeftover', () => {
+  const content = { width: 1600, height: 1200 };
+
+  it('MidRange_NothingRefused', () => {
+    const v = clampPan({ scale: 2, tx: -400, ty: -300 }, content, frame);
+    const left = panLeftover(v, 40, 40, content, frame);
+    expect(left.x).toBeCloseTo(0);
+    expect(left.y).toBeCloseTo(0);
+  });
+
+  it('AtBottomEdge_VerticalRefused', () => {
+    const atBottom = clampPan({ scale: 2, tx: -400, ty: -99999 }, content, frame);
+    const left = panLeftover(atBottom, 0, 50, content, frame);
+    expect(left.y).toBeCloseTo(-50); // content wanted to keep moving up
+    expect(left.x).toBeCloseTo(0);
+  });
+
+  it('AtTopEdge_VerticalRefusedTheOtherWay', () => {
+    const atTop = clampPan({ scale: 2, tx: -400, ty: 99999 }, content, frame);
+    const left = panLeftover(atTop, 0, -50, content, frame);
+    expect(left.y).toBeCloseTo(50);
+  });
+
+  it('ContentSmallerThanFrame_EverythingRefused', () => {
+    const small = { width: 200, height: 100 };
+    const v = computeFit(small, frame);
+    const left = panLeftover(v, 30, 30, small, frame);
+    expect(left.x).toBeCloseTo(-30);
+    expect(left.y).toBeCloseTo(-30);
   });
 });
