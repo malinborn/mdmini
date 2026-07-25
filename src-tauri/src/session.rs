@@ -367,7 +367,15 @@ pub async fn update_session_document(
 
     match (path, content) {
         // Untitled window with text — mirror it to a sidecar file.
-        (None, Some(text)) => {
+        //
+        // The `is_empty` guard matters more than it looks: the frontend reports
+        // once at mount, before `get_pending_file` has resolved, so a window that
+        // is *about* to load a file briefly looks like an empty Untitled one.
+        // Without the guard that transient state earns a sidecar and an
+        // `untitled` name, which survives `prune_missing` and comes back as a
+        // blank window instead of the file. With it, the entry has neither a path
+        // nor an untitled name and is pruned on read.
+        (None, Some(text)) if !text.is_empty() => {
             let file_name = untitled_file_name(&label);
             write_untitled(&file_name, &text)?;
             state.set_untitled(&label, Some(file_name));
@@ -473,6 +481,20 @@ mod tests {
                 "/tmp/editor-10.md".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn prune_missing_drops_entry_with_neither_path_nor_untitled() {
+        // A window reports itself at mount, before `get_pending_file` resolves,
+        // so it briefly has no path and an empty buffer. That entry must not
+        // come back as a blank window.
+        let session = Session {
+            version: SESSION_VERSION,
+            saved_at: 0,
+            windows: vec![snap(None)],
+        };
+        let pruned = prune_missing(session, |_| true);
+        assert!(pruned.windows.is_empty());
     }
 
     #[test]
