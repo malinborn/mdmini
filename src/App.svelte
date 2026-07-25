@@ -167,6 +167,22 @@
     }
   }
 
+  // --- Restored caret / scroll ---
+  async function applyRestorePosition(cursor: number, topLine: number): Promise<void> {
+    const view = editorHandle?.view;
+    if (!view) return;
+    const { clampCursor, clampTopLine } = await import('./lib/session-position');
+    const { EditorView } = await import('@codemirror/view');
+
+    const anchor = clampCursor(cursor, view.state.doc.length);
+    const line = view.state.doc.line(clampTopLine(topLine, view.state.doc.lines));
+
+    view.dispatch({
+      selection: { anchor },
+      effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
+    });
+  }
+
   // --- External file change handling ---
   async function handleExternalChange(path: string): Promise<void> {
     if (isSaving) return; // Ignore changes caused by our own save
@@ -247,14 +263,17 @@
   onMount(() => {
     // Pull any file path stored by the backend for this window (CLI args or new-window open).
     // This avoids the race condition of the push-based emit approach.
-    invoke<PendingOpen | null>('get_pending_file').then((pending) => {
+    invoke<PendingOpen | null>('get_pending_file').then(async (pending) => {
       if (!pending) return;
       if (pending.path) {
-        handleOpenFilePath(pending.path);
+        await handleOpenFilePath(pending.path);
       } else if (pending.content !== null) {
         // Restored Untitled window — no file on disk, just the buffer.
         editorHandle?.replaceContent(pending.content);
         fileState.isDirty = true;
+      }
+      if (pending.cursor > 0 || pending.topLine > 1) {
+        await applyRestorePosition(pending.cursor, pending.topLine);
       }
     });
 
