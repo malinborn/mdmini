@@ -4,10 +4,9 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-/// Returns the recovery directory path: ~/Library/Application Support/md-mini/recovery/
+/// Returns the recovery directory path: `<app data dir>/recovery/`.
 fn recovery_dir() -> Result<PathBuf, String> {
-    let data_dir = dirs::data_dir().ok_or("Cannot determine application data directory")?;
-    let dir = data_dir.join("md-mini").join("recovery");
+    let dir = crate::paths::app_data_dir()?.join("recovery");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("Failed to create recovery dir: {}", e))?;
     }

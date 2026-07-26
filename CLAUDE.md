@@ -10,7 +10,7 @@ Minimalist live-preview markdown editor for macOS. Tauri 2 + Svelte 5 + CodeMirr
 |---------|-------------|
 | `npm install` | Install frontend dependencies |
 | `npm run dev` | **Default for visual checks.** Frontend only (Vite at http://localhost:1420). No Tauri shell — open the URL in any browser. |
-| `npm run dev:app` | Tauri dev with **renamed identifier** (`md-mini-dev` / `com.md-mini.dev`). Uses its own bundle ID + single-instance socket — does NOT conflict with an installed production md-mini. Use when you need Tauri IPC (file I/O, menu, native dialogs). |
+| `npm run dev:app` | Tauri dev with **renamed identifier** (`md-mini-dev` / `com.md-mini.dev`). Own bundle ID, own single-instance socket, and own data directory (`~/Library/Application Support/md-mini-dev/`) — does NOT conflict with an installed production md-mini. Use when you need Tauri IPC (file I/O, menu, native dialogs). |
 | `npm run check` | Svelte type checking |
 | `npm run test` | Run frontend tests (vitest) |
 | `cd src-tauri && cargo test` | Run Rust tests |
@@ -35,6 +35,7 @@ src-tauri/src/          # Rust (Tauri backend)
   commands.rs           # IPC commands: read_file, write_file, file_exists
   menu.rs               # macOS native app menu
   window.rs             # Window creation with cascade + file dedup
+  paths.rs              # App data directory, named after the product (isolates dev from release)
   recovery.rs           # Crash recovery (temp files)
   session.rs            # Session restore (window list, geometry, caret, untitled buffers)
   watcher.rs            # File watcher (notify crate)
@@ -165,6 +166,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - **Verifying quit/exit behaviour needs both build flavours:** the MCP bridge exists only in debug (`#[cfg(debug_assertions)]`), while AppleScript can only address a registered `.app` bundle — `tauri dev`'s bare binary is invisible to `quit app id "..."`. Build with `npm run build:dev` and launch `md-mini-dev.app/Contents/MacOS/md-mini` **directly from a terminal**: that registers the bundle id *and* keeps stderr attached.
 - **`pkill -f "src-tauri/target/debug/md-mini"` does not match the dev app:** its cmdline holds the relative path `target/debug/md-mini`. Use `pkill -f "debug/md-mini"`.
 - **Never delete `/tmp/com_md_mini_dev_si.sock` while the dev app is alive:** the single-instance plugin then lets a second instance start alongside the first, and you end up with two dev apps on bridge ports 9223 and 9224.
+- **On-disk state must go through `paths::app_data_dir()`,** never `dirs::data_dir().join("md-mini")`. The directory is named after the product name, so a dev build gets `md-mini-dev/` and cannot overwrite an installed release app's `recovery/` (which holds the user's unsaved work) or `session.json`. `paths::init` runs as the first statement in `setup`, before anything reads or writes.
 - **`npm run test` overcounts:** vitest picks up stale copies under `.claude/worktrees/`. Use `npx vitest run --dir src` for a true count (252 at the time of writing).
 
 ## Workflow

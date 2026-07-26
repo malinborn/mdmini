@@ -1,5 +1,6 @@
 mod commands;
 mod menu;
+mod paths;
 mod recovery;
 mod session;
 mod watcher;
@@ -59,6 +60,11 @@ pub fn run() {
             watcher::start_watching,
         ])
         .setup(|app| {
+            // FIRST, before anything touches disk: decide which data directory this
+            // build owns. A dev build must never share `recovery/` or `session.json`
+            // with an installed release one.
+            paths::init(app.config().product_name.as_deref().unwrap_or("md-mini"));
+
             // Load the previous session before the menu is built — the menu item's
             // enabled state depends on whether there is anything to restore.
             let pending_count = {

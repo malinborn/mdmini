@@ -288,23 +288,13 @@ pub fn parse_session(data: &str) -> Option<Session> {
     })
 }
 
-/// `~/Library/Application Support/md-mini/`
-fn app_data_dir() -> Result<PathBuf, String> {
-    let base = dirs::data_dir().ok_or("Cannot determine application data directory")?;
-    let dir = base.join("md-mini");
-    if !dir.exists() {
-        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
-    }
-    Ok(dir)
-}
-
 fn session_file() -> Result<PathBuf, String> {
-    Ok(app_data_dir()?.join("session.json"))
+    Ok(crate::paths::app_data_dir()?.join("session.json"))
 }
 
-/// `~/Library/Application Support/md-mini/session/` — holds Untitled buffers.
+/// `<app data dir>/session/` — holds Untitled buffers.
 pub fn session_dir() -> Result<PathBuf, String> {
-    let dir = app_data_dir()?.join("session");
+    let dir = crate::paths::app_data_dir()?.join("session");
     if !dir.exists() {
         fs::create_dir_all(&dir).map_err(|e| format!("Failed to create session dir: {}", e))?;
     }
