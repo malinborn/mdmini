@@ -4,7 +4,12 @@ import { StateEffect } from '@codemirror/state';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { cursorInRange } from './utils';
-import { createViewport, type ViewportController } from './mermaid-viewport';
+import {
+  createViewport,
+  estimateFrameHeight,
+  autoHeightCap,
+  type ViewportController,
+} from './mermaid-viewport';
 import { getMermaidView, setMermaidView } from './mermaid-state';
 
 // -- Types --
@@ -161,7 +166,12 @@ class MermaidWidget extends WidgetType {
     private svg: string | null,
     private error: string | null,
     /** Start of the fenced block — the key under which view state is stored. */
-    private pos: number
+    private pos: number,
+    /**
+     * Height to give the frame before layout. Without it the SVG lays out at
+     * its natural size for one frame — see `createViewport`.
+     */
+    private frameHeight: number
   ) {
     super();
   }
@@ -204,7 +214,8 @@ class MermaidWidget extends WidgetType {
           view.dispatch({
             effects: setMermaidView.of({ pos: this.commitPos(view), view: state }),
           });
-        }
+        },
+        this.frameHeight
       );
       container.appendChild(this.controller.dom);
     }
@@ -271,6 +282,16 @@ export function decorateMermaidBlock(
     requestRender(source, view);
   }
 
+  // Tell CM6 how tall this will be before it is ever laid out, so its height map
+  // is right for diagrams outside the viewport.
+  const stored = getMermaidView(view.state, startLine.from);
+  const frameHeight = estimateFrameHeight(
+    svg,
+    stored?.frameHeight ?? null,
+    view.contentDOM.clientWidth,
+    autoHeightCap()
+  );
+
   // Hide all lines of the fenced block, replace with widget on first line
   for (let i = startLine.number; i <= endLine.number; i++) {
     const line = doc.line(i);
@@ -289,7 +310,7 @@ export function decorateMermaidBlock(
         line.from,
         line.to,
         Decoration.replace({
-          widget: new MermaidWidget(source, svg, error, startLine.from),
+          widget: new MermaidWidget(source, svg, error, startLine.from, frameHeight),
         })
       );
     } else {

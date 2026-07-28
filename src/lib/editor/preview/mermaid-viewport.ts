@@ -259,6 +259,62 @@ export interface ViewportController {
   destroy(): void;
 }
 
+/**
+ * Natural diagram size read straight out of SVG markup, without parsing it into
+ * a document. Used for height estimates before the widget is ever laid out.
+ */
+export function parseSvgSize(markup: string): Size | null {
+  const viewBox = /viewBox\s*=\s*["']\s*([-\d.]+)[\s,]+([-\d.]+)[\s,]+([-\d.]+)[\s,]+([-\d.]+)\s*["']/i.exec(
+    markup
+  );
+  if (viewBox) {
+    const width = parseFloat(viewBox[3]);
+    const height = parseFloat(viewBox[4]);
+    if (width > 0 && height > 0) return { width, height };
+  }
+
+  const attr = (name: string): number => {
+    const m = new RegExp(`\\s${name}\\s*=\\s*["']([\\d.]+)(?:px)?["']`, 'i').exec(markup);
+    return m ? parseFloat(m[1]) : 0;
+  };
+  const width = attr('width');
+  const height = attr('height');
+  if (width > 0 && height > 0) return { width, height };
+
+  return null;
+}
+
+/**
+ * Height to give a diagram's frame before it has ever been laid out.
+ *
+ * Needed because the frame gets its height from an inline style, and the SVG
+ * inside it is inserted at natural size — often 2000px+ tall. Any window in
+ * which that height is unset is a window in which the diagram dictates the line
+ * height. `remeasure` refines this once the real frame width is known.
+ */
+export function estimateFrameHeight(
+  markup: string | null,
+  storedHeight: number | null,
+  frameWidth: number,
+  maxHeight: number
+): number {
+  if (storedHeight !== null && storedHeight > 0) {
+    return Math.max(MIN_FRAME_HEIGHT, storedHeight);
+  }
+  if (!markup) return MIN_FRAME_HEIGHT;
+
+  const content = parseSvgSize(markup);
+  if (!content) return MIN_FRAME_HEIGHT;
+
+  // Mirrors what `remeasure` will compute once the frame has a real width.
+  return autoHeight(content, frameWidth, maxHeight);
+}
+
+/** The cap `remeasure` applies to an auto-sized frame. Depends on the window. */
+export function autoHeightCap(): number {
+  return maxAutoHeight();
+}
+
 function maxAutoHeight(): number {
   return Math.max(MIN_FRAME_HEIGHT, window.innerHeight * AUTO_HEIGHT_FRACTION);
 }
@@ -315,13 +371,29 @@ function makeButton(label: string, title: string, className: string): HTMLButton
 export function createViewport(
   svgMarkup: string,
   initial: ViewportInit | null,
-  onCommit: (state: ViewportInit) => void
+  onCommit: (state: ViewportInit) => void,
+  /**
+   * Height to give the frame immediately, before layout. Pass the same value
+   * handed to `WidgetType.estimatedHeight` so CodeMirror's height map and the
+   * real DOM agree from the first frame.
+   */
+  initialHeight: number = MIN_FRAME_HEIGHT
 ): ViewportController {
   const dom = document.createElement('div');
   dom.className = 'cm-md-mermaid-frame';
 
   const viewport = document.createElement('div');
   viewport.className = 'cm-md-mermaid-viewport';
+
+  // Bound the frame BEFORE the SVG can influence layout. The SVG is inserted at
+  // its natural size (2000px+ tall is normal), and `.cm-md-mermaid-viewport` gets
+  // its height only from this inline style — so until it is set, the line is as
+  // tall as the diagram. WebKit lays that intermediate state out and lets
+  // CodeMirror measure it, which sends the height map and the scroll position
+  // wild; the document ends up several thousand pixels too tall and then
+  // collapses. Chrome happens to coalesce it into one frame, which is why this
+  // only showed up in the app.
+  viewport.style.height = `${Math.round(initialHeight)}px`;
 
   const canvas = document.createElement('div');
   canvas.className = 'cm-md-mermaid-canvas';

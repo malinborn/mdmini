@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  parseSvgSize,
+  estimateFrameHeight,
   fitScale,
   minScale,
   computeFit,
@@ -337,5 +339,62 @@ describe('panLeftover', () => {
     const left = panLeftover(v, 30, 30, small, frame);
     expect(left.x).toBeCloseTo(-30);
     expect(left.y).toBeCloseTo(-30);
+  });
+});
+
+describe('parseSvgSize', () => {
+  // Shape mermaid actually emits: a natural-size width plus an authoritative viewBox.
+  const real =
+    '<svg id="mermaid-render-0" width="1125.26953125" xmlns="http://www.w3.org/2000/svg"' +
+    ' class="flowchart" style="max-width: none;" viewBox="0 0 1125.26953125 2055.5841064453125">';
+
+  it('PrefersViewBox', () => {
+    expect(parseSvgSize(real)).toEqual({ width: 1125.26953125, height: 2055.5841064453125 });
+  });
+
+  it('FallsBackToWidthHeightAttributes', () => {
+    expect(parseSvgSize('<svg width="300" height="150">')).toEqual({ width: 300, height: 150 });
+  });
+
+  it('IgnoresPercentageSizes', () => {
+    expect(parseSvgSize('<svg width="100%" height="100%">')).toBeNull();
+  });
+
+  it('ReturnsNullWhenNothingUsable', () => {
+    expect(parseSvgSize('<svg>')).toBeNull();
+    expect(parseSvgSize('')).toBeNull();
+  });
+
+  it('AcceptsCommaSeparatedViewBox', () => {
+    expect(parseSvgSize('<svg viewBox="0,0,200,100">')).toEqual({ width: 200, height: 100 });
+  });
+});
+
+describe('estimateFrameHeight', () => {
+  const tall = '<svg viewBox="0 0 1000 4000">';
+
+  it('StoredHeightWins', () => {
+    expect(estimateFrameHeight(tall, 250, 800, 500)).toBe(250);
+  });
+
+  it('TallDiagramIsCappedNotNatural', () => {
+    // The whole point: never return the SVG's natural height, which would let a
+    // 4000px diagram dictate the line height.
+    const h = estimateFrameHeight(tall, null, 800, 500);
+    expect(h).toBeLessThan(4000);
+    expect(h).toBeGreaterThanOrEqual(MIN_FRAME_HEIGHT);
+  });
+
+  it('WidthConstrainedDiagramScalesDown', () => {
+    // 400x200 at 200px wide → half scale → 100px tall.
+    expect(estimateFrameHeight('<svg viewBox="0 0 400 200">', null, 200, 500)).toBeCloseTo(100);
+  });
+
+  it('UnparseableMarkupFallsBackToMinimum', () => {
+    expect(estimateFrameHeight('<svg width="100%">', null, 800, 500)).toBe(MIN_FRAME_HEIGHT);
+  });
+
+  it('NoMarkupFallsBackToMinimum', () => {
+    expect(estimateFrameHeight(null, null, 800, 500)).toBe(MIN_FRAME_HEIGHT);
   });
 });
