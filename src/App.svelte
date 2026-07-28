@@ -4,7 +4,14 @@
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
   import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, type PendingOpen } from './lib/tauri/commands';
-  import { onMenuEvent, onOpenFile, onFileChangedExternally, onSessionRestored } from './lib/tauri/events';
+  import {
+    onMenuEvent,
+    onOpenFile,
+    onFileChangedExternally,
+    onSessionRestored,
+    onUpdateAvailable,
+    onUpdateDismissed,
+  } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
@@ -368,12 +375,29 @@
     // Start recovery interval
     startRecoveryInterval();
 
-    // Check for updates: first after 15s, then every hour
+    // Check for updates: first after 15s, then every hour. Only one window
+    // actually polls — startUpdateChecker is a no-op in the others.
     let stopUpdateChecker: (() => void) | null = null;
-    import('./lib/updater').then(({ startUpdateChecker }) => {
-      stopUpdateChecker = startUpdateChecker((latest, current) => {
-        toasts.push({ kind: 'update', latest, current });
+    import('./lib/updater').then(async ({ startUpdateChecker }) => {
+      stopUpdateChecker = await startUpdateChecker();
+    });
+
+    // The notice itself is process-wide: Rust broadcasts a find to every window
+    // and remembers dismissal, so it does not have to be closed window by window.
+    invoke<{ latest: string; current: string } | null>('pending_update')
+      .then((info) => {
+        if (info) toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+      })
+      .catch(() => {
+        // Update notices are best-effort; never surface this.
       });
+
+    const unlistenUpdateAvailable = onUpdateAvailable((info) => {
+      toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+    });
+
+    const unlistenUpdateDismissed = onUpdateDismissed(() => {
+      toasts.dismissKind('update');
     });
 
     // Offer the previous session, but only in the window that exists at launch —
@@ -400,6 +424,8 @@
       unlistenExternalChange.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
       unlistenSessionRestored.then((fn) => fn());
+      unlistenUpdateAvailable.then((fn) => fn());
+      unlistenUpdateDismissed.then((fn) => fn());
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
       if (recoveryInterval !== null) clearInterval(recoveryInterval);
@@ -462,7 +488,15 @@
   />
 {/if}
 
-<ToastStack store={toasts} />
+<ToastStack
+  store={toasts}
+  onDismiss={(entry) => {
+    // Closing the update notice closes it everywhere, not just here.
+    if (entry.payload.kind === 'update') {
+      invoke('dismiss_update').catch(() => {});
+    }
+  }}
+/>
 
 <style>
   main {

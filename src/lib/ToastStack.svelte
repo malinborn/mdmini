@@ -1,7 +1,19 @@
 <script lang="ts">
-  import type { ToastStore } from './toasts.svelte';
+  import type { ToastEntry, ToastStore } from './toasts.svelte';
 
-  let { store }: { store: ToastStore } = $props();
+  let {
+    store,
+    /**
+     * Called after a toast is dismissed locally, so the caller can propagate it.
+     * The update notice uses this to dismiss itself in every window at once.
+     */
+    onDismiss,
+  }: { store: ToastStore; onDismiss?: (entry: ToastEntry) => void } = $props();
+
+  function dismiss(entry: ToastEntry): void {
+    store.dismiss(entry.id);
+    onDismiss?.(entry);
+  }
 
   const BREW_CMD = 'brew update && brew upgrade --cask mdmini';
 
@@ -36,7 +48,7 @@
         <button
           class="md-toast-close"
           title="Dismiss"
-          onclick={() => store.dismiss(toast.id)}
+          onclick={() => dismiss(toast)}
         >✕</button>
       </div>
     {/each}

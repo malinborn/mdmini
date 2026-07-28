@@ -2,17 +2,19 @@
  * Update checker — compares the running version with the latest GitHub release.
  * Checks 15s after launch and then hourly.
  *
- * Rendering is the caller's problem: it hands in a callback and decides what the
- * notification looks like. This keeps the toast store owned by the component
- * tree instead of becoming a module singleton.
+ * Only **one** window polls. Every window used to run its own timer, which meant
+ * one request per window per hour for a single answer, and a notice that had to be
+ * dismissed separately in each window. The claim and the dismissal are held in
+ * Rust (`src-tauri/src/updater.rs`); a find is reported there and broadcast to
+ * every window from one place.
  */
+
+import { invoke } from '@tauri-apps/api/core';
 
 const GITHUB_REPO = 'malinborn/mdmini';
 const CHECK_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
 const FIRST_CHECK_DELAY = 15_000;
-
-export type UpdateHandler = (latest: string, current: string) => void;
 
 async function getCurrentVersion(): Promise<string> {
   const { getVersion } = await import('@tauri-apps/api/app');
@@ -28,7 +30,7 @@ export function isNewer(latest: string, current: string): boolean {
   return lc > cc;
 }
 
-export async function checkForUpdates(onUpdate: UpdateHandler): Promise<void> {
+export async function checkForUpdates(): Promise<void> {
   try {
     const current = await getCurrentVersion();
 
@@ -42,16 +44,24 @@ export async function checkForUpdates(onUpdate: UpdateHandler): Promise<void> {
 
     if (!latest || !isNewer(latest, current)) return;
 
-    onUpdate(latest, current);
+    // Rust decides whether this is worth showing — it remembers dismissals and
+    // suppresses the repeat report every subsequent hour.
+    await invoke('report_update', { latest, current });
   } catch {
     // Network error, repo not found — silently ignore
   }
 }
 
-/** Start periodic update checks. Returns a stop function. */
-export function startUpdateChecker(onUpdate: UpdateHandler): () => void {
-  const initialTimer = setTimeout(() => checkForUpdates(onUpdate), FIRST_CHECK_DELAY);
-  const intervalTimer = setInterval(() => checkForUpdates(onUpdate), CHECK_INTERVAL);
+/**
+ * Start periodic checks, but only in the window that wins the claim. Returns a
+ * stop function; it is a no-op in windows that did not win.
+ */
+export async function startUpdateChecker(): Promise<() => void> {
+  const isChecker = await invoke<boolean>('claim_update_checker').catch(() => false);
+  if (!isChecker) return () => {};
+
+  const initialTimer = setTimeout(() => void checkForUpdates(), FIRST_CHECK_DELAY);
+  const intervalTimer = setInterval(() => void checkForUpdates(), CHECK_INTERVAL);
 
   return () => {
     clearTimeout(initialTimer);

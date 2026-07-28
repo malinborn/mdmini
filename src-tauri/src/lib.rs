@@ -3,12 +3,14 @@ mod menu;
 mod paths;
 mod recovery;
 mod session;
+mod updater;
 mod watcher;
 mod window;
 
 use tauri::{Emitter, Manager};
 use tauri_plugin_cli::CliExt;
 use session::SessionState;
+use updater::UpdateState;
 use window::{FileWatchers, OpenFiles, PendingFiles, PendingOpen};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -45,6 +47,7 @@ pub fn run() {
         .manage(PendingFiles::new())
         .manage(FileWatchers::new())
         .manage(SessionState::new())
+        .manage(UpdateState::new())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -57,6 +60,10 @@ pub fn run() {
             session::update_session_document,
             session::pending_session_count,
             session::restore_session,
+            updater::claim_update_checker,
+            updater::report_update,
+            updater::dismiss_update,
+            updater::pending_update,
             watcher::start_watching,
         ])
         .setup(|app| {
@@ -158,6 +165,8 @@ pub fn run() {
                     let label = window.label();
                     // No-op while quitting, so an exit keeps every window.
                     app.state::<SessionState>().remove(label);
+                    // Hand the update poll to a surviving window.
+                    app.state::<UpdateState>().release(label);
                     window::untrack_window(app, label);
                 }
                 tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {

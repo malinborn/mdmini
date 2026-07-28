@@ -42,3 +42,22 @@ export function onSessionRestored(handler: (count: number) => void): Promise<() 
     handler(event.payload);
   });
 }
+
+/** A newer release was found. Emitted to every window by the polling one. */
+export function onUpdateAvailable(
+  handler: (info: { latest: string; current: string }) => void
+): Promise<() => void> {
+  return listen<{ latest: string; current: string }>('update-available', (event) => {
+    handler(event.payload);
+  });
+}
+
+/**
+ * The update notice was dismissed. Broadcast so closing it in one window closes
+ * it in all of them, rather than once per window.
+ */
+export function onUpdateDismissed(handler: () => void): Promise<() => void> {
+  return listen('update-dismissed', () => {
+    handler();
+  });
+}
