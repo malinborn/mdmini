@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.5.0",
+    "softwareVersion": "0.5.1",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -861,6 +861,22 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.5.1</div>
+            <div class="changelog-date">2026-07-28</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Close that update notice once</h3>
+            <ul>
+              <li><strong>One notice, not one per window</strong> — dismissing the &ldquo;new version available&rdquo; toast now dismisses it everywhere instead of making you close it in every open window</li>
+              <li><strong>It stays dismissed</strong> — neither the next hourly check nor a window you open afterwards brings it back. A genuinely newer version still shows up</li>
+              <li><strong>One check per app, not per window</strong> — five windows used to mean five requests an hour for the same answer</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
