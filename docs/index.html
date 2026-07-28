@@ -35,7 +35,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://malinborn.github.io/mdmini/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.4.0",
+    "softwareVersion": "0.5.0",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -779,6 +779,12 @@
         </div>
 
         <div class="feature-card">
+          <div class="feature-icon">⇧</div>
+          <div class="feature-title">Session Restore</div>
+          <div class="feature-desc">Reopen the windows you had last time with <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">⇧⌘T</code> — files, positions, scroll, and unsaved drafts.</div>
+        </div>
+
+        <div class="feature-card">
           <div class="feature-icon">◑</div>
           <div class="feature-title">Dark &amp; Light Themes</div>
           <div class="feature-desc">Rosé Pine dark and Rosé Pine Dawn. Switch with a single keypress.</div>
@@ -855,6 +861,25 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v0.5.0</div>
+            <div class="changelog-date">2026-07-28</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Your windows come back</h3>
+            <ul>
+              <li><strong>Reopen your last session</strong> — quitting no longer loses the windows you had open. A toast tells you how many are waiting; <code>⇧⌘T</code> brings them back, or use <code>File → Reopen Windows from Last Session</code></li>
+              <li><strong>Everything comes back with them</strong> — file, window position and size, where the caret was, and how far you had scrolled</li>
+              <li><strong>Unsaved drafts too</strong> — an Untitled window you never saved returns with its text intact, still marked dirty</li>
+              <li><strong>Survives an upgrade</strong> — this is the point: <code>brew upgrade --cask mdmini</code> closes every window, and now you can get them back</li>
+              <li><strong>Notifications stack</strong> — the update notice and the session offer sit above one another instead of overlapping, and each waits until you dismiss it</li>
+              <li><strong>Fixed: scrolling a diagram-heavy file</strong> — reaching the end of a document full of mermaid diagrams and scrolling back up threw you straight down again. Diagrams no longer briefly lay out at full natural size, which was corrupting every scroll position on the page</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
