@@ -9,7 +9,7 @@ Three workstreams, shipped in this order:
 
 1. **New app icon** — replace all icon assets with the new 1024px brand icon.
 2. **Claude Design prompt** — a self-contained brief for Anthropic's Claude Design tool that will produce the site redesign.
-3. **Migration to md-mini.com** — move the site from GitHub Pages to the owner's nginx server with a GitHub Actions deploy pipeline and full SEO handover. The **current** site ships to the new domain first; the redesigned site from Claude Design replaces the static files later through the same pipeline.
+3. **Migration to md-mini.com** — move the site from GitHub Pages to the owner's own server (Caddy) with a GitHub Actions deploy pipeline and full SEO handover. The **current** site ships to the new domain first; the redesigned site from Claude Design replaces the static files later through the same pipeline.
 
 Rationale for infra-first: domain indexing age matters for Google ranking — the sooner md-mini.com serves real content with correct canonicals, the sooner it ranks. The deploy pipeline built now is reused unchanged for the redesigned site.
 
@@ -48,13 +48,17 @@ Deliverable: `docs/superpowers/specs/2026-08-22-claude-design-site-prompt.md` �
 
 ## Workstream 3: Migration to md-mini.com
 
-### Server (nginx + TLS)
+### Server (Caddy + automatic TLS)
 
-- Static site served from `/var/www/md-mini.com` on the owner's Ubuntu server.
-- nginx vhost: HTTP→HTTPS redirect, `www.md-mini.com` → `md-mini.com` redirect, gzip, long-lived cache headers for images/fonts + `no-cache` for HTML, security headers (HSTS, X-Content-Type-Options, Referrer-Policy, frame-ancestors).
-- TLS via certbot (`--nginx`, covers apex + www).
-- Config delivered as a file in the repo (`deploy/nginx/md-mini.com.conf`) and applied to the server over SSH.
-- Owner provides: DNS A/AAAA records for `md-mini.com` and `www` pointing at the server, SSH access.
+Revised 2026-08-22 at the owner's request: nginx on the server was broken, Caddy
+was already installed, so Caddy became the web server. This also removes certbot
+— Caddy issues and renews certificates itself.
+
+- Static site served from `/var/www/md-mini.com` on the owner's Ubuntu server (147.45.146.94).
+- Caddy site config: `www.md-mini.com` → `md-mini.com` permanent redirect, gzip/zstd, long-lived cache headers for images/fonts + `no-cache` for everything else (mutually exclusive matchers so no response gets two `Cache-Control` values), security headers (HSTS, X-Content-Type-Options, Referrer-Policy, frame-ancestors) applied to error responses too, `Server` header stripped. HTTP→HTTPS redirect and TLS issuance/renewal are Caddy's own automatic behavior.
+- Config lives in the repo as `deploy/caddy/Caddyfile` and installs as a **fragment** at `/etc/caddy/Caddyfile.d/md-mini.com.caddy`, pulled in by a single `import` line — an existing main Caddyfile is backed up, never overwritten, so other sites on the box survive.
+- Provisioning is scripted: `deploy/provision.sh` (idempotent, run as root) creates the `deploy-mdmini` user, its SSH key, the web root, opens 80/443, installs the config, validates and reloads Caddy, then prints the deploy private key.
+- Owner provides: DNS A/AAAA records for `md-mini.com` and `www` (done — both resolve to 147.45.146.94), a running Caddy, and root access to run the provisioning script.
 
 ### Deploy pipeline (GitHub Actions → SSH)
 
@@ -66,7 +70,7 @@ Deliverable: `docs/superpowers/specs/2026-08-22-claude-design-site-prompt.md` �
 
 - In `docs/index.html`, `sitemap.xml`, `llms.txt`, JSON-LD: all URLs `https://malinborn.github.io/mdmini/` → `https://md-mini.com/`.
 - `robots.txt` updated with the new sitemap URL.
-- **Archive on GitHub Pages** (stays up, as requested): `docs/` is both the Pages source and the deploy source, so the same `index.html` serves on both hosts. It always carries `<link rel="canonical" href="https://md-mini.com/">`, which tells Google the new domain is the single canonical copy — no duplicate-content penalty, and ranking signals consolidate on md-mini.com. Additionally a tiny inline script redirects visitors: `if (location.hostname.endsWith('github.io')) location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.hash)` — humans land on the new domain, while the Pages URL keeps working as an archive entry point. Pages itself cannot 301 to an external domain, so canonical + JS redirect is the correct maximum.
+- **Archive on GitHub Pages** (stays up, as requested): `docs/` is both the Pages source and the deploy source, so the same `index.html` serves on both hosts. It always carries `<link rel="canonical" href="https://md-mini.com/">`, which tells Google the new domain is the single canonical copy — no duplicate-content penalty, and ranking signals consolidate on md-mini.com. Additionally a tiny inline script redirects visitors: `if (location.hostname.endsWith('.github.io')) location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.search + location.hash)` — humans land on the new domain, query and fragment preserved, while the Pages URL keeps working as an archive entry point. Pages itself cannot 301 to an external domain, so canonical + JS redirect is the correct maximum.
 - Owner action after go-live: add md-mini.com to Google Search Console (DNS TXT verification), submit sitemap. Instruction included in the final report.
 
 ### Testing / verification
@@ -80,4 +84,4 @@ Deliverable: `docs/superpowers/specs/2026-08-22-claude-design-site-prompt.md` �
 
 - The redesign itself (done externally in Claude Design; integration of its output is a follow-up task).
 - Cutting an app release with the new icon (owner-triggered `/brew-release`).
-- Server provisioning beyond the nginx vhost (server already exists).
+- Server provisioning beyond the Caddy site config and the deploy user (server already exists, Caddy already installed).

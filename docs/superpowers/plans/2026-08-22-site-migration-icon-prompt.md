@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the new app icon across all assets, produce a copy-paste-ready Claude Design brief, and move the site from GitHub Pages to md-mini.com (nginx + GH Actions deploy) with full SEO handover.
+**Goal:** Ship the new app icon across all assets, produce a copy-paste-ready Claude Design brief, and move the site from GitHub Pages to md-mini.com (Caddy + GH Actions deploy) with full SEO handover.
 
-**Architecture:** Static site stays a single `docs/index.html`; the same file serves on both GitHub Pages (archive, canonical → new domain, JS redirect) and md-mini.com (nginx). Deploy is rsync-over-SSH from GitHub Actions on push to main. Icon set regenerated from one versioned 1024px source via `tauri icon`.
+**Architecture:** Static site stays a single `docs/index.html`; the same file serves on both GitHub Pages (archive, canonical → new domain, JS redirect) and md-mini.com (Caddy). Deploy is rsync-over-SSH from GitHub Actions on push to main. Icon set regenerated from one versioned 1024px source via `tauri icon`.
 
-**Tech Stack:** Tauri CLI (icon gen), macOS `sips` (favicon resize), nginx + certbot, GitHub Actions, rsync.
+**Tech Stack:** Tauri CLI (icon gen), macOS `sips` (favicon resize), Caddy (was nginx + certbot — see the Task 4 amendment), GitHub Actions, rsync.
 
 **Spec:** `docs/superpowers/specs/2026-08-22-site-redesign-migration-design.md`
 
@@ -232,6 +232,14 @@ git commit -m "feat: point site at md-mini.com — canonical, sitemap, archive r
 ---
 
 ### Task 4: nginx config + server setup guide
+
+> **SUPERSEDED 2026-08-22 (commit `e2aa7e1`).** nginx on the target server was
+> broken and Caddy was already installed, so the owner switched web servers. The
+> nginx configs below were deleted; the live source of truth is
+> `deploy/caddy/Caddyfile`, `deploy/provision.sh`, and `deploy/README.md`. Caddy
+> handles HTTP→HTTPS and certificate issuance/renewal itself, so the bootstrap
+> vhost and every certbot step here no longer apply. Kept verbatim as the
+> execution record.
 
 **Files:**
 - Create: `deploy/nginx/md-mini.com.conf`
@@ -485,7 +493,7 @@ git push -u origin worktree-site-redesign-migration
 Owner actions (in order):
 1. Review + merge `worktree-site-redesign-migration` into main. **Merging does not go live yet** — the workflow will fail until secrets exist; that's expected and harmless (or merge after step 4).
 2. DNS: A records for `md-mini.com` and `www.md-mini.com` → server IP.
-3. Server: follow `deploy/README.md` steps 2–5 (web root, bootstrap nginx, certbot, final config).
+3. Server: run `sudo bash deploy/provision.sh` as root (see `deploy/README.md`) — deploy user, key, web root, Caddy site config.
 4. GitHub: add `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` secrets.
 5. Merge/push → workflow deploys; run the post-go-live curl checks from `deploy/README.md`.
 6. Google Search Console: add domain property, submit sitemap.
@@ -496,6 +504,6 @@ Owner actions (in order):
 
 ## Self-review notes
 
-- Spec coverage: icon (Task 1), prompt (Task 2), SEO/domain switch (Task 3), nginx+TLS (Task 4), CI deploy (Task 5), owner actions incl. Search Console (Task 6). Changelog carry-over and redesign integration are explicitly out of scope per spec.
-- No TDD tasks: this plan produces static assets, configs, and docs — verification is command-based (grep/curl/nginx -t at apply time), not unit tests.
+- Spec coverage: icon (Task 1), prompt (Task 2), SEO/domain switch (Task 3), web server + TLS (Task 4, later redone with Caddy), CI deploy (Task 5), owner actions incl. Search Console (Task 6). Changelog carry-over and redesign integration are explicitly out of scope per spec.
+- No TDD tasks: this plan produces static assets, configs, and docs — verification is command-based (grep/curl/`caddy validate` at apply time), not unit tests.
 - `sample.md` / `sample_image.png` stay deployable (not excluded) — harmless, and sample.md may be linked in future content.
