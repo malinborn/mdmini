@@ -170,7 +170,7 @@ fn main() {
 - Create: `docs/ai-interface.md` (verbs, JSON contract, socket protocol, launch-if-not-running flow, the CLAUDE.md paragraph users paste into their projects)
 - Modify: `CLAUDE.md` (Architecture file list + Commands note), `docs/cli-launcher.md` (mention the `ai` passthrough)
 
-- [ ] **Step 1: Write docs, commit** `docs: AI interface usage and protocol`
+- [x] **Step 1: Write docs, commit** `docs: AI interface usage and protocol`
 
 ## Verification (whole feature)
 

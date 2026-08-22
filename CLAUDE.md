@@ -39,6 +39,7 @@ src-tauri/src/          # Rust (Tauri backend)
   recovery.rs           # Crash recovery (temp files)
   session.rs            # Session restore (window list, geometry, caret, untitled buffers)
   watcher.rs            # File watcher (notify crate)
+  ai_socket.rs          # AI interface: command socket (mdmini show/edit) + CLI client
 
 src/                    # Frontend (Svelte + TypeScript)
   App.svelte            # Root component, event wiring
@@ -63,6 +64,8 @@ src/                    # Frontend (Svelte + TypeScript)
       mermaid-viewport.ts # Pan/zoom geometry (pure) + frame DOM controller
       mermaid-state.ts  # Per-diagram scale/pan/height (StateField, in-memory)
       utils.ts          # cursorInRange() helper
+    ai-highlight.ts     # AI-edit/pulse highlight StateField (mdmini show/edit), Esc to clear
+  lib/ai-commands.ts    # Pure helpers for AI commands (show target resolution, changed-line ranges)
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
   lib/toasts.svelte.ts  # Toast stack store (update + session notifications)
   lib/ToastStack.svelte # Bottom-right toast stack
@@ -78,6 +81,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - `docs/superpowers/specs/2026-03-19-md-mini-design.md` — Full design specification
 - `docs/superpowers/plans/2026-03-20-md-mini-implementation.md` — Implementation plan (16 tasks)
 - `docs/cli-launcher.md` — How the CLI launcher works (two-path approach: `open` + single-instance IPC)
+- `docs/ai-interface.md` — `mdmini show`/`edit`: CLI syntax, JSON contract, command socket protocol, CLAUDE.md paragraph to paste into other projects
 - `src-tauri/tauri.conf.json` — Tauri config (window defaults, CLI args, plugins)
 - `src-tauri/capabilities/default.json` — Tauri permissions
 - `src/lib/editor/setup.ts` — All CM6 extensions assembled here
