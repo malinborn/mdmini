@@ -1258,6 +1258,13 @@
   line-height: 1.5;
 }
 
+/* Multi-choice mode hint next to the question — a colorblind/monochrome-safe
+ * fallback for the checkbox marker below. */
+.cm-ai-ask-mode {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
 .cm-ai-ask-options {
   display: flex;
   flex-wrap: wrap;
@@ -1278,6 +1285,15 @@
 
 .cm-ai-ask-option:hover {
   background: var(--ai-ask-chip-hover-bg);
+}
+
+/* Multi-choice: an unchecked chip gets a leading empty-checkbox marker, so
+ * the toggle reads as checkbox semantics before the first click — a
+ * multi-choice ask would otherwise look identical to a single-choice one.
+ * Same specificity as the checked rule below (2 classes + a pseudo-element);
+ * source order lets that later rule's `✓ ` win once a chip is checked. */
+.cm-ai-ask-multi .cm-ai-ask-option::before {
+  content: '☐ ';
 }
 
 /* Multi-choice: a toggled-on chip. Two-class selector to outrank

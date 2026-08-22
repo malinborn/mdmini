@@ -85,10 +85,21 @@ export class AskWidget extends WidgetType {
     const questionEl = document.createElement('div');
     questionEl.className = 'cm-ai-ask-question';
     questionEl.textContent = question;
+    if (multi) {
+      // A monochrome/colorblind-safe cue that survives even if the checkbox
+      // marker below is missed — spelled out next to the question itself.
+      const modeHint = document.createElement('span');
+      modeHint.className = 'cm-ai-ask-mode';
+      modeHint.textContent = ' (select any, then OK)';
+      questionEl.appendChild(modeHint);
+    }
     card.appendChild(questionEl);
 
     const optionsRow = document.createElement('div');
-    optionsRow.className = 'cm-ai-ask-options';
+    // `cm-ai-ask-multi` gives unchecked chips a leading empty-checkbox
+    // marker via CSS, so a multi-choice ask doesn't look identical to a
+    // single-choice one before the first click.
+    optionsRow.className = multi ? 'cm-ai-ask-options cm-ai-ask-multi' : 'cm-ai-ask-options';
 
     // Built up front (if requested) so the multi-choice confirm handler
     // below can read its value; appended to the card last regardless, so it

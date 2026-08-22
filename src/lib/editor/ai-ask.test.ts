@@ -521,3 +521,47 @@ describe('AskWidget.toDOM free-text input', () => {
     expect(preventDefault).not.toHaveBeenCalled();
   });
 });
+
+describe('AskWidget.toDOM multi-choice visual affordance', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('marks the options container with cm-ai-ask-multi in multi mode', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: true, options: ['A', 'B'] }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-multi')).toHaveLength(1);
+  });
+
+  it('does not mark the options container in single-choice mode', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: false, options: ['A', 'B'] }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-multi')).toHaveLength(0);
+  });
+
+  it('renders the mode hint span only in multi mode', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const multiWidget = new AskWidget(makeSpec({ multi: true, options: ['A', 'B'] }));
+    const singleWidget = new AskWidget(makeSpec({ multi: false, options: ['A', 'B'] }));
+
+    const multiDom = multiWidget.toDOM() as unknown as FakeElement;
+    const singleDom = singleWidget.toDOM() as unknown as FakeElement;
+
+    const [hint] = findByClass(multiDom, 'cm-ai-ask-mode');
+    expect(hint.textContent).toContain('select any');
+    expect(hint.textContent).toContain('OK');
+    expect(findByClass(singleDom, 'cm-ai-ask-mode')).toHaveLength(0);
+  });
+
+  it('the multi-mode chips still carry the plain cm-ai-ask-option class the checkbox CSS keys off of', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: true, options: ['A', 'B', 'C'] }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-option')).toHaveLength(3);
+  });
+});
