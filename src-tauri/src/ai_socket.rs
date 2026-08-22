@@ -664,31 +664,47 @@ enum CliVerb {
     /// Local, offline: prints the full CLI reference. No file arg, no flags.
     Help,
     /// Local, offline: prints the agent-onboarding instruction block. No file
-    /// arg, no flags.
-    Agent,
+    /// arg. `mcp: true` (`--mcp`) prints the MCP-flavored behavioral snippet
+    /// instead of the CLI-syntax one.
+    Agent { mcp: bool },
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent [--mcp]";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
-/// `help` and `agent` take no file arg and no flags — checked before the
-/// file-arg parsing shared by `show`/`edit` below.
+/// `help` and `agent` take no file arg — checked before the file-arg parsing
+/// shared by `show`/`edit` below. `agent` accepts one optional flag, `--mcp`;
+/// `help` accepts none.
 fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
     let mut iter = args.iter();
     let verb = iter.next().ok_or_else(|| USAGE.to_string())?;
 
-    if verb == "help" || verb == "agent" {
+    if verb == "help" {
         if iter.next().is_some() {
-            return Err(format!("{} takes no arguments", verb));
+            return Err("help takes no arguments".to_string());
         }
         return Ok(CliArgs {
             path: String::new(),
-            verb: if verb == "help" {
-                CliVerb::Help
+            verb: CliVerb::Help,
+            socket: None,
+        });
+    }
+    if verb == "agent" {
+        let mut mcp = false;
+        for arg in iter.by_ref() {
+            if arg == "--mcp" {
+                mcp = true;
             } else {
-                CliVerb::Agent
-            },
+                return Err(format!(
+                    "agent takes no arguments (except --mcp): unknown flag: {}",
+                    arg
+                ));
+            }
+        }
+        return Ok(CliArgs {
+            path: String::new(),
+            verb: CliVerb::Agent { mcp },
             socket: None,
         });
     }
@@ -857,10 +873,10 @@ USAGE
   mdmini <file>...                          Open one or more files (or focus existing windows)
   mdmini show <file> [--line N | --find TEXT] [--socket PATH]
   mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
-  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
   mdmini mcp [--socket PATH]
   mdmini help
-  mdmini agent
+  mdmini agent [--mcp]
 
 OPENING FILES
   mdmini notes.md report.md
@@ -984,10 +1000,15 @@ HELP
       md-mini isn't installed or running.
 
 AGENT
-  mdmini agent
+  mdmini agent [--mcp]
       Prints a ready-to-paste instruction block for an AI agent's
-      instruction file (CLAUDE.md, AGENTS.md, etc.) describing the
-      show/edit interface. Exit 0. Local and offline.
+      instruction file (CLAUDE.md, AGENTS.md, etc.). Without --mcp:
+      the CLI-syntax show/edit/ask reference, for agents driving mdmini
+      as a shell command. With --mcp: a shorter behavioral snippet for
+      agents already connected via `mdmini mcp` — the tools are
+      self-describing there, so this covers usage culture instead
+      (when to ask in the document vs. chat, reading multi-choice/
+      free-text answers). Exit 0. Local and offline either way.
 
 DEV BUILDS
   Release and dev builds use different command sockets:
@@ -1014,20 +1035,55 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 
 All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
 
+/// Common instruction-file locations, shared by `mdmini agent`'s CLI-syntax
+/// snippet and its `--mcp` behavioral-snippet counterpart below.
+const INSTRUCTION_FILE_LOCATIONS: &str = "\
+\x20 CLAUDE.md                         Claude Code — project root, or ~/.claude/CLAUDE.md for all projects\n\
+\x20 AGENTS.md                         Codex CLI / generic agent standard — project root\n\
+\x20 GEMINI.md                         Gemini CLI\n\
+\x20 .cursor/rules or .cursorrules     Cursor\n\
+\x20 .github/copilot-instructions.md   GitHub Copilot";
+
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
 fn agent_text() -> String {
     format!(
         "Paste the block below into your AI agent's instruction file. Common locations:\n\n\
-        \x20 CLAUDE.md                         Claude Code — project root, or ~/.claude/CLAUDE.md for all projects\n\
-        \x20 AGENTS.md                         Codex CLI / generic agent standard — project root\n\
-        \x20 GEMINI.md                         Gemini CLI\n\
-        \x20 .cursor/rules or .cursorrules     Cursor\n\
-        \x20 .github/copilot-instructions.md   GitHub Copilot\n\n\
+        {}\n\n\
         --- copy from here ---\n\
         {}\n\n\
-        Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed.",
-        AGENT_SNIPPET
+        Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed; run `mdmini agent --mcp` for a short usage-culture snippet worth pasting alongside it.",
+        INSTRUCTION_FILE_LOCATIONS, AGENT_SNIPPET
+    )
+}
+
+/// The fenced instruction block reused verbatim by `mdmini agent --mcp` and by
+/// `docs/ai-interface.md`'s "MCP server" section. Keep both in sync by hand
+/// when this changes — same discipline as `AGENT_SNIPPET`.
+///
+/// Unlike `AGENT_SNIPPET`, this isn't CLI syntax — an MCP-connected agent
+/// already gets `show`/`edit`/`ask` as self-describing tools via `tools/list`.
+/// What it needs instead is usage culture: when to reach for `ask` over
+/// chatting, how to read multi-choice/free-text answers, and how to be
+/// considerate of the user's attention.
+const MCP_AGENT_SNIPPET: &str = r#"## md-mini via MCP — how to use it well
+
+- Before asking the user something about a document, use `show` (line or find) so they're looking at the relevant part when the question arrives — or anchor the `ask` itself there with line/find.
+- Prefer `ask` in the document over asking in chat when the question is about the document the user has open: single choice for decisions, `multi` for pick-several, `free_text` when their own words matter. An empty `answers` array means "none of these", not an error.
+- Chain questions: read each answer and build the next ask from it. Answers arrive as `answer` (string), `answers` (array), and/or `custom` (their typed text).
+- After edits, the changed span stays highlighted until the user presses Esc or you edit again — use `show: true` on the edit when they should see the change immediately.
+- Respect their attention: batch related questions into one `ask` with options rather than many small ones; timeouts/dismissals mean "not now", not failure — fall back to chat.
+- `edit` takes the COMPLETE new document, never a diff; md-mini diffs internally and preserves their scroll position and undo history."#;
+
+/// Text for `mdmini agent --mcp` — printed by `mdmini help` for `mdmini agent
+/// [--mcp]`. Local and offline.
+fn mcp_agent_text() -> String {
+    format!(
+        "Paste the block below into your AI agent's instruction file if md-mini is connected via MCP (mdmini mcp). Common locations:\n\n\
+        {}\n\n\
+        --- copy from here ---\n\
+        {}",
+        INSTRUCTION_FILE_LOCATIONS, MCP_AGENT_SNIPPET
     )
 }
 
@@ -1050,8 +1106,8 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             println!("{}", help_text());
             return 0;
         }
-        CliVerb::Agent => {
-            println!("{}", agent_text());
+        CliVerb::Agent { mcp } => {
+            println!("{}", if mcp { mcp_agent_text() } else { agent_text() });
             return 0;
         }
         _ => {}
@@ -1109,7 +1165,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             multi,
             free_text,
         },
-        CliVerb::Help | CliVerb::Agent => {
+        CliVerb::Help | CliVerb::Agent { .. } => {
             unreachable!("Help/Agent return early above, before this match")
         }
     };
@@ -1706,7 +1762,13 @@ mod tests {
     #[test]
     fn ai_cli_args_agent_parses() {
         let parsed = parse_cli_args(&args(&["agent"])).unwrap();
-        assert_eq!(parsed.verb, CliVerb::Agent);
+        assert_eq!(parsed.verb, CliVerb::Agent { mcp: false });
+    }
+
+    #[test]
+    fn ai_cli_args_agent_mcp_flag_parses() {
+        let parsed = parse_cli_args(&args(&["agent", "--mcp"])).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Agent { mcp: true });
     }
 
     #[test]
@@ -1718,6 +1780,14 @@ mod tests {
     #[test]
     fn ai_cli_args_agent_rejects_extra_args() {
         let err = parse_cli_args(&args(&["agent", "--socket", "/tmp/s.sock"])).unwrap_err();
+        assert!(err.contains("takes no arguments"));
+    }
+
+    #[test]
+    fn ai_cli_args_agent_mcp_rejects_further_extra_args() {
+        // --mcp is the only flag agent accepts; anything after it (or instead
+        // of it) is still an error, same as before --mcp existed.
+        let err = parse_cli_args(&args(&["agent", "--mcp", "extra"])).unwrap_err();
         assert!(err.contains("takes no arguments"));
     }
 
@@ -1741,6 +1811,7 @@ mod tests {
         assert!(text.contains("\"answers\""));
         assert!(text.contains("--free-text"));
         assert!(text.contains("\"custom\""));
+        assert!(text.contains("--mcp"));
     }
 
     #[test]
@@ -1749,6 +1820,24 @@ mod tests {
         assert!(text.contains("CLAUDE.md"));
         assert!(text.contains("AGENTS.md"));
         assert!(text.contains("## md-mini AI interface"));
+        assert!(text.contains("--mcp"), "should point at agent --mcp for MCP setups");
+    }
+
+    #[test]
+    fn mcp_agent_text_contains_behavioral_snippet_and_locations() {
+        let text = mcp_agent_text();
+        assert!(text.contains("CLAUDE.md"));
+        assert!(text.contains("AGENTS.md"));
+        assert!(text.contains("## md-mini via MCP"));
+        assert!(text.contains("MCP"));
+        assert!(text.contains("`show`"));
+        assert!(text.contains("`ask`"));
+        assert!(text.contains("`edit`"));
+        assert!(text.contains("multi"));
+        assert!(text.contains("free_text"));
+        // This is a behavioral snippet, not CLI syntax — it should not carry
+        // the `mdmini ask <file> --question ...` shell-command shape.
+        assert!(!text.contains("mdmini ask <file>"));
     }
 
     #[test]
