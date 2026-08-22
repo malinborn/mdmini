@@ -56,8 +56,8 @@ pub fn parse_request(line: &str) -> Result<AiRequest, String>;
 - Modify: `src-tauri/src/ai_socket.rs`
 - Modify: `src-tauri/src/lib.rs` (manage state, register commands, call `ai_socket::start` at the end of `setup`, remove socket file in both exit paths — same dual-path rule as `save_session_on_exit`)
 
-- [ ] **Step 1: Failing tests**: `pending_queue_drains_once` (push two payloads for label, `pull("editor-3")` returns both then empty); `respond_routes_to_waiting_request` (register id in `AiPending`, `respond(id, resp)` → receiver gets it; unknown id is a no-op).
-- [ ] **Step 2: Implement state + dispatch:**
+- [x] **Step 1: Failing tests**: `pending_queue_drains_once` (push two payloads for label, `pull("editor-3")` returns both then empty); `respond_routes_to_waiting_request` (register id in `AiPending`, `respond(id, resp)` → receiver gets it; unknown id is a no-op).
+- [x] **Step 2: Implement state + dispatch:**
 
 ```rust
 pub struct AiPending { map: Mutex<HashMap<u64, mpsc::Sender<AiResponse>>>, next: AtomicU64 }
@@ -72,8 +72,8 @@ pub struct AiCommandPayload { pub id: u64, pub cmd: String /* "show"|"edit" */, 
 
   `dispatch(app, req, tx)`: id = `AiPending::register(tx)`; build payload; look up label in `OpenFiles`; if the window exists → `win.emit("ai-command", &payload)`; else → push payload into `AiQueue` under a label reserved by opening the window: **window creation must run on the main thread** — `app.run_on_main_thread(move || window::open_file_window(&handle, Some(path)))`. To learn the new label, change nothing in `open_file_window`; after the closure runs, re-read `OpenFiles` for the path (post a second `run_on_main_thread` or poll the map from the socket thread with a short sleep loop, ≤2s) and queue under that label.
   Tauri commands: `#[tauri::command] ai_respond(app, id: u64, response: AiResponse)` → `AiPending::respond`; `#[tauri::command] ai_pull_pending(window: tauri::WebviewWindow) -> Vec<AiCommandPayload>` → drain `AiQueue` for `window.label()`.
-- [ ] **Step 3: Run** `cargo test --manifest-path src-tauri/Cargo.toml` + clippy — PASS/clean.
-- [ ] **Step 4: Commit** `feat(ai): dispatch AI commands to owning windows`
+- [x] **Step 3: Run** `cargo test --manifest-path src-tauri/Cargo.toml` + clippy — PASS/clean.
+- [x] **Step 4: Commit** `feat(ai): dispatch AI commands to owning windows`
 
 ### Task 3: Frontend — AI highlight CM6 extension
 

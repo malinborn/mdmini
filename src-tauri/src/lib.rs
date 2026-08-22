@@ -49,6 +49,8 @@ pub fn run() {
         .manage(FileWatchers::new())
         .manage(SessionState::new())
         .manage(UpdateState::new())
+        .manage(ai_socket::AiPending::new())
+        .manage(ai_socket::AiQueue::new())
         .invoke_handler(tauri::generate_handler![
             commands::read_file,
             commands::write_file,
@@ -66,6 +68,8 @@ pub fn run() {
             updater::dismiss_update,
             updater::pending_update,
             watcher::start_watching,
+            ai_socket::ai_respond,
+            ai_socket::ai_pull_pending,
         ])
         .setup(|app| {
             // FIRST, before anything touches disk: decide which data directory this
@@ -153,6 +157,11 @@ pub fn run() {
                     session::prune_untitled_files(&state.referenced_untitled());
                 }
             });
+
+            // Command socket for the `mdmini show`/`edit` CLI verbs. Started last —
+            // it can dispatch to windows created earlier in setup, but nothing
+            // earlier in setup depends on it.
+            ai_socket::start(app.handle());
 
             Ok(())
         })
@@ -265,6 +274,10 @@ fn save_session_on_exit(app: &tauri::AppHandle) {
     if state.is_quitting() {
         return;
     }
+    // Both quit paths call this, and either one is the last thing that runs —
+    // clean up the command socket file here rather than duplicating it at each
+    // `RunEvent` match arm.
+    ai_socket::remove_socket(app);
     let snapshot = state.snapshot(session::now_secs());
     state.mark_quitting();
     // A quit records the session, it never erases it. An empty snapshot here
