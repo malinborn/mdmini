@@ -1264,7 +1264,11 @@
   padding: 10px 32px 10px 14px;
   border: 1px solid var(--ai-ask-border);
   border-radius: 8px;
-  background: var(--ai-ask-bg);
+  /* Opaque stack: the ask tint over the editor base. --ai-ask-bg alone is a
+   * 10%-alpha wash — the selection layer (z:-2, behind content) would show
+   * straight through it whenever a drag spans the widget. */
+  background-color: var(--bg-base);
+  background-image: linear-gradient(var(--ai-ask-bg), var(--ai-ask-bg));
   font-family: var(--font-code);
   font-size: 0.85em;
 }
