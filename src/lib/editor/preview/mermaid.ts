@@ -34,7 +34,7 @@ let mermaidModule: MermaidAPI | null = null;
 let mermaidLoading: Promise<MermaidAPI> | null = null;
 
 function currentTheme(): 'default' | 'dark' {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default';
+  return document.documentElement.dataset.theme?.endsWith('dark') ? 'dark' : 'default';
 }
 
 async function loadMermaid(): Promise<MermaidAPI> {

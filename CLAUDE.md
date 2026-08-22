@@ -70,7 +70,7 @@ src/                    # Frontend (Svelte + TypeScript)
   lib/toasts.svelte.ts  # Toast stack store (update + session notifications)
   lib/ToastStack.svelte # Bottom-right toast stack
   lib/session-position.ts # Clamps for a restored caret and scroll line
-  lib/theme/            # CSS variables + CM6 theme
+  lib/theme/            # CSS variables (light/dark + aurora-light/aurora-dark) + CM6 theme
   lib/tauri/            # Tauri IPC wrappers + event listeners
   styles/               # Global CSS, editor decoration styles
   assets/fonts/         # Bundled woff2 (Inter, Merriweather, JetBrains Mono)

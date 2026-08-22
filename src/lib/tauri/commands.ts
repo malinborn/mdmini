@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
+import type { ThemeSetting } from '../theme-resolve';
 
 export async function readFile(path: string): Promise<string> {
   return invoke<string>('read_file', { path });
@@ -11,6 +12,11 @@ export async function writeFile(path: string, content: string): Promise<void> {
 
 export async function fileExists(path: string): Promise<boolean> {
   return invoke<boolean>('file_exists', { path });
+}
+
+/** Sets the Theme menu checkmarks; harmless no-op outside Tauri (browser dev). */
+export function syncThemeMenu(preference: ThemeSetting): void {
+  invoke('sync_theme_menu', { preference }).catch(() => {});
 }
 
 const FILE_FILTERS = [
