@@ -1,6 +1,6 @@
 # AI Interface — `mdmini show` / `mdmini edit`
 
-Lets an AI agent (Claude Code and similar) drive a running md-mini window directly: point at a location ("look here") or push new content into the live buffer, instead of writing the file to disk and hoping the watcher/autosave/reload path catches up. No daemon required either way — the interface is the existing `mdmini` CLI plus a small command socket served by the already-running app, reachable either as plain CLI verbs or, for agents that speak it, as an MCP server (`mdmini mcp`) wrapping the same socket protocol — see "MCP server" below.
+Lets an AI agent (Claude Code and similar) drive a running md-mini window directly: point at a location ("look here"), push new content into the live buffer, or ask a blocking question with option buttons — instead of writing the file to disk and hoping the watcher/autosave/reload path catches up. No daemon required either way — the interface is the existing `mdmini` CLI plus a small command socket served by the already-running app, reachable either as plain CLI verbs or, for agents that speak it, as an MCP server (`mdmini mcp`) wrapping the same socket protocol — see "MCP server" below.
 
 ## CLI verbs
 
@@ -8,8 +8,9 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 |---------|----------|
 | `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window) and scroll the target into view with a ~1.6s pulse highlight. `--line` is 1-based, clamped to the document. `--find` locates the first substring match (case-sensitive). Neither flag → just open/focus, no scroll. `--line` and `--find` are mutually exclusive. |
 | `cat new.md \| mdmini edit <file> [--show] [--allow-empty]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. Empty stdin is refused by default (`--allow-empty` to intentionally clear the buffer) — see below. |
-| `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit` as MCP tools instead of CLI verbs — see "MCP server" below. |
-| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
+| `mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--at-line N \| --at-find TEXT] [--timeout SECS]` | Post `TEXT` as a question with 2-6 option buttons (one per `--option`, repeatable) inside the file's document, **blocking until the user clicks one**, and return the chosen option's text as `answer`. `--at-line`/`--at-find` (mutually exclusive) place the question near a location, same semantics as `show`'s `--line`/`--find`. `--timeout` bounds the wait, default 300s, clamped to 10-3600s. The file must already be open, or exist on disk — unlike `edit`, `ask` cannot "start a new file". |
+| `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit`/`ask` as MCP tools instead of CLI verbs — see "MCP server" below. |
+| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
 | `mdmini agent` | Print a ready-to-paste instruction block for an AI agent's instruction file (CLAUDE.md, AGENTS.md, etc.) — see below. Local and offline. |
 
 Examples:
@@ -18,9 +19,10 @@ Examples:
 mdmini show notes.md --line 42
 mdmini show notes.md --find "## Deploy"
 cat new.md | mdmini edit notes.md --show
+mdmini ask notes.md --question "Ship it?" --option Yes --option No
 ```
 
-Both verbs accept `--socket <path>` to target a non-default command socket (dev builds — see below).
+All three verbs accept `--socket <path>` to target a non-default command socket (dev builds — see below).
 
 Always send the **full** new document on stdin for `edit`, not a diff or patch — md-mini computes the diff itself against what's currently in the buffer.
 
@@ -39,7 +41,10 @@ One line of JSON on stdout, always. No JSON on stderr.
 {"ok": true, "changed_lines": [[12, 15]]}
 {"ok": true, "changed_lines": []}
 
-// error (either verb)
+// ask, success — the text of the option the user clicked
+{"ok": true, "answer": "Yes"}
+
+// error (any verb)
 {"ok": false, "error": "target not found"}
 ```
 
@@ -50,8 +55,8 @@ One line of JSON on stdout, always. No JSON on stderr.
 | Code | Meaning |
 |------|---------|
 | `0` | Request reached md-mini and succeeded (`"ok":true`). |
-| `1` | Request reached md-mini but it rejected it (`"ok":false"`), or the CLI's own 10s read timed out waiting for a reply after the socket accepted the request (`{"ok":false,"error":"timeout waiting for response"}`). |
-| `2` | Usage error (bad flags, missing file arg, unknown verb), `edit` refused empty stdin without `--allow-empty`, or md-mini isn't running / didn't start in time (`{"ok":false,"error":"md-mini is not running"}` or `"md-mini did not start in time"`). |
+| `1` | Request reached md-mini but it rejected it (`"ok":false"`), or the CLI's own read timed out waiting for a reply after the socket accepted the request (`{"ok":false,"error":"timeout waiting for response"}`) — 10s for `show`/`edit`, the (clamped) `ask` timeout plus 10s for `ask`. |
+| `2` | Usage error (bad flags, missing file arg, unknown verb), `edit` refused empty stdin without `--allow-empty`, `ask` given no `--question` or an `--option` count outside 2-6, or md-mini isn't running / didn't start in time (`{"ok":false,"error":"md-mini is not running"}` or `"md-mini did not start in time"`). |
 
 ## Socket protocol
 
@@ -63,7 +68,10 @@ Request shapes (`"v":1` is a protocol version, reserved for a future MCP wrapper
 {"v": 1, "cmd": "show", "path": "/abs/file.md", "line": 42, "find": null}
 {"v": 1, "cmd": "show", "path": "/abs/file.md", "line": null, "find": "## Deploy"}
 {"v": 1, "cmd": "edit", "path": "/abs/file.md", "content": "<full new document>", "show": false}
+{"v": 1, "cmd": "ask", "path": "/abs/file.md", "question": "Ship it?", "options": ["Yes", "No"], "line": null, "find": null, "timeout_secs": 300}
 ```
+
+`ask`'s `timeout_secs` defaults to `300` and is clamped server-side to `10..=3600`; `question` must be non-empty and `options` must have 2 to 6 non-empty entries, checked before any window is touched.
 
 `path` must be absolute — the CLI resolves relative paths against the current directory (and canonicalizes them) before sending.
 
@@ -76,20 +84,21 @@ Socket path, derived from the product name (same dev/release isolation rule as t
 
 Created with `0600` permissions on startup (`ai_socket::start`, spawned at the end of Rust `setup`, on its own background thread). A stale socket file left behind by a prior run that didn't exit cleanly (`kill -9`) is unlinked and rebound automatically — no manual cleanup needed, unlike the single-instance socket. Removed on both clean-exit paths (`RunEvent::ExitRequested` and `RunEvent::Exit` — see `remove_socket` in `ai_socket.rs`).
 
-Server-side, a request that reaches a live window but gets no frontend reply within **8s** returns `{"ok":false,"error":"timeout waiting for editor"}` (window closed mid-request, or frozen). The CLI itself gives up after **10s** with `"timeout waiting for response"` if it never gets a line back at all.
+Server-side, a request that reaches a live window but gets no frontend reply within its wait — **8s** for `show`/`edit`, the (clamped) `timeout_secs` for `ask` — returns `{"ok":false,"error":"timeout waiting for editor"}` (window closed mid-request, or frozen, or for `ask`, nobody clicked in time). The CLI itself gives up after **10s** (**timeout + 10s** for `ask`) with `"timeout waiting for response"` if it never gets a line back at all.
 
 ### Routing to a window
 
 Requests are dispatched to the window that owns `path`, looked up in the existing `OpenFiles` registry:
 
-- `show` on a path that doesn't exist on disk fails immediately with `{"ok":false,"error":"file does not exist"}`, without going through the open-window path at all. `edit` is unaffected — a nonexistent path there still opens a fresh window and applies the edit as a new file.
+- `show` on a path that doesn't exist on disk fails immediately with `{"ok":false,"error":"file does not exist"}`, without going through the open-window path at all. `edit` is unaffected — a nonexistent path there still opens a fresh window and applies the edit as a new file. `ask` takes the middle ground: it fails the same way only when the file is **both** not already open **and** missing from disk — an already-open file with no matching path on disk (e.g. deleted after opening) still routes normally.
 - File already open → the payload is emitted as an `ai-command` event to that window; the frontend answers by invoking `ai_respond` with the same request id, which the socket listener correlates back to the waiting connection.
-- File not open → md-mini opens a new window for it on the main thread (`window::open_file_window`), polls `OpenFiles` for up to 2s for the new window's label, and queues the command for it. The new window's frontend drains its queue once, on mount, via `ai_pull_pending`. If the window never registers within 2s, the request fails with `"failed to open window for file"`. If the window is closed before it ever mounts to pull that queue, the queued command is failed with `"window closed before the command was delivered"` instead of hanging until the 8s listener timeout.
+- File not open → md-mini opens a new window for it on the main thread (`window::open_file_window`), polls `OpenFiles` for up to 2s for the new window's label, and queues the command for it. The new window's frontend drains its queue once, on mount, via `ai_pull_pending`. If the window never registers within 2s, the request fails with `"failed to open window for file"`. If the window is closed before it ever mounts to pull that queue, the queued command is failed with `"window closed before the command was delivered"` instead of hanging until the listener timeout.
+- Once a request has been **delivered** to a window (emitted or pulled from the queue on mount) but the window closes before the frontend ever answers it — most relevant to `ask`, which can sit waiting on a click for minutes — `window::untrack_window` calls `AiPending::cancel_for_window`, which fails every entry registered under that window's label with `{"ok":false,"error":"window closed"}` instead of leaving the caller to wait out the full timeout.
 - Each socket connection is served on its own thread and blocks on its own reply channel, but that is not the same as one-command-per-window serialization — two connections can dispatch to the same window concurrently. What actually prevents two concurrent `edit`s from clobbering each other is the frontend: `handleAiCommand`'s edit branch reads the document and calls `dispatch` synchronously, with no `await` in between.
 
 ## Launch-if-not-running flow
 
-`scripts/mdmini` handles `show`/`edit` before falling into the normal file-open path:
+`scripts/mdmini` handles `show`/`edit`/`ask` before falling into the normal file-open path:
 
 1. If the command socket already exists (`-S "$CMD_SOCK"`) → skip straight to step 3.
 2. Otherwise `open /Applications/md-mini.app` (no pending-files handoff needed — the request itself carries the file) and poll for the socket every 0.1s, up to 5s. Times out with `{"ok":false,"error":"md-mini did not start in time"}`, exit 2.
@@ -108,7 +117,7 @@ The `ai` subcommand is intercepted in `main.rs` before Tauri initializes anythin
 
 ## MCP server
 
-`mdmini mcp` runs a stdio [MCP](https://modelcontextprotocol.io) server instead of the CLI verbs above: same `show`/`edit` operations, same command socket underneath, wrapped as two MCP tools over JSON-RPC 2.0 on stdin/stdout. Nothing new to run — it's the existing socket protocol with a different transport in front, implemented in `mcp_server.rs` (`ai_socket.rs` stays focused on the socket protocol itself).
+`mdmini mcp` runs a stdio [MCP](https://modelcontextprotocol.io) server instead of the CLI verbs above: same `show`/`edit`/`ask` operations, same command socket underneath, wrapped as MCP tools over JSON-RPC 2.0 on stdin/stdout. Nothing new to run — it's the existing socket protocol with a different transport in front, implemented in `mcp_server.rs` (`ai_socket.rs` stays focused on the socket protocol itself).
 
 Register it once and CLAUDE.md/AGENTS.md instruction snippets become unnecessary — the tools are discoverable natively:
 
@@ -136,7 +145,7 @@ Generic `mcpServers` config (Claude Desktop, other MCP clients):
 | `initialize` | Echoes the client's `protocolVersion` back (defaults to `2025-06-18` if absent). Result includes `capabilities: {"tools": {}}` and `serverInfo: {"name": "mdmini", "version": "<crate version>"}`. |
 | `notifications/initialized` | Notification, no response. |
 | `ping` | `{}`. |
-| `tools/list` | Returns the `show` and `edit` tools, each with a JSON Schema `inputSchema`. |
+| `tools/list` | Returns the `show`, `edit`, and `ask` tools, each with a JSON Schema `inputSchema`. |
 | `tools/call` | Dispatches to the command socket — see below. |
 
 Any other method that carries an `id` gets a JSON-RPC `-32601` ("method not found") error. A message with no `id` at all is treated as a notification and never gets a response, regardless of method. Malformed JSON gets a `-32700` ("parse error") response with `id: null`.
@@ -147,11 +156,13 @@ Same shapes as the CLI verbs, as MCP tools:
 
 - **`show`** — `path` (string, required, absolute), `line` (integer, 1-based) or `find` (string, first-occurrence text search); `line` and `find` are mutually exclusive.
 - **`edit`** — `path` (string, required), `content` (string, required, the **complete** new document), `show` (boolean, scroll to the change on completion). Empty `content` is refused with the same message the CLI gives for empty stdin — there's no `--allow-empty` equivalent over MCP, since an agent should never *mean* to send an empty document.
+- **`ask`** — `path` (string, required), `question` (string, required), `options` (array of string, required, 2-6 entries), `line` (integer, 1-based) or `find` (string), mutually exclusive, `timeout_secs` (integer, default 300, clamped to 10-3600). Blocks the `tools/call` response until the user clicks a button; returns the chosen option's text as `answer` in the wrapped `AiResponse`. Missing `path`/`question`/`options` is a JSON-RPC `-32602` ("invalid params") error, same as `show`'s missing `path` — the question/option-count and empty-string validation happens socket-side and comes back as a normal `isError: true` tool result instead. **Note:** a long `timeout_secs` may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.
 
 `tools/call` builds the matching command-socket request (`{"v":1,"cmd":...}`), sends it, and wraps the raw `AiResponse` JSON line as the tool result text:
 
 ```jsonc
 {"content": [{"type": "text", "text": "{\"ok\":true,\"changed_lines\":[[12,15]]}"}], "isError": false}
+{"content": [{"type": "text", "text": "{\"ok\":true,\"answer\":\"Yes\"}"}], "isError": false}
 ```
 
 `isError` is `true` whenever the underlying response has `"ok":false` (routing failure, refusal, target not found, etc.) — this is a *tool-level* failure, reported inside a normal JSON-RPC success result, not a JSON-RPC protocol error. Only a malformed call itself (unknown tool name, missing required argument) becomes a JSON-RPC `-32602` ("invalid params") error.
@@ -162,6 +173,8 @@ Same default socket as the CLI (`ai_socket::socket_path("md-mini")`, i.e. `/tmp/
 
 - **No `--socket` override** (the normal case): launch `open /Applications/md-mini.app` and poll for the socket up to 5s, same as `scripts/mdmini`'s launch-if-not-running step, then retry the connection once.
 - **`--socket` given explicitly** (dev/test socket): never attempt a launch — a dev socket being down just means the dev build isn't running, and launching the *release* app would be wrong. Fails straight to `{"ok":false,"error":"md-mini is not running"}` as an `isError: true` text result.
+
+The read timeout on the socket connection is `10s` for `show`/`edit`, matching the CLI, but the (clamped) `timeout_secs` plus `10s` for `ask` — otherwise the MCP transport would time out its own read before a slow-to-answer `ask` ever gets a chance to.
 
 ## Using this from an AI agent's CLAUDE.md
 
@@ -175,11 +188,12 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
 - `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
+- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text.
 
-Both verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk. Always send the full document on stdin for `edit`, never a diff.
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, or `"answer":"..."` for `ask`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff.
 ```
 
-Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit tools directly — then no instruction-file snippet is needed.
+Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed.
 
 ## Troubleshooting
 
@@ -189,7 +203,9 @@ Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini
 | `{"ok":false,"error":"md-mini did not start in time"}`, exit 2 | App didn't finish launching within the wrapper's 5s poll. | Launch it manually once (`open /Applications/md-mini.app`) and retry. |
 | `{"ok":false,"error":"window does not own this file"}` | The request's `path` doesn't exactly match the path the target window has open (symlink, relative-vs-canonical, or the file is genuinely open in a different window / not open at all and routing raced). | Pass the same absolute, canonicalized path used to open the file; avoid symlinks. |
 | `{"ok":false,"error":"target not found"}` (`show`) | `--find` text isn't a substring of the current buffer (exact, case-sensitive match). | Check the text against the file's current content — it may have changed since you last read it. |
-| `{"ok":false,"error":"file does not exist"}` (`show`) | Target path doesn't exist on disk. | `show` requires the file to already exist; check the path. `edit` has no such restriction — it opens a window and applies the edit as a new file. |
+| `{"ok":false,"error":"file does not exist"}` (`show`, `ask`) | Target path doesn't exist on disk (`show`), or doesn't exist on disk **and** isn't already open (`ask`). | `show` requires the file to already exist; `ask` requires it to already exist or already be open. `edit` has no such restriction — it opens a window and applies the edit as a new file. |
+| `{"ok":false,"error":"question must not be empty"}` / `"options must have between 2 and 6 entries"` / `"options must not be empty"` (`ask`), exit `1` | The request's `question` was blank, or `options` had fewer than 2 / more than 6 entries, or contained a blank entry. CLI catches the option-count case earlier as a usage error (exit `2`); the rest reach the socket and come back this way. | Fix the `--question`/`--option` values (CLI) or the MCP tool call's `question`/`options` arguments. |
+| `{"ok":false,"error":"window closed"}` (`ask`) | The window the question was posted to closed before the user clicked an option. | Ask again once the file is open, or check why the window closed. |
 | `{"ok":false,"error":"refusing to apply empty content (use --allow-empty)"}`, exit `2` (`edit`) | stdin was empty and `--allow-empty` wasn't passed. | Pass `--allow-empty` if clearing the file is actually intended; otherwise check what produced the empty stdin. |
 | `{"ok":false,"error":"timeout waiting for editor"}` | Socket accepted the request, but the frontend didn't answer within 8s (window frozen or closed mid-request). | Check the app isn't hung; retry. |
 | `{"ok":false,"error":"timeout waiting for response"}`, exit 1 | CLI's own 10s wait for any reply line expired. | App likely crashed after accepting the connection; check for a crash and relaunch. |

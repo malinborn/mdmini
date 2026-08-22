@@ -134,8 +134,8 @@ fn handle_message(line: &str, config: &McpConfig) -> Option<String> {
     }
 }
 
-/// The two tools exposed over MCP — `show` and `edit`, one-to-one with the
-/// command socket's verbs.
+/// The tools exposed over MCP — `show`, `edit`, and `ask`, one-to-one with
+/// the command socket's verbs.
 fn tools_list() -> Value {
     json!([
         {
@@ -181,6 +181,44 @@ fn tools_list() -> Value {
                 },
                 "required": ["path", "content"]
             }
+        },
+        {
+            "name": "ask",
+            "description": "Ask the user a question with buttons rendered inside their open md-mini document; blocks until they click and returns the chosen option. Use for quick decisions while working on that document. Note: long timeout_secs values may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the file. Must already be open in md-mini, or exist on disk."
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "The question text."
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 2,
+                        "maxItems": 6,
+                        "description": "Button labels, 2 to 6 of them."
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "1-based line number to show the question near. Mutually exclusive with `find`."
+                    },
+                    "find": {
+                        "type": "string",
+                        "description": "First-occurrence text search to show the question near. Mutually exclusive with `line`."
+                    },
+                    "timeout_secs": {
+                        "type": "integer",
+                        "default": 300,
+                        "description": "How long to wait for the user to click, in seconds. Clamped to 10-3600."
+                    }
+                },
+                "required": ["path", "question", "options"]
+            }
         }
     ])
 }
@@ -202,6 +240,10 @@ fn handle_tools_call(id: Value, params: &Value, config: &McpConfig) -> String {
         "edit" => match build_edit_request(&arguments) {
             Ok(req) => req,
             Err(refusal) => return tool_result_response(id, &refusal, true),
+        },
+        "ask" => match build_ask_request(&arguments) {
+            Ok(req) => req,
+            Err(msg) => return error_response(id, -32602, msg),
         },
         other => return error_response(id, -32602, format!("unknown tool: {}", other)),
     };
@@ -265,6 +307,45 @@ fn build_edit_request(arguments: &Value) -> Result<AiRequest, AiResponse> {
     })
 }
 
+fn build_ask_request(arguments: &Value) -> Result<AiRequest, String> {
+    let path = arguments
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing required argument: path".to_string())?;
+    let question = arguments
+        .get("question")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing required argument: question".to_string())?;
+    let options: Vec<String> = arguments
+        .get("options")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing required argument: options".to_string())?
+        .iter()
+        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+        .collect();
+    let line = arguments
+        .get("line")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+    let find = arguments
+        .get("find")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string());
+    let timeout_secs = arguments
+        .get("timeout_secs")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(ai_socket::default_ask_timeout);
+    Ok(AiRequest::Ask {
+        v: 1,
+        path: crate::resolve_path(path, None),
+        question: question.to_string(),
+        options,
+        line,
+        find,
+        timeout_secs,
+    })
+}
+
 /// Send one request over the command socket and read back one response line,
 /// attempting an `open`-launch-and-wait first if the socket is down and
 /// launching is allowed (see `McpConfig::allow_launch`).
@@ -279,7 +360,16 @@ fn send_request(request: &AiRequest, config: &McpConfig) -> Result<AiResponse, S
         Err(_) => return Err("md-mini is not running".to_string()),
     };
 
-    let _ = stream.set_read_timeout(Some(RESPONSE_TIMEOUT));
+    // `ask` blocks server-side on a human clicking a button, so the read
+    // timeout must cover that wait (plus margin) instead of the fixed
+    // `RESPONSE_TIMEOUT` used for show/edit's near-immediate replies.
+    let read_timeout = match request {
+        AiRequest::Ask { timeout_secs, .. } => {
+            Duration::from_secs(ai_socket::clamp_ask_timeout(*timeout_secs)) + RESPONSE_TIMEOUT
+        }
+        _ => RESPONSE_TIMEOUT,
+    };
+    let _ = stream.set_read_timeout(Some(read_timeout));
 
     let mut writer = stream.try_clone().map_err(|e| e.to_string())?;
     let mut request_line =
@@ -423,9 +513,11 @@ mod tests {
         let response = handle_message(request, &test_config()).unwrap();
         let v: Value = serde_json::from_str(&response).unwrap();
         let tools = v["result"]["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 3);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"show"));
         assert!(names.contains(&"edit"));
+        assert!(names.contains(&"ask"));
         for tool in tools {
             assert!(!tool["description"].as_str().unwrap().is_empty());
             assert_eq!(tool["inputSchema"]["type"], json!("object"));
@@ -555,6 +647,44 @@ mod tests {
         assert_eq!(req["content"], json!("hello"));
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tools_call_ask_round_trips_request_shape_and_answer() {
+        let canned = AiResponse {
+            ok: true,
+            error: None,
+            changed_lines: None,
+            answer: Some("Yes".to_string()),
+        };
+        let (path, rx) = spawn_fake_socket(canned);
+        let config = McpConfig {
+            socket_path: path.clone(),
+            allow_launch: false,
+        };
+        let request = r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"ask","arguments":{"path":"/tmp/a.md","question":"Ship it?","options":["Yes","No"],"timeout_secs":60}}}"#;
+        let response = handle_message(request, &config).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(false));
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(text, r#"{"ok":true,"answer":"Yes"}"#);
+
+        let req_line = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let req: Value = serde_json::from_str(&req_line).unwrap();
+        assert_eq!(req["cmd"], json!("ask"));
+        assert_eq!(req["question"], json!("Ship it?"));
+        assert_eq!(req["options"], json!(["Yes", "No"]));
+        assert_eq!(req["timeout_secs"], json!(60));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tools_call_ask_missing_options_is_invalid_params() {
+        let request = r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"ask","arguments":{"path":"/tmp/a.md","question":"Ship it?"}}}"#;
+        let response = handle_message(request, &test_config()).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["error"]["code"], json!(-32602));
     }
 
     #[test]

@@ -22,13 +22,13 @@ if [ "$1" = "mcp" ]; then
   exec "$BIN" "$@"
 fi
 
-# AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` talk to the
-# running app's command socket instead of the file-open path above. Launch the
-# app first (no pending files needed — the request itself carries the file)
-# if the command socket isn't there yet, then hand off to the binary's own
-# `ai` client (see `run_ai_cli` in src-tauri/src/ai_socket.rs). stdin passes
-# through untouched for `edit`.
-if [ "$1" = "show" ] || [ "$1" = "edit" ]; then
+# AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` / `mdmini
+# ask <file> ...` talk to the running app's command socket instead of the
+# file-open path above. Launch the app first (no pending files needed — the
+# request itself carries the file) if the command socket isn't there yet,
+# then hand off to the binary's own `ai` client (see `run_ai_cli` in
+# src-tauri/src/ai_socket.rs). stdin passes through untouched for `edit`.
+if [ "$1" = "show" ] || [ "$1" = "edit" ] || [ "$1" = "ask" ]; then
   if [ -S "$CMD_SOCK" ] && ! pgrep -f "md-mini.app/Contents/MacOS/md-mini" >/dev/null; then
     # Socket file survived a crash/kill-9 of the process that owned it — a
     # stale socket makes every command below hang until its own read times

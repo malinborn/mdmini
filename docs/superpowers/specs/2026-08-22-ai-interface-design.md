@@ -15,12 +15,12 @@ Nothing extra to run: the interface is the existing `mdmini` CLI plus a small co
 
 ## Non-Goals (backlog, not MVP)
 
-- `mdmini ask` — interactive choice buttons rendered in md-mini, answer returned to the agent.
 - Review/accept workflow (per-hunk confirmation) — the highlight is informational only in MVP.
 
 ## Implemented since MVP
 
 - `mdmini mcp` — a stdio MCP server wrapping the same command socket protocol, exactly as anticipated above: one socket command (`show`/`edit`) maps to one MCP tool, no changes needed to the socket protocol itself. See `src-tauri/src/mcp_server.rs` and `docs/ai-interface.md` ("MCP server").
+- `mdmini ask <file> --question TEXT --option TEXT (repeatable, 2..=6) [--at-line N | --at-find TEXT] [--timeout SECS]` — an AI agent posts a question with option buttons into the open document; the call blocks until the user clicks one, and the chosen option's text comes back as `AiResponse.answer`. Same command socket, same `OpenFiles` routing as `show`/`edit`, plus a per-request timeout (default 300s, clamped to 10-3600s) instead of the fixed 8s show/edit wait, and a window-close cancellation path (`AiPending::cancel_for_window`, called from `window::untrack_window`) so a delivered-but-unanswered `ask` fails immediately with `"window closed"` instead of hanging until its timeout. Also exposed as an MCP tool (`ask`). See `src-tauri/src/ai_socket.rs` and `docs/ai-interface.md`.
 
 ## CLI Surface
 

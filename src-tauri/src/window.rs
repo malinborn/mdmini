@@ -158,6 +158,13 @@ pub fn untrack_window(app: &AppHandle, label: &str) {
     // until the socket listener's own timeout.
     crate::ai_socket::cancel_queued_for_window(app, label);
 
+    // Fail any AI command already delivered to this window but not yet
+    // answered (e.g. an `ask` still waiting on a click) — otherwise the CLI
+    // connection hangs until the request's own timeout instead of learning
+    // right away that the window it was waiting on is gone.
+    app.state::<crate::ai_socket::AiPending>()
+        .cancel_for_window(label);
+
     // Clean up recovery file in background
     if let Some(path) = file_path {
         std::thread::spawn(move || {

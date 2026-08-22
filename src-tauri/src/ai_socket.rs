@@ -40,6 +40,57 @@ pub enum AiRequest {
         #[serde(default)]
         show: bool,
     },
+    Ask {
+        #[allow(dead_code)] // protocol version, reserved for the future MCP wrapper
+        v: u32,
+        path: String,
+        question: String,
+        options: Vec<String>,
+        #[serde(default)]
+        line: Option<usize>,
+        #[serde(default)]
+        find: Option<String>,
+        #[serde(default = "default_ask_timeout")]
+        timeout_secs: u64,
+    },
+}
+
+/// Default `ask` timeout when the request omits `timeout_secs` — five minutes
+/// is generous for a human to notice a question and click, without leaving a
+/// caller's terminal hung indefinitely if nobody's looking.
+pub(crate) fn default_ask_timeout() -> u64 {
+    300
+}
+
+/// Lower/upper bound accepted for an `ask` timeout. Below 10s a human
+/// realistically can't read and answer; above an hour it's almost certainly a
+/// mistake (or the caller meant "no timeout", which this protocol doesn't
+/// offer) — clamp rather than reject either way, since the caller's intent
+/// ("wait a long time" / "wait a short time") is still honored, just bounded.
+const ASK_TIMEOUT_MIN_SECS: u64 = 10;
+const ASK_TIMEOUT_MAX_SECS: u64 = 3600;
+
+/// Clamp a requested `ask` timeout into the accepted bound. Pure and shared
+/// by both the socket-side dispatch (server wait) and the CLI client (its own
+/// read timeout must match what the server will actually wait).
+pub(crate) fn clamp_ask_timeout(secs: u64) -> u64 {
+    secs.clamp(ASK_TIMEOUT_MIN_SECS, ASK_TIMEOUT_MAX_SECS)
+}
+
+/// Validate an `ask` request's user-facing fields before touching any window:
+/// a non-empty question and 2..=6 non-empty options. Kept separate from
+/// dispatch so it can be unit-tested without a running app.
+fn validate_ask(question: &str, options: &[String]) -> Result<(), String> {
+    if question.trim().is_empty() {
+        return Err("question must not be empty".to_string());
+    }
+    if !(2..=6).contains(&options.len()) {
+        return Err("options must have between 2 and 6 entries".to_string());
+    }
+    if options.iter().any(|o| o.trim().is_empty()) {
+        return Err("options must not be empty".to_string());
+    }
+    Ok(())
 }
 
 /// Response written back on the same connection, one JSON object per line.
@@ -50,6 +101,10 @@ pub struct AiResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub changed_lines: Option<Vec<[usize; 2]>>,
+    /// The option text the user clicked, for `ask`. `None` for `show`/`edit`
+    /// responses and for any `ask` failure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
 }
 
 impl AiResponse {
@@ -63,6 +118,7 @@ impl AiResponse {
             ok: true,
             error: None,
             changed_lines: None,
+            answer: None,
         }
     }
 
@@ -71,6 +127,7 @@ impl AiResponse {
             ok: false,
             error: Some(msg.into()),
             changed_lines: None,
+            answer: None,
         }
     }
 }
@@ -171,9 +228,20 @@ fn handle_connection(app: &AppHandle, stream: UnixStream) {
 
         let response = match parse_request(trimmed) {
             Ok(req) => {
+                // `ask` blocks on a human clicking a button, so it gets its
+                // own (clamped) timeout instead of the 8s show/edit wait —
+                // computed from the request before dispatch so the wait
+                // matches what the caller asked for even if dispatch fails
+                // fast.
+                let wait = match &req {
+                    AiRequest::Ask { timeout_secs, .. } => {
+                        Duration::from_secs(clamp_ask_timeout(*timeout_secs))
+                    }
+                    _ => Duration::from_secs(8),
+                };
                 let (tx, rx) = mpsc::channel::<AiResponse>();
                 let id = dispatch(app, req, tx);
-                match rx.recv_timeout(Duration::from_secs(8)) {
+                match rx.recv_timeout(wait) {
                     Ok(resp) => resp,
                     Err(_) => {
                         // Drop the waiting entry so a response that arrives after
@@ -198,9 +266,12 @@ fn handle_connection(app: &AppHandle, stream: UnixStream) {
 }
 
 /// Requests waiting on a response from the frontend, keyed by an id the
-/// frontend echoes back via the `ai_respond` command.
+/// frontend echoes back via the `ai_respond` command. Each entry also carries
+/// the label of the window the request was delivered to, so a window closing
+/// before it answers can fail exactly its own pending entries (see
+/// `cancel_for_window`) instead of leaking until the listener's own timeout.
 pub struct AiPending {
-    map: Mutex<HashMap<u64, mpsc::Sender<AiResponse>>>,
+    map: Mutex<HashMap<u64, (String, mpsc::Sender<AiResponse>)>>,
     next: AtomicU64,
 }
 
@@ -218,17 +289,24 @@ impl AiPending {
         }
     }
 
-    /// Register a waiting request, returning the id the frontend must echo back.
-    fn register(&self, tx: mpsc::Sender<AiResponse>) -> u64 {
-        let id = self.next.fetch_add(1, Ordering::SeqCst);
-        self.map.lock().unwrap().insert(id, tx);
-        id
+    /// Allocate an id for a request that will be registered once the window
+    /// that will own the response is known (see `dispatch`) — split from
+    /// `register` because the payload built for the frontend needs the id
+    /// before that window is resolved.
+    fn alloc_id(&self) -> u64 {
+        self.next.fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Register a waiting request under `id` (from `alloc_id`), tagged with
+    /// the label of the window it was delivered to.
+    fn register(&self, id: u64, label: impl Into<String>, tx: mpsc::Sender<AiResponse>) {
+        self.map.lock().unwrap().insert(id, (label.into(), tx));
     }
 
     /// Deliver a response to the connection waiting on `id`. An unknown id is a
     /// no-op — the request may have already timed out and been dropped.
     pub fn respond(&self, id: u64, response: AiResponse) {
-        if let Some(tx) = self.map.lock().unwrap().remove(&id) {
+        if let Some((_, tx)) = self.map.lock().unwrap().remove(&id) {
             let _ = tx.send(response);
         }
     }
@@ -240,6 +318,24 @@ impl AiPending {
     /// receiving on anymore.
     pub fn cancel(&self, id: u64) {
         self.map.lock().unwrap().remove(&id);
+    }
+
+    /// Fail every entry registered under `label` with "window closed" and
+    /// remove them — called from `window::untrack_window` so an `ask` (or any
+    /// other still-pending request) delivered to a window that then closes
+    /// before answering doesn't hang the caller for the full timeout.
+    pub fn cancel_for_window(&self, label: &str) {
+        let mut map = self.map.lock().unwrap();
+        let ids: Vec<u64> = map
+            .iter()
+            .filter(|(_, (l, _))| l == label)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            if let Some((_, tx)) = map.remove(&id) {
+                let _ = tx.send(AiResponse::error("window closed"));
+            }
+        }
     }
 }
 
@@ -297,12 +393,18 @@ pub fn cancel_queued_for_window(app: &AppHandle, label: &str) {
 #[serde(rename_all = "camelCase")]
 pub struct AiCommandPayload {
     pub id: u64,
-    pub cmd: String, // "show" | "edit"
+    pub cmd: String, // "show" | "edit" | "ask"
     pub path: String,
     pub line: Option<usize>,
     pub find: Option<String>,
     pub content: Option<String>,
     pub show: bool,
+    /// `ask` only — `None` for `show`/`edit`.
+    pub question: Option<String>,
+    /// `ask` only — empty for `show`/`edit`.
+    pub options: Vec<String>,
+    /// `ask` only — `0` for `show`/`edit`.
+    pub timeout_secs: u64,
 }
 
 /// How long to wait for `open_file_window` (run on the main thread) to register
@@ -319,6 +421,7 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
     let path = match &req {
         AiRequest::Show { path, .. } => path.clone(),
         AiRequest::Edit { path, .. } => path.clone(),
+        AiRequest::Ask { path, .. } => path.clone(),
     };
 
     // `show` on a path that doesn't exist would otherwise fall through to
@@ -331,31 +434,75 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
         return 0;
     }
 
+    if let AiRequest::Ask {
+        question, options, ..
+    } = &req
+    {
+        if let Err(msg) = validate_ask(question, options) {
+            let _ = tx.send(AiResponse::error(msg));
+            return 0;
+        }
+        // Unlike `edit`, `ask` has no "start a new file" meaning — a question
+        // about a file that neither exists on disk nor is already open (which
+        // would let us route to it regardless of disk state) can never be
+        // answered.
+        let already_open = {
+            let open_files = app.state::<window::OpenFiles>();
+            let map = open_files.0.lock().unwrap();
+            map.contains_key(&path)
+        };
+        if !already_open && !std::path::Path::new(&path).exists() {
+            let _ = tx.send(AiResponse::error("file does not exist"));
+            return 0;
+        }
+    }
+
+    // The id is handed to the frontend in the payload before we know which
+    // window will own the response — `AiPending::register` (which needs that
+    // window's label) happens later, at each point below where the label
+    // becomes known.
+    let id = app.state::<AiPending>().alloc_id();
     let payload = AiCommandPayload {
-        id: app.state::<AiPending>().register(tx),
+        id,
         cmd: match &req {
             AiRequest::Show { .. } => "show".to_string(),
             AiRequest::Edit { .. } => "edit".to_string(),
+            AiRequest::Ask { .. } => "ask".to_string(),
         },
         path: path.clone(),
         line: match &req {
             AiRequest::Show { line, .. } => *line,
             AiRequest::Edit { .. } => None,
+            AiRequest::Ask { line, .. } => *line,
         },
         find: match &req {
             AiRequest::Show { find, .. } => find.clone(),
             AiRequest::Edit { .. } => None,
+            AiRequest::Ask { find, .. } => find.clone(),
         },
         content: match &req {
             AiRequest::Show { .. } => None,
             AiRequest::Edit { content, .. } => Some(content.clone()),
+            AiRequest::Ask { .. } => None,
         },
         show: match &req {
             AiRequest::Show { .. } => false,
             AiRequest::Edit { show, .. } => *show,
+            AiRequest::Ask { .. } => false,
+        },
+        question: match &req {
+            AiRequest::Ask { question, .. } => Some(question.clone()),
+            _ => None,
+        },
+        options: match &req {
+            AiRequest::Ask { options, .. } => options.clone(),
+            _ => Vec::new(),
+        },
+        timeout_secs: match &req {
+            AiRequest::Ask { timeout_secs, .. } => clamp_ask_timeout(*timeout_secs),
+            _ => 0,
         },
     };
-    let id = payload.id;
 
     let existing_label = {
         let open_files = app.state::<window::OpenFiles>();
@@ -365,11 +512,17 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
 
     if let Some(label) = existing_label {
         if let Some(win) = app.get_webview_window(&label) {
+            app.state::<AiPending>().register(id, label.clone(), tx);
             // emit() broadcasts to every window — a window that does not own the
             // file would race to answer with an error. Target the owner only.
             if win.emit_to(label.as_str(), "ai-command", &payload).is_ok() {
                 return id;
             }
+            // Registered but never delivered — fail now instead of leaking
+            // until the connection's own timeout.
+            app.state::<AiPending>()
+                .respond(id, AiResponse::error("failed to deliver to window"));
+            return id;
         }
         // Label was in OpenFiles but the window is already gone (closed between
         // the lookup above and here) — fall through and open a fresh one.
@@ -383,8 +536,7 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
         .run_on_main_thread(move || window::open_file_window(&handle, Some(path_for_open)))
         .is_err()
     {
-        app.state::<AiPending>()
-            .respond(id, AiResponse::error("failed to open window for file"));
+        let _ = tx.send(AiResponse::error("failed to open window for file"));
         return id;
     }
 
@@ -398,12 +550,12 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
             map.get(&path).cloned()
         };
         if let Some(label) = label {
+            app.state::<AiPending>().register(id, label.clone(), tx);
             app.state::<AiQueue>().push(&label, payload);
             return id;
         }
         if Instant::now() >= deadline {
-            app.state::<AiPending>()
-                .respond(id, AiResponse::error("failed to open window for file"));
+            let _ = tx.send(AiResponse::error("failed to open window for file"));
             return id;
         }
         std::thread::sleep(Duration::from_millis(20));
@@ -456,6 +608,13 @@ enum CliVerb {
         show: bool,
         allow_empty: bool,
     },
+    Ask {
+        question: String,
+        options: Vec<String>,
+        line: Option<usize>,
+        find: Option<String>,
+        timeout_secs: u64,
+    },
     /// Local, offline: prints the full CLI reference. No file arg, no flags.
     Help,
     /// Local, offline: prints the agent-onboarding instruction block. No file
@@ -463,7 +622,7 @@ enum CliVerb {
     Agent,
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
@@ -544,6 +703,65 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                 socket,
             })
         }
+        "ask" => {
+            let mut question: Option<String> = None;
+            let mut options: Vec<String> = Vec::new();
+            let mut line: Option<usize> = None;
+            let mut find: Option<String> = None;
+            let mut timeout_secs = default_ask_timeout();
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--question" => {
+                        let v = iter.next().ok_or("--question requires a value")?;
+                        question = Some(v.clone());
+                    }
+                    "--option" => {
+                        let v = iter.next().ok_or("--option requires a value")?;
+                        options.push(v.clone());
+                    }
+                    "--at-line" => {
+                        let v = iter.next().ok_or("--at-line requires a value")?;
+                        line = Some(
+                            v.parse::<usize>()
+                                .map_err(|_| format!("invalid --at-line value: {}", v))?,
+                        );
+                    }
+                    "--at-find" => {
+                        let v = iter.next().ok_or("--at-find requires a value")?;
+                        find = Some(v.clone());
+                    }
+                    "--timeout" => {
+                        let v = iter.next().ok_or("--timeout requires a value")?;
+                        timeout_secs = v
+                            .parse::<u64>()
+                            .map_err(|_| format!("invalid --timeout value: {}", v))?;
+                    }
+                    "--socket" => {
+                        let v = iter.next().ok_or("--socket requires a value")?;
+                        socket = Some(v.clone());
+                    }
+                    other => return Err(format!("unknown flag: {}", other)),
+                }
+            }
+            if line.is_some() && find.is_some() {
+                return Err("--at-line and --at-find are mutually exclusive".to_string());
+            }
+            let question = question.ok_or("--question is required")?;
+            if !(2..=6).contains(&options.len()) {
+                return Err("--option must be given between 2 and 6 times".to_string());
+            }
+            Ok(CliArgs {
+                path,
+                verb: CliVerb::Ask {
+                    question,
+                    options,
+                    line,
+                    find,
+                    timeout_secs: clamp_ask_timeout(timeout_secs),
+                },
+                socket,
+            })
+        }
         other => Err(format!("unknown command: {}", other)),
     }
 }
@@ -587,6 +805,7 @@ USAGE
   mdmini <file>...                          Open one or more files (or focus existing windows)
   mdmini show <file> [--line N | --find TEXT] [--socket PATH]
   mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
+  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
   mdmini mcp [--socket PATH]
   mdmini help
   mdmini agent
@@ -636,13 +855,36 @@ EDIT — replace the live buffer with new content, diffed and highlighted
   Example:
     cat new.md | mdmini edit notes.md --show
 
+ASK — post a question with option buttons, block until the user clicks
+  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] \
+    [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+
+  Renders the question and 2-6 option buttons inside the open (or newly
+  opened) document, blocks until the user clicks one, and returns the chosen
+  option's text. Use for a quick decision while working on that document.
+    --question TEXT   The question text. Required.
+    --option TEXT     One button's label. Repeat 2-6 times. Required.
+    --at-line N       Show the question near this 1-based line number.
+                       Mutually exclusive with --at-find.
+    --at-find TEXT    Show the question near the first substring match.
+                       Mutually exclusive with --at-line.
+    --timeout SECS    How long to wait for a click. Default 300, clamped to
+                       10-3600.
+    --socket PATH     Talk to a non-default command socket.
+  Neither --at-line nor --at-find: the question appears at the current view.
+
+  Example:
+    mdmini ask notes.md --question "Ship it?" --option Yes --option No
+
 JSON RESPONSE CONTRACT
-  Both show and edit print exactly one line of JSON to stdout, never stderr.
+  show, edit, and ask each print exactly one line of JSON to stdout, never
+  stderr.
 
     show, success:                    {"ok":true}
     edit, success:                    {"ok":true,"changed_lines":[[12,15]]}
     edit, no-op (identical content):  {"ok":true,"changed_lines":[]}
-    error (either verb):              {"ok":false,"error":"target not found"}
+    ask, success:                     {"ok":true,"answer":"Yes"}
+    error (any verb):                 {"ok":false,"error":"target not found"}
 
   changed_lines is a [start,end] pair, 1-based inclusive line numbers in the
   resulting document — one pair, since md-mini computes a single minimal
@@ -651,15 +893,17 @@ JSON RESPONSE CONTRACT
 EXIT CODES
     0   Request reached md-mini and succeeded ("ok":true).
     1   Request reached md-mini but was rejected ("ok":false), or the CLI's
-        own 10s wait for a reply timed out.
+        own wait for a reply timed out (10s for show/edit, the ask timeout
+        plus 10s for ask).
     2   Usage error (bad flags, missing file, unknown verb), edit refused
-        empty stdin without --allow-empty, or md-mini isn't running /
+        empty stdin without --allow-empty, ask given fewer than 2 or more
+        than 6 --option flags or no --question, or md-mini isn't running /
         didn't start in time.
 
-MCP — stdio MCP server exposing show/edit as tools, for agents that speak MCP
+MCP — stdio MCP server exposing show/edit/ask as tools, for agents that speak MCP
   mdmini mcp [--socket PATH]
       Runs a Model Context Protocol server on stdin/stdout instead of the CLI
-      verbs above: same show/edit operations, wrapped as MCP tools over
+      verbs above: same show/edit/ask operations, wrapped as MCP tools over
       JSON-RPC 2.0. Launches md-mini via `open` if the command socket is down
       (skipped when --socket is given explicitly). Register once with:
         claude mcp add --scope user mdmini -- mdmini mcp
@@ -698,8 +942,9 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
 - `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
+- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text.
 
-Both verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk. Always send the full document on stdin for `edit`, never a diff."#;
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, or `"answer":"..."` for `ask`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
 
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
@@ -713,7 +958,7 @@ fn agent_text() -> String {
         \x20 .github/copilot-instructions.md   GitHub Copilot\n\n\
         --- copy from here ---\n\
         {}\n\n\
-        Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit tools directly — then no instruction-file snippet is needed.",
+        Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed.",
         AGENT_SNIPPET
     )
 }
@@ -777,6 +1022,21 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             content: content.unwrap_or_default(),
             show,
         },
+        CliVerb::Ask {
+            question,
+            options,
+            line,
+            find,
+            timeout_secs,
+        } => AiRequest::Ask {
+            v: 1,
+            path: abs_path,
+            question,
+            options,
+            line,
+            find,
+            timeout_secs,
+        },
         CliVerb::Help | CliVerb::Agent => {
             unreachable!("Help/Agent return early above, before this match")
         }
@@ -798,7 +1058,14 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
         }
     };
 
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    // `ask` blocks server-side on a human clicking a button, so the CLI's own
+    // read timeout must cover that wait (plus 10s of margin) instead of the
+    // fixed 10s used for show/edit's near-immediate replies.
+    let read_timeout = match &request {
+        AiRequest::Ask { timeout_secs, .. } => Duration::from_secs(timeout_secs + 10),
+        _ => Duration::from_secs(10),
+    };
+    let _ = stream.set_read_timeout(Some(read_timeout));
 
     let mut request_line = match serde_json::to_string(&request) {
         Ok(s) => s,
@@ -883,6 +1150,87 @@ mod tests {
     }
 
     #[test]
+    fn parses_ask_with_default_timeout() {
+        let req = parse_request(
+            r#"{"v":1,"cmd":"ask","path":"/a.md","question":"Ship it?","options":["Yes","No"]}"#,
+        )
+        .unwrap();
+        match req {
+            AiRequest::Ask {
+                question,
+                options,
+                timeout_secs,
+                line,
+                find,
+                ..
+            } => {
+                assert_eq!(question, "Ship it?");
+                assert_eq!(options, vec!["Yes".to_string(), "No".to_string()]);
+                assert_eq!(timeout_secs, 300);
+                assert_eq!(line, None);
+                assert_eq!(find, None);
+            }
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn parses_ask_with_explicit_timeout_and_options() {
+        let req = parse_request(
+            r#"{"v":1,"cmd":"ask","path":"/a.md","question":"Which?","options":["A","B","C"],"timeout_secs":60}"#,
+        )
+        .unwrap();
+        match req {
+            AiRequest::Ask {
+                options,
+                timeout_secs,
+                ..
+            } => {
+                assert_eq!(options, vec!["A".to_string(), "B".to_string(), "C".to_string()]);
+                assert_eq!(timeout_secs, 60);
+            }
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn clamp_ask_timeout_clamps_below_and_above_bounds() {
+        assert_eq!(clamp_ask_timeout(5), 10);
+        assert_eq!(clamp_ask_timeout(7200), 3600);
+        assert_eq!(clamp_ask_timeout(60), 60);
+    }
+
+    #[test]
+    fn validate_ask_rejects_one_option() {
+        let err = validate_ask("Ship it?", &["Yes".to_string()]).unwrap_err();
+        assert!(err.contains("between 2 and 6"));
+    }
+
+    #[test]
+    fn validate_ask_rejects_seven_options() {
+        let options: Vec<String> = (0..7).map(|n| n.to_string()).collect();
+        let err = validate_ask("Ship it?", &options).unwrap_err();
+        assert!(err.contains("between 2 and 6"));
+    }
+
+    #[test]
+    fn validate_ask_rejects_empty_question() {
+        let err = validate_ask("  ", &["Yes".to_string(), "No".to_string()]).unwrap_err();
+        assert!(err.contains("question"));
+    }
+
+    #[test]
+    fn validate_ask_rejects_empty_option() {
+        let err = validate_ask("Ship it?", &["Yes".to_string(), "  ".to_string()]).unwrap_err();
+        assert!(err.contains("options"));
+    }
+
+    #[test]
+    fn validate_ask_accepts_valid_input() {
+        assert!(validate_ask("Ship it?", &["Yes".to_string(), "No".to_string()]).is_ok());
+    }
+
+    #[test]
     fn malformed_line_yields_error_response() {
         assert!(parse_request("not json").is_err());
 
@@ -901,6 +1249,9 @@ mod tests {
             find: None,
             content: None,
             show: false,
+            question: None,
+            options: Vec::new(),
+            timeout_secs: 0,
         }
     }
 
@@ -922,7 +1273,8 @@ mod tests {
     fn respond_routes_to_waiting_request() {
         let pending = AiPending::new();
         let (tx, rx) = mpsc::channel();
-        let id = pending.register(tx);
+        let id = pending.alloc_id();
+        pending.register(id, "editor-1", tx);
 
         pending.respond(id, AiResponse::ok());
         let received = rx.recv_timeout(Duration::from_secs(1)).unwrap();
@@ -930,6 +1282,32 @@ mod tests {
 
         // Unknown id is a no-op — must not panic or block.
         pending.respond(9999, AiResponse::error("ignored"));
+    }
+
+    #[test]
+    fn cancel_for_window_responds_window_closed_to_matching_entries_only() {
+        let pending = AiPending::new();
+
+        let (tx_a, rx_a) = mpsc::channel();
+        let id_a = pending.alloc_id();
+        pending.register(id_a, "editor-1", tx_a);
+
+        let (tx_b, rx_b) = mpsc::channel();
+        let id_b = pending.alloc_id();
+        pending.register(id_b, "editor-2", tx_b);
+
+        pending.cancel_for_window("editor-1");
+
+        let received = rx_a.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(!received.ok);
+        assert_eq!(received.error.as_deref(), Some("window closed"));
+
+        // The other window's pending entry is untouched.
+        assert!(rx_b.try_recv().is_err());
+
+        // Cancelling an already-cancelled or unknown label is a no-op.
+        pending.cancel_for_window("editor-1");
+        pending.cancel_for_window("no-such-window");
     }
 
     fn args(parts: &[&str]) -> Vec<String> {
@@ -1013,6 +1391,114 @@ mod tests {
     }
 
     #[test]
+    fn ai_cli_args_ask_happy_path() {
+        let parsed = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Ship it?",
+            "--option",
+            "Yes",
+            "--option",
+            "No",
+            "--option",
+            "Later",
+            "--at-line",
+            "5",
+            "--timeout",
+            "60",
+            "--socket",
+            "/tmp/s.sock",
+        ]))
+        .unwrap();
+        assert_eq!(parsed.path, "/a.md");
+        assert_eq!(parsed.socket, Some("/tmp/s.sock".to_string()));
+        match parsed.verb {
+            CliVerb::Ask {
+                question,
+                options,
+                line,
+                find,
+                timeout_secs,
+            } => {
+                assert_eq!(question, "Ship it?");
+                assert_eq!(
+                    options,
+                    vec!["Yes".to_string(), "No".to_string(), "Later".to_string()]
+                );
+                assert_eq!(line, Some(5));
+                assert_eq!(find, None);
+                assert_eq!(timeout_secs, 60);
+            }
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_ask_clamps_timeout() {
+        let parsed = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Ship it?",
+            "--option",
+            "Yes",
+            "--option",
+            "No",
+            "--timeout",
+            "5",
+        ]))
+        .unwrap();
+        match parsed.verb {
+            CliVerb::Ask { timeout_secs, .. } => assert_eq!(timeout_secs, 10),
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_ask_missing_question_errors() {
+        let err = parse_cli_args(&args(&[
+            "ask", "/a.md", "--option", "Yes", "--option", "No",
+        ]))
+        .unwrap_err();
+        assert!(err.contains("--question is required"));
+    }
+
+    #[test]
+    fn ai_cli_args_ask_one_option_errors() {
+        let err = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Ship it?",
+            "--option",
+            "Yes",
+        ]))
+        .unwrap_err();
+        assert!(err.contains("between 2 and 6"));
+    }
+
+    #[test]
+    fn ai_cli_args_ask_at_line_and_at_find_conflict() {
+        let err = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Ship it?",
+            "--option",
+            "Yes",
+            "--option",
+            "No",
+            "--at-line",
+            "1",
+            "--at-find",
+            "x",
+        ]))
+        .unwrap_err();
+        assert!(err.contains("mutually exclusive"));
+    }
+
+    #[test]
     fn ai_cli_args_help_parses() {
         let parsed = parse_cli_args(&args(&["help"])).unwrap();
         assert_eq!(parsed.verb, CliVerb::Help);
@@ -1039,7 +1525,7 @@ mod tests {
     #[test]
     fn help_text_mentions_all_verbs() {
         let text = help_text();
-        for verb in ["show", "edit", "mcp", "help", "agent"] {
+        for verb in ["show", "edit", "ask", "mcp", "help", "agent"] {
             assert!(text.contains(verb), "help text missing verb: {}", verb);
         }
         assert!(text.contains("--line"));
@@ -1047,6 +1533,11 @@ mod tests {
         assert!(text.contains("--show"));
         assert!(text.contains("--allow-empty"));
         assert!(text.contains("--socket"));
+        assert!(text.contains("--question"));
+        assert!(text.contains("--option"));
+        assert!(text.contains("--at-line"));
+        assert!(text.contains("--at-find"));
+        assert!(text.contains("--timeout"));
     }
 
     #[test]
@@ -1111,7 +1602,8 @@ mod tests {
     fn cancel_makes_a_later_respond_a_noop() {
         let pending = AiPending::new();
         let (tx, rx) = mpsc::channel();
-        let id = pending.register(tx);
+        let id = pending.alloc_id();
+        pending.register(id, "editor-1", tx);
 
         pending.cancel(id);
         // A response that arrives after the caller gave up must not be
