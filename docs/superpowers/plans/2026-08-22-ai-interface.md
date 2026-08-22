@@ -111,8 +111,8 @@ export const aiHighlightKeymap = keymap.of([{ key: 'Escape',
 ```
 
   Mark: `Decoration.mark({ class: 'cm-ai-edit' })`. Pulse for `show`: `pulseAiLine = StateEffect.define<number>()` adds `Decoration.line({ class: 'cm-ai-pulse' })` to that line in the same field; the App handler clears it via `clearAiHighlights` after 1600ms `setTimeout`. CSS: `.cm-ai-edit { background: var(--ai-edit-bg); }`, `.cm-ai-pulse { animation: ai-pulse 1.6s ease-out; }` with `--ai-edit-bg` defined in both `src/lib/theme/dark.css` and `light.css` (subtle accent tint). Wire `aiHighlightField` + `aiHighlightKeymap` into `createExtensions()` in `setup.ts`.
-- [ ] **Step 3: Run** `npx vitest run --dir src` + `npm run check` — PASS.
-- [ ] **Step 4: Commit** `feat(ai): highlight field for AI edits with Esc to clear`
+- [x] **Step 3: Run** `npx vitest run --dir src` + `npm run check` — PASS.
+- [x] **Step 4: Commit** `feat(ai): highlight field for AI edits with Esc to clear`
 
 ### Task 4: Frontend — handle ai-command (show/edit) and respond
 

@@ -21,6 +21,7 @@ import { tableSelectionSnapOut } from './preview/table-selection';
 import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
 import { headingSlugsField, navigateToHeading } from './heading-slugs';
+import { aiHighlightField, aiHighlightKeymap } from './ai-highlight';
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -32,6 +33,8 @@ export function createExtensions(): Extension[] {
     tableModeField,
     mermaidViewField,
     headingSlugsField,
+    aiHighlightField,
+    aiHighlightKeymap,
     lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),

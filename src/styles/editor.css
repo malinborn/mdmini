@@ -1191,6 +1191,25 @@
   background: rgba(246, 193, 119, 0.1);
 }
 
+/* AI-driven edits (mdmini ai edit / show) */
+.cm-ai-edit {
+  background: var(--ai-edit-bg);
+  border-radius: 2px;
+}
+
+.cm-line.cm-ai-pulse {
+  animation: cm-ai-pulse 1.6s ease-out;
+}
+
+@keyframes cm-ai-pulse {
+  0% {
+    background-color: var(--ai-edit-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 /* Active line glow — stronger in light theme */
 :root[data-theme='light'] .cm-activeLine {
   background-color: rgba(124, 58, 237, 0.06) !important;
