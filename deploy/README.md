@@ -30,7 +30,7 @@ Pushes to `main` touching `docs/**` auto-deploy via `.github/workflows/deploy-si
 
 5. **Certificate**
    ```bash
-   sudo certbot certonly --nginx -d md-mini.com -d www.md-mini.com
+   sudo certbot certonly --nginx -d md-mini.com -d www.md-mini.com --deploy-hook 'systemctl reload nginx'
    ```
 
    Before applying the final config, confirm certbot's nginx plugin created its snippets:

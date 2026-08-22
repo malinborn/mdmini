@@ -20,7 +20,7 @@
 - Create: `docs/favicon-32.png`, `docs/apple-touch-icon.png`
 - Modify: `docs/index.html:43` (favicon links)
 
-- [ ] **Step 1: Copy new icon source into the repo**
+- [x] **Step 1: Copy new icon source into the repo**
 
 ```bash
 cp ~/Downloads/md-icon-1024.png icon.png
@@ -28,7 +28,7 @@ cp ~/Downloads/md-icon-1024.png icon.png
 
 Verify: `sips -g pixelWidth -g pixelHeight icon.png` → `pixelWidth: 1024`, `pixelHeight: 1024`.
 
-- [ ] **Step 2: Regenerate the Tauri icon set**
+- [x] **Step 2: Regenerate the Tauri icon set**
 
 ```bash
 npx tauri icon icon.png
@@ -36,7 +36,7 @@ npx tauri icon icon.png
 
 Expected: log lines for `icons/32x32.png`, `icons/128x128.png`, `icons/icon.icns`, `icons/icon.ico`, iOS/Android sets. Verify: `git status --short src-tauri/icons | head` shows modified files, and `open src-tauri/icons/icon.icns` shows the new icon in Preview.
 
-- [ ] **Step 3: Generate site favicons with sips**
+- [x] **Step 3: Generate site favicons with sips**
 
 ```bash
 sips -z 32 32 icon.png --out docs/favicon-32.png
@@ -45,7 +45,7 @@ sips -z 180 180 icon.png --out docs/apple-touch-icon.png
 
 Verify: `file docs/favicon-32.png docs/apple-touch-icon.png` → both `PNG image data`, 32x32 and 180x180.
 
-- [ ] **Step 4: Replace the inline-SVG favicon in index.html**
+- [x] **Step 4: Replace the inline-SVG favicon in index.html**
 
 In `docs/index.html` line 43, replace the whole `<link rel="icon" type="image/svg+xml" ... />` line with:
 
@@ -54,7 +54,7 @@ In `docs/index.html` line 43, replace the whole `<link rel="icon" type="image/sv
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 ```
 
-- [ ] **Step 5: Visual check**
+- [x] **Step 5: Visual check**
 
 ```bash
 python3 -m http.server 8899 -d docs &
@@ -64,7 +64,7 @@ kill %1
 
 Expected: `HTTP/1.0 200 OK`. (Full favicon render check happens in Task 3's browser check.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add icon.png src-tauri/icons docs/favicon-32.png docs/apple-touch-icon.png docs/index.html
@@ -78,7 +78,7 @@ git commit -m "feat: new app icon — gradient md with caret"
 **Files:**
 - Create: `docs/superpowers/specs/2026-08-22-claude-design-site-prompt.md`
 
-- [ ] **Step 1: Write the prompt file with exactly this content**
+- [x] **Step 1: Write the prompt file with exactly this content**
 
 ````markdown
 # Claude Design Brief — md-mini.com
@@ -143,7 +143,7 @@ Tone: calm, precise, quietly confident. No marketing fluff, no exclamation marks
 When the design is approved, package it as a handoff bundle for Claude Code. Integration target: the `docs/` directory of the mdmini repo (single `index.html` plus assets), deployed to https://md-mini.com/ via existing CI.
 ````
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/superpowers/specs/2026-08-22-claude-design-site-prompt.md
@@ -158,7 +158,7 @@ git commit -m "docs: add claude design brief for site redesign"
 - Modify: `docs/index.html` (6 URL lines + JS redirect snippet)
 - Modify: `docs/sitemap.xml`, `docs/robots.txt`, `docs/llms.txt`
 
-- [ ] **Step 1: Replace all github.io URLs in index.html**
+- [x] **Step 1: Replace all github.io URLs in index.html**
 
 ```bash
 sed -i '' 's|https://malinborn\.github\.io/mdmini/|https://md-mini.com/|g' docs/index.html
@@ -166,7 +166,7 @@ sed -i '' 's|https://malinborn\.github\.io/mdmini/|https://md-mini.com/|g' docs/
 
 Verify: `grep -c 'malinborn.github.io' docs/index.html` → `0`, and `grep -n 'md-mini.com' docs/index.html` shows lines 9, 10, 16, 17, 24, 36 (canonical, llms alternate, og:url, og:image, twitter:image, JSON-LD url).
 
-- [ ] **Step 2: Add the archive JS redirect**
+- [x] **Step 2: Add the archive JS redirect**
 
 In `docs/index.html`, immediately after the canonical link (line 9), insert:
 
@@ -178,7 +178,7 @@ In `docs/index.html`, immediately after the canonical link (line 9), insert:
   </script>
 ```
 
-- [ ] **Step 3: Update sitemap.xml**
+- [x] **Step 3: Update sitemap.xml**
 
 Replace the `<loc>` line and bump lastmod:
 
@@ -187,7 +187,7 @@ Replace the `<loc>` line and bump lastmod:
     <lastmod>2026-08-22</lastmod>
 ```
 
-- [ ] **Step 4: Update robots.txt**
+- [x] **Step 4: Update robots.txt**
 
 ```
 User-agent: *
@@ -196,11 +196,11 @@ Allow: /
 Sitemap: https://md-mini.com/sitemap.xml
 ```
 
-- [ ] **Step 5: Update llms.txt**
+- [x] **Step 5: Update llms.txt**
 
 Line 30: `- Website: https://malinborn.github.io/mdmini/` → `- Website: https://md-mini.com/`
 
-- [ ] **Step 6: Verify no old URLs remain in deployable files**
+- [x] **Step 6: Verify no old URLs remain in deployable files**
 
 ```bash
 grep -rn 'malinborn.github.io' docs --include='*.html' --include='*.xml' --include='*.txt'
@@ -208,7 +208,7 @@ grep -rn 'malinborn.github.io' docs --include='*.html' --include='*.xml' --inclu
 
 Expected: no output.
 
-- [ ] **Step 7: Browser check**
+- [x] **Step 7: Browser check**
 
 ```bash
 python3 -m http.server 8899 -d docs
@@ -216,7 +216,7 @@ python3 -m http.server 8899 -d docs
 
 Open http://localhost:8899 — page renders, new favicon visible in the tab, no redirect fires (hostname is localhost). Stop the server.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/index.html docs/sitemap.xml docs/robots.txt docs/llms.txt
@@ -232,7 +232,7 @@ git commit -m "feat: point site at md-mini.com — canonical, sitemap, archive r
 - Create: `deploy/nginx/md-mini.com-bootstrap.conf`
 - Create: `deploy/README.md`
 
-- [ ] **Step 1: Write the bootstrap config (pre-certificate, port 80 only)**
+- [x] **Step 1: Write the bootstrap config (pre-certificate, port 80 only)**
 
 `deploy/nginx/md-mini.com-bootstrap.conf`:
 
@@ -247,7 +247,7 @@ server {
 }
 ```
 
-- [ ] **Step 2: Write the final config**
+- [x] **Step 2: Write the final config**
 
 `deploy/nginx/md-mini.com.conf`:
 
@@ -321,7 +321,7 @@ server {
 }
 ```
 
-- [ ] **Step 3: Write the setup guide**
+- [x] **Step 3: Write the setup guide**
 
 `deploy/README.md`:
 
@@ -358,7 +358,7 @@ Pushes to `main` touching `docs/**` auto-deploy via `.github/workflows/deploy-si
 
 5. **Certificate**
    ```bash
-   sudo certbot certonly --nginx -d md-mini.com -d www.md-mini.com
+   sudo certbot certonly --nginx -d md-mini.com -d www.md-mini.com --deploy-hook 'systemctl reload nginx'
    ```
 
    Before applying the final config, confirm certbot's nginx plugin created its snippets:
@@ -396,7 +396,7 @@ curl -s https://md-mini.com/sitemap.xml | head -3
    re-attribute within a few weeks.
 ````
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add deploy/
@@ -410,7 +410,7 @@ git commit -m "feat: nginx configs and server setup guide for md-mini.com"
 **Files:**
 - Create: `.github/workflows/deploy-site.yml`
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
 ```yaml
 name: Deploy site
@@ -449,7 +449,7 @@ jobs:
             docs/ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/md-mini.com/"
 ```
 
-- [ ] **Step 2: Validate YAML**
+- [x] **Step 2: Validate YAML**
 
 ```bash
 python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/deploy-site.yml')); print('ok')"
@@ -457,7 +457,7 @@ python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/deploy-site.
 
 Expected: `ok`. (If PyYAML is missing, `npx --yes yaml-lint .github/workflows/deploy-site.yml` or visual review.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/deploy-site.yml
@@ -468,13 +468,13 @@ git commit -m "ci: deploy docs/ to md-mini.com over ssh on push to main"
 
 ### Task 6: Hand off — push branch and owner checklist
 
-- [ ] **Step 1: Push the worktree branch**
+- [x] **Step 1: Push the worktree branch**
 
 ```bash
 git push -u origin worktree-site-redesign-migration
 ```
 
-- [ ] **Step 2: Final report to owner with the go-live checklist**
+- [x] **Step 2: Final report to owner with the go-live checklist**
 
 Owner actions (in order):
 1. Review + merge `worktree-site-redesign-migration` into main. **Merging does not go live yet** — the workflow will fail until secrets exist; that's expected and harmless (or merge after step 4).
