@@ -39,3 +39,16 @@ pub async fn write_file(path: String, content: String) -> Result<(), String> {
 pub async fn file_exists(path: String) -> bool {
     Path::new(&path).exists()
 }
+
+/// Sets the Theme menu checkmarks to match the frontend's persisted
+/// preference. Called on startup and on every theme change — the only
+/// writer of these checkmarks (macOS toggles the clicked item natively;
+/// this call corrects it).
+#[command]
+pub async fn sync_theme_menu(
+    state: tauri::State<'_, crate::menu::ThemeMenuItems>,
+    preference: String,
+) -> Result<(), String> {
+    state.sync(&preference);
+    Ok(())
+}

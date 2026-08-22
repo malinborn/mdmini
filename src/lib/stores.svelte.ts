@@ -1,4 +1,12 @@
-type ThemeSetting = 'light' | 'dark' | 'system';
+import {
+  resolveTheme,
+  familyOf,
+  isDarkTheme,
+  type ThemeSetting,
+  type ThemeFamily,
+  type ConcreteTheme,
+} from './theme-resolve';
+
 type EditorMode = 'live-preview' | 'raw';
 
 function loadSetting<T>(key: string, fallback: T): T {
@@ -16,11 +24,11 @@ function saveSetting(key: string, value: unknown): void {
 
 export function createThemeStore() {
   let preference = $state<ThemeSetting>(loadSetting('theme', 'system'));
+  let lastFamily = $state<ThemeFamily>(loadSetting('themeFamily', 'classic'));
   let systemDark = $state(window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  const resolved = $derived<'light' | 'dark'>(
-    preference === 'system' ? (systemDark ? 'dark' : 'light') : preference
-  );
+  const resolved = $derived<ConcreteTheme>(resolveTheme(preference, lastFamily, systemDark));
+  const isDark = $derived(isDarkTheme(resolved));
 
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
     systemDark = e.matches;
@@ -33,9 +41,16 @@ export function createThemeStore() {
     set preference(v: ThemeSetting) {
       preference = v;
       saveSetting('theme', v);
+      if (v !== 'system') {
+        lastFamily = familyOf(v);
+        saveSetting('themeFamily', lastFamily);
+      }
     },
     get resolved() {
       return resolved;
+    },
+    get isDark() {
+      return isDark;
     },
   };
 }

@@ -3,7 +3,7 @@
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
-  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, type PendingOpen } from './lib/tauri/commands';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, type PendingOpen } from './lib/tauri/commands';
   import {
     onMenuEvent,
     onOpenFile,
@@ -40,6 +40,8 @@
   import { addAiAsk, removeAiAsk } from './lib/editor/ai-ask';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
+  import './lib/theme/aurora-dark.css';
+  import './lib/theme/aurora-light.css';
   import './styles/global.css';
   import './styles/editor.css';
 
@@ -598,12 +600,27 @@
         case 'theme_dark':
           theme.preference = 'dark';
           break;
+        case 'theme_aurora_light':
+          theme.preference = 'aurora-light';
+          break;
+        case 'theme_aurora_dark':
+          theme.preference = 'aurora-dark';
+          break;
         case 'theme_system':
           theme.preference = 'system';
           break;
         case 'recent_files':
           showRecentFiles = true;
           break;
+      }
+
+      // macOS/muda toggles the clicked CheckMenuItem natively before this
+      // handler runs. Re-clicking the already-active theme assigns the same
+      // preference value, so the $effect below never reruns and the native
+      // toggle leaves the submenu with nothing checked. Force a corrective
+      // sync on every theme_* event, independent of whether the value changed.
+      if (action.startsWith('theme_')) {
+        syncThemeMenu(theme.preference);
       }
     });
 
@@ -708,6 +725,12 @@
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme.resolved);
     reinitializeTheme();
+  });
+
+  // Separate effect on purpose: it depends on `preference` (not `resolved`),
+  // and its first run on mount is the startup sync.
+  $effect(() => {
+    syncThemeMenu(theme.preference);
   });
 
   $effect(() => {

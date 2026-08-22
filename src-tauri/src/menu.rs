@@ -6,7 +6,22 @@ use tauri::{
 pub struct ThemeMenuItems {
     pub light: CheckMenuItem<Wry>,
     pub dark: CheckMenuItem<Wry>,
+    pub aurora_light: CheckMenuItem<Wry>,
+    pub aurora_dark: CheckMenuItem<Wry>,
     pub system: CheckMenuItem<Wry>,
+}
+
+impl ThemeMenuItems {
+    /// Single writer for the Theme checkmarks: checks exactly the item
+    /// matching the preference ("light" | "dark" | "aurora-light" |
+    /// "aurora-dark" | "system"), unchecks the rest.
+    pub fn sync(&self, preference: &str) {
+        let _ = self.light.set_checked(preference == "light");
+        let _ = self.dark.set_checked(preference == "dark");
+        let _ = self.aurora_light.set_checked(preference == "aurora-light");
+        let _ = self.aurora_dark.set_checked(preference == "aurora-dark");
+        let _ = self.system.set_checked(preference == "system");
+    }
 }
 
 pub fn build_menu(
@@ -111,17 +126,20 @@ pub fn build_menu(
         )
         .build()?;
 
-    let theme_light = CheckMenuItemBuilder::with_id("theme_light", "Light")
-        .build(app)?;
-    let theme_dark = CheckMenuItemBuilder::with_id("theme_dark", "Dark")
-        .build(app)?;
-    let theme_system = CheckMenuItemBuilder::with_id("theme_system", "System")
-        .checked(true)
-        .build(app)?;
+    let theme_light = CheckMenuItemBuilder::with_id("theme_light", "Light").build(app)?;
+    let theme_dark = CheckMenuItemBuilder::with_id("theme_dark", "Dark").build(app)?;
+    let theme_aurora_light =
+        CheckMenuItemBuilder::with_id("theme_aurora_light", "Aurora Light").build(app)?;
+    let theme_aurora_dark =
+        CheckMenuItemBuilder::with_id("theme_aurora_dark", "Aurora Dark").build(app)?;
+    let theme_system = CheckMenuItemBuilder::with_id("theme_system", "System").build(app)?;
 
     let theme_menu = SubmenuBuilder::new(app, "Theme")
         .item(&theme_light)
         .item(&theme_dark)
+        .item(&theme_aurora_light)
+        .item(&theme_aurora_dark)
+        .separator()
         .item(&theme_system)
         .build()?;
 
@@ -163,6 +181,8 @@ pub fn build_menu(
     let theme_items = ThemeMenuItems {
         light: theme_light,
         dark: theme_dark,
+        aurora_light: theme_aurora_light,
+        aurora_dark: theme_aurora_dark,
         system: theme_system,
     };
 
