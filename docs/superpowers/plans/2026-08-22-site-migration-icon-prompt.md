@@ -172,8 +172,8 @@ In `docs/index.html`, immediately after the canonical link (line 9), insert:
 
 ```html
   <script>
-    if (location.hostname.endsWith('github.io')) {
-      location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.hash);
+    if (location.hostname.endsWith('.github.io')) {
+      location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.search + location.hash);
     }
   </script>
 ```
