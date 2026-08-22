@@ -1251,6 +1251,11 @@
  * line below the widget. */
 .cm-ai-ask-wrap {
   padding: 6px 0 10px;
+  /* Keep the widget out of native text selection: a drag across the document
+   * otherwise paints the whole card as selected. Copying is unaffected — CM6
+   * builds clipboard text from the document, never from widget DOM. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cm-ai-ask {
@@ -1341,6 +1346,9 @@
 }
 
 .cm-ai-ask-input {
+  /* Re-enable selection inside the input — the wrap opts the widget out. */
+  -webkit-user-select: text;
+  user-select: text;
   display: block;
   width: 100%;
   margin-top: 8px;
