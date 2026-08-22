@@ -1,4 +1,5 @@
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export type MenuAction =
   | 'new'
@@ -77,9 +78,16 @@ export interface AiCommandPayload {
   show: boolean;
 }
 
-/** Emitted to the window that owns the file targeted by an AI command. */
+/**
+ * Emitted to the window that owns the file targeted by an AI command.
+ *
+ * Must listen via the current webview window, not the global `listen`: a
+ * global listener's target is `Any`, which matches *targeted* emits too, so
+ * every window would receive the command and the non-owners would race to
+ * answer it with an error.
+ */
 export function onAiCommand(handler: (payload: AiCommandPayload) => void): Promise<() => void> {
-  return listen<AiCommandPayload>('ai-command', (event) => {
+  return getCurrentWebviewWindow().listen<AiCommandPayload>('ai-command', (event) => {
     handler(event.payload);
   });
 }

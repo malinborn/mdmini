@@ -314,7 +314,9 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) {
 
     if let Some(label) = existing_label {
         if let Some(win) = app.get_webview_window(&label) {
-            if win.emit("ai-command", &payload).is_ok() {
+            // emit() broadcasts to every window — a window that does not own the
+            // file would race to answer with an error. Target the owner only.
+            if win.emit_to(label.as_str(), "ai-command", &payload).is_ok() {
                 return;
             }
         }
