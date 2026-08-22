@@ -54,3 +54,7 @@ Tone: calm, precise, quietly confident. No marketing fluff, no exclamation marks
 - `<link rel="canonical" href="https://md-mini.com/">`
 - Full Open Graph + Twitter Card meta (og:url https://md-mini.com/, og:image https://md-mini.com/screenshot.png)
 - JSON-LD `SoftwareApplication`: name mdmini, applicationCategory DeveloperApplication, operatingSystem macOS, price 0 USD, url https://md-mini.com/, downloadUrl https://github.com/malinborn/mdmini/releases, license GPL-3.0
+
+## Handoff
+
+When the design is approved, package it as a handoff bundle for Claude Code. Integration target: the `docs/` directory of the mdmini repo (single `index.html` plus assets), deployed to https://md-mini.com/ via existing CI.
