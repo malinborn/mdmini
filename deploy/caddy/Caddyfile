@@ -1,0 +1,50 @@
+# md-mini.com — static site.
+#
+# Installed by deploy/provision.sh as /etc/caddy/Caddyfile.d/md-mini.com.caddy
+# and pulled in from the main Caddyfile via `import Caddyfile.d/*.caddy`.
+#
+# Caddy does the HTTP->HTTPS redirect and the certificate issuance/renewal by
+# itself, so neither appears here. `tls <email>` only sets the ACME account
+# address; there is deliberately no global options block, because a global
+# block has to be the first thing in the *main* Caddyfile and would break the
+# moment this file is imported.
+
+md-mini.com {
+	tls m.kovalevskiy@dodobrands.io
+
+	root * /var/www/md-mini.com
+	encode zstd gzip
+
+	# Set and delete live in separate directives on purpose. Caddy runs a header
+	# handler that contains a deletion in "deferred" mode, i.e. at response-write
+	# time — and a file_server 404 unwinds the chain before that, so a combined
+	# block would drop the security headers on every 404. Keeping the `set` ops
+	# in their own (non-deferred) handler puts them on error responses too, which
+	# is what nginx's `add_header ... always` did.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "frame-ancestors 'none'"
+	}
+	header -Server
+
+	# The two Cache-Control matchers are exact complements, so no response can
+	# ever collect both values.
+	@assets path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2
+	header @assets Cache-Control "public, max-age=2592000"
+
+	@everything_else not path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2
+	header @everything_else Cache-Control "no-cache"
+
+	file_server
+}
+
+www.md-mini.com {
+	tls m.kovalevskiy@dodobrands.io
+
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	header -Server
+
+	redir https://md-mini.com{uri} permanent
+}

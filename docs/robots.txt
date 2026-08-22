@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://malinborn.github.io/mdmini/sitemap.xml
+Sitemap: https://md-mini.com/sitemap.xml

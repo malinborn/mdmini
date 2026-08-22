@@ -6,22 +6,27 @@
   <title>mdmini — Minimalist Markdown Editor for macOS</title>
   <meta name="description" content="Free minimalist markdown editor for macOS with live preview, mermaid diagrams, GFM tables, syntax highlighting. Built with Tauri, lightweight and fast." />
   <meta name="keywords" content="markdown editor, macOS, markdown, live preview, mermaid diagrams, GFM tables, code editor, Tauri, open source, free" />
-  <link rel="canonical" href="https://malinborn.github.io/mdmini/" />
-  <link rel="alternate" type="text/plain" href="https://malinborn.github.io/mdmini/llms.txt" title="LLM-readable description" />
+  <link rel="canonical" href="https://md-mini.com/" />
+  <script>
+    if (location.hostname.endsWith('.github.io')) {
+      location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.search + location.hash);
+    }
+  </script>
+  <link rel="alternate" type="text/plain" href="https://md-mini.com/llms.txt" title="LLM-readable description" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="mdmini — Minimalist Markdown Editor for macOS" />
   <meta property="og:description" content="Free markdown editor with live preview, mermaid diagrams, GFM tables, and syntax highlighting. Lightweight, fast, open source." />
-  <meta property="og:url" content="https://malinborn.github.io/mdmini/" />
-  <meta property="og:image" content="https://malinborn.github.io/mdmini/screenshot.png" />
+  <meta property="og:url" content="https://md-mini.com/" />
+  <meta property="og:image" content="https://md-mini.com/screenshot.png" />
   <meta property="og:site_name" content="mdmini" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="mdmini — Minimalist Markdown Editor for macOS" />
   <meta name="twitter:description" content="Free markdown editor with live preview, mermaid diagrams, GFM tables, and syntax highlighting." />
-  <meta name="twitter:image" content="https://malinborn.github.io/mdmini/screenshot.png" />
+  <meta name="twitter:image" content="https://md-mini.com/screenshot.png" />
 
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -33,14 +38,15 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "macOS",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "url": "https://malinborn.github.io/mdmini/",
+    "url": "https://md-mini.com/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
     "softwareVersion": "0.5.1",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
 
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='-apple-system%2C BlinkMacSystemFont%2C sans-serif' font-weight='700' font-size='22' fill='%23c4a7e7'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <style>
     /* ── Design tokens (Rosé Pine dark) ── */
     :root {
