@@ -13,6 +13,11 @@ export async function fileExists(path: string): Promise<boolean> {
   return invoke<boolean>('file_exists', { path });
 }
 
+/** Sets the Theme menu checkmarks; harmless no-op outside Tauri (browser dev). */
+export function syncThemeMenu(preference: string): void {
+  invoke('sync_theme_menu', { preference }).catch(() => {});
+}
+
 const FILE_FILTERS = [
   { name: 'All Supported', extensions: ['md', 'markdown', 'txt', 'csv', 'json', 'yml', 'yaml', 'toml', 'py', 'rs', 'ts', 'js', 'sh', 'env'] },
   { name: 'Markdown', extensions: ['md', 'markdown', 'txt'] },

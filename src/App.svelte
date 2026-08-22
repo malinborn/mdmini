@@ -3,7 +3,7 @@
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
-  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, type PendingOpen } from './lib/tauri/commands';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, type PendingOpen } from './lib/tauri/commands';
   import {
     onMenuEvent,
     onOpenFile,
@@ -600,6 +600,12 @@
         case 'theme_dark':
           theme.preference = 'dark';
           break;
+        case 'theme_aurora_light':
+          theme.preference = 'aurora-light';
+          break;
+        case 'theme_aurora_dark':
+          theme.preference = 'aurora-dark';
+          break;
         case 'theme_system':
           theme.preference = 'system';
           break;
@@ -710,6 +716,12 @@
   $effect(() => {
     document.documentElement.setAttribute('data-theme', theme.resolved);
     reinitializeTheme();
+  });
+
+  // Separate effect on purpose: it depends on `preference` (not `resolved`),
+  // and its first run on mount is the startup sync.
+  $effect(() => {
+    syncThemeMenu(theme.preference);
   });
 
   $effect(() => {

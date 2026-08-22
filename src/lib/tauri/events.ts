@@ -16,6 +16,8 @@ export type MenuAction =
   | 'toggle_line_glow'
   | 'theme_light'
   | 'theme_dark'
+  | 'theme_aurora_light'
+  | 'theme_aurora_dark'
   | 'theme_system'
   | 'recent_files';
 
