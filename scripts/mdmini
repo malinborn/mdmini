@@ -6,6 +6,13 @@ SOCK="/tmp/com_md_mini_app_si.sock"
 PENDING="/tmp/md-mini-pending-files"
 CMD_SOCK="/tmp/md_mini_cmd.sock"
 
+# `mdmini help` / `mdmini agent` are local and offline (no socket, no running
+# app required) — hand off straight to the binary's `ai` client without the
+# launch-wait logic below.
+if [ "$1" = "help" ] || [ "$1" = "agent" ]; then
+  exec "$BIN" ai "$@"
+fi
+
 # AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` talk to the
 # running app's command socket instead of the file-open path above. Launch the
 # app first (no pending files needed — the request itself carries the file)

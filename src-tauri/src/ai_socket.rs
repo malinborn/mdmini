@@ -456,15 +456,38 @@ enum CliVerb {
         show: bool,
         allow_empty: bool,
     },
+    /// Local, offline: prints the full CLI reference. No file arg, no flags.
+    Help,
+    /// Local, offline: prints the agent-onboarding instruction block. No file
+    /// arg, no flags.
+    Agent,
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
+/// `help` and `agent` take no file arg and no flags — checked before the
+/// file-arg parsing shared by `show`/`edit` below.
 fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
     let mut iter = args.iter();
     let verb = iter.next().ok_or_else(|| USAGE.to_string())?;
+
+    if verb == "help" || verb == "agent" {
+        if iter.next().is_some() {
+            return Err(format!("{} takes no arguments", verb));
+        }
+        return Ok(CliArgs {
+            path: String::new(),
+            verb: if verb == "help" {
+                CliVerb::Help
+            } else {
+                CliVerb::Agent
+            },
+            socket: None,
+        });
+    }
+
     let path = iter.next().ok_or_else(|| USAGE.to_string())?.clone();
     let mut socket: Option<String> = None;
 
@@ -550,6 +573,139 @@ fn print_response_and_exit_code(response_json: &str) -> i32 {
     }
 }
 
+/// Full reference for every `mdmini` verb — printed by `mdmini help`. Single
+/// source of truth: keep in sync with `docs/ai-interface.md` by hand (the doc
+/// says as much). Local and offline — works whether or not md-mini is
+/// installed or running.
+fn help_text() -> String {
+    // Uses `###`-delimited raw string, not `#` — the body contains a literal
+    // `"##` sequence (`--find "## Deploy"`) that would otherwise terminate a
+    // single-hash raw string early.
+    r###"mdmini — minimalist live-preview markdown editor for macOS
+
+USAGE
+  mdmini <file>...                          Open one or more files (or focus existing windows)
+  mdmini show <file> [--line N | --find TEXT] [--socket PATH]
+  mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
+  mdmini help
+  mdmini agent
+
+OPENING FILES
+  mdmini notes.md report.md
+      Opens each file in its own window (or focuses it if already open).
+      Relative paths are resolved against the current directory. If md-mini
+      isn't running, it is launched via `open`; an already-running instance
+      receives the file list over a single-instance socket.
+
+SHOW — point at a location in an already-open (or newly opened) window
+  mdmini show <file> [--line N | --find "text"] [--socket PATH]
+
+  Opens <file> (or focuses its window if already open) and scrolls the
+  target into view with a ~1.6s pulse highlight.
+    --line N        1-based line number, clamped to the document.
+    --find TEXT     Locate the first substring match (case-sensitive).
+                    Mutually exclusive with --line.
+    --socket PATH   Talk to a non-default command socket (see "Dev builds").
+  Neither flag: just opens/focuses the file, no scroll.
+
+  Examples:
+    mdmini show notes.md --line 42
+    mdmini show notes.md --find "## Deploy"
+
+EDIT — replace the live buffer with new content, diffed and highlighted
+  cat new.md | mdmini edit <file> [--show] [--allow-empty] [--socket PATH]
+
+  Reads the COMPLETE new document from stdin, diffs it against what's
+  currently in the live buffer, applies only the changed span, and marks it
+  with a persistent highlight. If the file isn't open yet, md-mini opens a
+  window for it first, then applies the edit.
+    --show          Also scroll the changed span into view.
+    --allow-empty   Permit empty stdin (otherwise refused — see below).
+    --socket PATH   Talk to a non-default command socket.
+
+  Always send the FULL new document on stdin, never a diff/patch — md-mini
+  computes the diff itself against the live buffer.
+
+  Empty stdin is refused by default:
+    {"ok":false,"error":"refusing to apply empty content (use --allow-empty)"}
+  exit 2. This guards against a shell mistake (e.g. `cat /dev/null | mdmini
+  edit file.md`) silently truncating the buffer. Pass --allow-empty to
+  intentionally clear a file.
+
+  Example:
+    cat new.md | mdmini edit notes.md --show
+
+JSON RESPONSE CONTRACT
+  Both show and edit print exactly one line of JSON to stdout, never stderr.
+
+    show, success:                    {"ok":true}
+    edit, success:                    {"ok":true,"changed_lines":[[12,15]]}
+    edit, no-op (identical content):  {"ok":true,"changed_lines":[]}
+    error (either verb):              {"ok":false,"error":"target not found"}
+
+  changed_lines is a [start,end] pair, 1-based inclusive line numbers in the
+  resulting document — one pair, since md-mini computes a single minimal
+  common-prefix/common-suffix span, not a multi-hunk diff.
+
+EXIT CODES
+    0   Request reached md-mini and succeeded ("ok":true).
+    1   Request reached md-mini but was rejected ("ok":false), or the CLI's
+        own 10s wait for a reply timed out.
+    2   Usage error (bad flags, missing file, unknown verb), edit refused
+        empty stdin without --allow-empty, or md-mini isn't running /
+        didn't start in time.
+
+HELP
+  mdmini help
+      Prints this reference. Exit 0. Local and offline — works even if
+      md-mini isn't installed or running.
+
+AGENT
+  mdmini agent
+      Prints a ready-to-paste instruction block for an AI agent's
+      instruction file (CLAUDE.md, AGENTS.md, etc.) describing the
+      show/edit interface. Exit 0. Local and offline.
+
+DEV BUILDS
+  Release and dev builds use different command sockets:
+    Release (md-mini)   /tmp/md_mini_cmd.sock
+    Dev (md-mini-dev)   /tmp/md_mini_dev_cmd.sock
+  Pass --socket explicitly to target a dev build's socket.
+
+See docs/ai-interface.md in the md-mini repository for the full protocol,
+routing behavior, and troubleshooting."###
+        .to_string()
+}
+
+/// The fenced instruction block reused verbatim by `mdmini agent` and by
+/// `docs/ai-interface.md`'s "Using this from an AI agent's CLAUDE.md"
+/// section. Keep both in sync by hand when this changes.
+const AGENT_SNIPPET: &str = r#"## md-mini AI interface
+
+If `mdmini` is available, use it to point at things in the user's open editor and to push edits into the live buffer, instead of only writing files to disk:
+
+- `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
+- `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
+- `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
+
+Both verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk. Always send the full document on stdin for `edit`, never a diff."#;
+
+/// Text for `mdmini agent` — printed by `mdmini help` for
+/// `mdmini agent`. Local and offline.
+fn agent_text() -> String {
+    format!(
+        "Paste the block below into your AI agent's instruction file. Common locations:\n\n\
+        \x20 CLAUDE.md                         Claude Code — project root, or ~/.claude/CLAUDE.md for all projects\n\
+        \x20 AGENTS.md                         Codex CLI / generic agent standard — project root\n\
+        \x20 GEMINI.md                         Gemini CLI\n\
+        \x20 .cursor/rules or .cursorrules     Cursor\n\
+        \x20 .github/copilot-instructions.md   GitHub Copilot\n\n\
+        --- copy from here ---\n\
+        {}",
+        AGENT_SNIPPET
+    )
+}
+
 /// Entry point for `mdmini ai <verb> ...`, called from `main.rs` before Tauri
 /// is touched. `args` is the full `std::env::args()` vector (`args[0]` is the
 /// binary path, `args[1]` is `"ai"`); everything from `args[2]` on is the verb
@@ -562,6 +718,19 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             return 2;
         }
     };
+
+    // `help`/`agent` are local and offline — no path, no stdin, no socket.
+    match parsed.verb {
+        CliVerb::Help => {
+            println!("{}", help_text());
+            return 0;
+        }
+        CliVerb::Agent => {
+            println!("{}", agent_text());
+            return 0;
+        }
+        _ => {}
+    }
 
     let abs_path = crate::resolve_path(&parsed.path, None);
 
@@ -596,6 +765,9 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             content: content.unwrap_or_default(),
             show,
         },
+        CliVerb::Help | CliVerb::Agent => {
+            unreachable!("Help/Agent return early above, before this match")
+        }
     };
 
     let socket_path = parsed
@@ -826,6 +998,51 @@ mod tests {
             }
             _ => panic!("expected Edit"),
         }
+    }
+
+    #[test]
+    fn ai_cli_args_help_parses() {
+        let parsed = parse_cli_args(&args(&["help"])).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Help);
+    }
+
+    #[test]
+    fn ai_cli_args_agent_parses() {
+        let parsed = parse_cli_args(&args(&["agent"])).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Agent);
+    }
+
+    #[test]
+    fn ai_cli_args_help_rejects_extra_args() {
+        let err = parse_cli_args(&args(&["help", "extra"])).unwrap_err();
+        assert!(err.contains("takes no arguments"));
+    }
+
+    #[test]
+    fn ai_cli_args_agent_rejects_extra_args() {
+        let err = parse_cli_args(&args(&["agent", "--socket", "/tmp/s.sock"])).unwrap_err();
+        assert!(err.contains("takes no arguments"));
+    }
+
+    #[test]
+    fn help_text_mentions_all_verbs() {
+        let text = help_text();
+        for verb in ["show", "edit", "help", "agent"] {
+            assert!(text.contains(verb), "help text missing verb: {}", verb);
+        }
+        assert!(text.contains("--line"));
+        assert!(text.contains("--find"));
+        assert!(text.contains("--show"));
+        assert!(text.contains("--allow-empty"));
+        assert!(text.contains("--socket"));
+    }
+
+    #[test]
+    fn agent_text_contains_instruction_file_names_and_heading() {
+        let text = agent_text();
+        assert!(text.contains("CLAUDE.md"));
+        assert!(text.contains("AGENTS.md"));
+        assert!(text.contains("## md-mini AI interface"));
     }
 
     #[test]
