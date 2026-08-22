@@ -18,13 +18,13 @@
 - Create: `src-tauri/src/ai_socket.rs`
 - Modify: `src-tauri/src/lib.rs` (add `mod ai_socket;`)
 
-- [ ] **Step 1: Write failing cargo tests** in `ai_socket.rs` `#[cfg(test)]`:
+- [x] **Step 1: Write failing cargo tests** in `ai_socket.rs` `#[cfg(test)]`:
   - `socket_path_release_and_dev_differ`: `socket_path("md-mini") == /tmp/md_mini_cmd.sock`, `socket_path("md-mini-dev") == /tmp/md_mini_dev_cmd.sock` (non-alphanumeric chars in product name → `_`).
   - `parses_show_with_line`: `{"v":1,"cmd":"show","path":"/a.md","line":42}` → `AiRequest::Show { line: Some(42), find: None, .. }`.
   - `parses_edit_with_default_show`: `{"v":1,"cmd":"edit","path":"/a.md","content":"x"}` → `Edit { show: false, .. }`.
   - `malformed_line_yields_error_response`: `parse_request("not json")` returns `Err(String)`; `AiResponse::error("boom")` serializes to `{"ok":false,"error":"boom"}` (no `changed_lines` key — use `skip_serializing_if = "Option::is_none"`).
-- [ ] **Step 2: Run** `cargo test --manifest-path src-tauri/Cargo.toml ai_socket` — expect FAIL (module missing).
-- [ ] **Step 3: Implement** in `ai_socket.rs`:
+- [x] **Step 2: Run** `cargo test --manifest-path src-tauri/Cargo.toml ai_socket` — expect FAIL (module missing).
+- [x] **Step 3: Implement** in `ai_socket.rs`:
 
 ```rust
 #[derive(Debug, serde::Deserialize)]
@@ -47,8 +47,8 @@ pub fn parse_request(line: &str) -> Result<AiRequest, String>;
 ```
 
   Listener (`pub fn start(app: &AppHandle)`): resolve path from `app.config().product_name`, `let _ = std::fs::remove_file(&path)` (stale socket), bind `std::os::unix::net::UnixListener`, `std::fs::set_permissions(&path, PermissionsExt::from_mode(0o600))`, then `std::thread::spawn` accept loop; each connection: `BufReader::read_line`, `parse_request`, on Ok → `dispatch` (Task 2) with an `std::sync::mpsc::channel::<AiResponse>()`, `rx.recv_timeout(Duration::from_secs(8))` (timeout → `AiResponse::error("timeout waiting for editor")`), write `serde_json::to_string(&resp) + "\n"`, next line (connection stays usable; parse error → error response, continue).
-- [ ] **Step 4: Run tests** — expect PASS. Also `cargo clippy --manifest-path src-tauri/Cargo.toml` clean.
-- [ ] **Step 5: Commit** `feat(ai): command socket protocol and listener`
+- [x] **Step 4: Run tests** — expect PASS. Also `cargo clippy --manifest-path src-tauri/Cargo.toml` clean.
+- [x] **Step 5: Commit** `feat(ai): command socket protocol and listener`
 
 ### Task 2: Rust — dispatch, pending queue, frontend correlation
 

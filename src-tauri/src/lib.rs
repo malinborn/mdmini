@@ -1,3 +1,4 @@
+mod ai_socket;
 mod commands;
 mod menu;
 mod paths;
