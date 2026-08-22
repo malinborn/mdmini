@@ -13,6 +13,9 @@ export const editorTheme = EditorView.theme({
     padding: '0',
   },
   '.cm-cursor, .cm-dropCursor': {
+    // borderLeftColor is inert once borderImage is set — the caret color comes
+    // from the border-image gradient (solid via fallback in themes without
+    // dedicated caret tokens).
     borderLeftColor: 'var(--color-cursor)',
     borderLeftWidth: '2px',
     borderImage:
