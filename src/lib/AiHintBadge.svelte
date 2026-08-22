@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Bottom-left hint pointing at Esc while an AI-edit highlight is visible.
+   * Top-right hint pointing at Esc while an AI-edit highlight is visible.
    * Never intercepts input — it's purely informational, so pointer-events
    * stays off even while faded in.
    */
@@ -14,8 +14,8 @@
 <style>
   .ai-hint-badge {
     position: fixed;
-    left: 14px;
-    bottom: 14px;
+    right: 14px;
+    top: 14px;
     z-index: 900;
     display: flex;
     align-items: center;
@@ -33,7 +33,7 @@
   }
 
   .ai-hint-badge.ai-hint-visible {
-    opacity: 0.65;
+    opacity: 0.92;
   }
 
   .ai-hint-badge kbd {
