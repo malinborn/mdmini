@@ -87,6 +87,14 @@ Both variants use Inter (sans-serif) — Aurora is the "calm" family without ser
 | `--color-glow` | `143, 159, 245` |
 | `--bg-overlay` | `rgba(23, 22, 41, 0.75)` |
 | `--border` | `#353456` |
+| `--ai-edit-bg` | `rgba(111, 217, 192, 0.16)` |
+| `--ai-edit-shimmer` | `rgba(126, 223, 242, 0.4)` |
+| `--ai-ask-bg` | `rgba(111, 217, 192, 0.1)` |
+| `--ai-ask-border` | `rgba(111, 217, 192, 0.3)` |
+| `--ai-ask-chip-bg` | `rgba(255, 255, 255, 0.04)` |
+| `--ai-ask-chip-hover-bg` | `rgba(111, 217, 192, 0.18)` |
+| `--ai-ask-accent` | `#6fd9c0` |
+| `--ai-ask-accent-text` | `#171629` |
 | `--font-text` | `'Inter', -apple-system, system-ui, sans-serif` |
 | `--font-code` | `'JetBrains Mono', 'SF Mono', monospace` |
 
@@ -126,6 +134,14 @@ The signature feature: the editor background is a **very subtle long diagonal gr
 | `--color-glow` | `85, 102, 236` |
 | `--bg-overlay` | `rgba(239, 238, 236, 0.75)` |
 | `--border` | `#dddcd5` |
+| `--ai-edit-bg` | `rgba(13, 148, 136, 0.14)` |
+| `--ai-edit-shimmer` | `rgba(13, 148, 136, 0.26)` |
+| `--ai-ask-bg` | `rgba(85, 102, 236, 0.06)` |
+| `--ai-ask-border` | `rgba(85, 102, 236, 0.25)` |
+| `--ai-ask-chip-bg` | `#fbfaf7` |
+| `--ai-ask-chip-hover-bg` | `rgba(85, 102, 236, 0.12)` |
+| `--ai-ask-accent` | `#5566ec` |
+| `--ai-ask-accent-text` | `#ffffff` |
 | `--font-text` | `'Inter', -apple-system, system-ui, sans-serif` |
 | `--font-code` | `'JetBrains Mono', 'SF Mono', monospace` |
 
