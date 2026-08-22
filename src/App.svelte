@@ -199,7 +199,7 @@
       // Silently reload
       try {
         const content = await readFile(path);
-        editorHandle?.replaceContent(content);
+        editorHandle?.updateContent(content);
         fileState.isDirty = false;
       } catch (err) {
         console.error('Failed to reload externally changed file:', err);
@@ -213,7 +213,7 @@
       if (reload) {
         try {
           const content = await readFile(path);
-          editorHandle?.replaceContent(content);
+          editorHandle?.updateContent(content);
           fileState.isDirty = false;
         } catch (err) {
           console.error('Failed to reload externally changed file:', err);
