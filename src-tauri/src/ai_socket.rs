@@ -57,6 +57,12 @@ pub enum AiRequest {
         /// today's single-choice behavior for callers who omit the field.
         #[serde(default)]
         multi: bool,
+        /// Adds a free-text field alongside the option buttons/checkboxes; the
+        /// user may type a custom answer instead of (single mode) or in
+        /// addition to (multi mode) picking options. `false` keeps today's
+        /// options-only behavior for callers who omit the field.
+        #[serde(default)]
+        free_text: bool,
     },
 }
 
@@ -118,6 +124,14 @@ pub struct AiResponse {
     /// any failure).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answers: Option<Vec<String>>,
+    /// The user's typed answer, for free-text (`free_text: true`) `ask` only.
+    /// `None` when free-text wasn't offered, or the user didn't type
+    /// anything, or for any non-`ask` response or `ask` failure. Coexists
+    /// with `answer` (single mode: the frontend sends `custom` instead of
+    /// `answer` when the user typed rather than clicked) and with `answers`
+    /// (multi mode: both may be present together).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom: Option<String>,
 }
 
 impl AiResponse {
@@ -133,6 +147,7 @@ impl AiResponse {
             changed_lines: None,
             answer: None,
             answers: None,
+            custom: None,
         }
     }
 
@@ -143,6 +158,7 @@ impl AiResponse {
             changed_lines: None,
             answer: None,
             answers: None,
+            custom: None,
         }
     }
 }
@@ -422,6 +438,9 @@ pub struct AiCommandPayload {
     pub timeout_secs: u64,
     /// `ask` only — checkbox mode. `false` for `show`/`edit`.
     pub multi: bool,
+    /// `ask` only — offers a free-text field alongside the options. `false`
+    /// for `show`/`edit`. Wire name `freeText` via the struct's camelCase rename.
+    pub free_text: bool,
 }
 
 /// How long to wait for `open_file_window` (run on the main thread) to register
@@ -521,6 +540,10 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
         },
         multi: match &req {
             AiRequest::Ask { multi, .. } => *multi,
+            _ => false,
+        },
+        free_text: match &req {
+            AiRequest::Ask { free_text, .. } => *free_text,
             _ => false,
         },
     };
@@ -636,6 +659,7 @@ enum CliVerb {
         find: Option<String>,
         timeout_secs: u64,
         multi: bool,
+        free_text: bool,
     },
     /// Local, offline: prints the full CLI reference. No file arg, no flags.
     Help,
@@ -644,7 +668,7 @@ enum CliVerb {
     Agent,
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
@@ -732,6 +756,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
             let mut find: Option<String> = None;
             let mut timeout_secs = default_ask_timeout();
             let mut multi = false;
+            let mut free_text = false;
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--question" => {
@@ -743,6 +768,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                         options.push(v.clone());
                     }
                     "--multi" => multi = true,
+                    "--free-text" => free_text = true,
                     "--at-line" => {
                         let v = iter.next().ok_or("--at-line requires a value")?;
                         line = Some(
@@ -783,6 +809,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                     find,
                     timeout_secs: clamp_ask_timeout(timeout_secs),
                     multi,
+                    free_text,
                 },
                 socket,
             })
@@ -882,7 +909,7 @@ EDIT — replace the live buffer with new content, diffed and highlighted
 
 ASK — post a question with option buttons, block until the user answers
   mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] \
-    [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+    [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
 
   Renders the question and 2-6 option buttons inside the open (or newly
   opened) document, blocks until the user answers, and returns the choice.
@@ -893,6 +920,11 @@ ASK — post a question with option buttons, block until the user answers
                        options (including none) and confirms, instead of
                        clicking exactly one. Response carries "answers" (an
                        array) instead of "answer" — see JSON RESPONSE
+                       CONTRACT below.
+    --free-text       Also offer a free-text field: the user may type a
+                       custom answer instead of (single mode) or alongside
+                       (--multi) picking options. A typed answer comes back
+                       as "custom" in the response — see JSON RESPONSE
                        CONTRACT below.
     --at-line N       Show the question near this 1-based line number.
                        Mutually exclusive with --at-find.
@@ -906,6 +938,7 @@ ASK — post a question with option buttons, block until the user answers
   Examples:
     mdmini ask notes.md --question "Ship it?" --option Yes --option No
     mdmini ask notes.md --question "Which reviewers?" --option A --option B --option C --multi
+    mdmini ask notes.md --question "Ship it?" --option Yes --option No --free-text
 
 JSON RESPONSE CONTRACT
   show, edit, and ask each print exactly one line of JSON to stdout, never
@@ -917,6 +950,8 @@ JSON RESPONSE CONTRACT
     ask, success:                     {"ok":true,"answer":"Yes"}
     ask --multi, success:             {"ok":true,"answers":["A","C"]}
     ask --multi, confirmed none:      {"ok":true,"answers":[]}
+    ask --free-text, typed answer:    {"ok":true,"custom":"Something else"}
+    ask --multi --free-text, both:    {"ok":true,"answers":["A"],"custom":"and also this"}
     error (any verb):                 {"ok":false,"error":"target not found"}
 
   changed_lines is a [start,end] pair, 1-based inclusive line numbers in the
@@ -975,9 +1010,9 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
 - `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
-- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead.
+- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead. Add `--free-text` to also let the user type a custom answer — prints `{"ok":true,"custom":"..."}` (or alongside `answers` in `--multi` mode) when they do.
 
-All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, or `"answers":[...]` for `ask --multi`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
 
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
@@ -1062,6 +1097,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             find,
             timeout_secs,
             multi,
+            free_text,
         } => AiRequest::Ask {
             v: 1,
             path: abs_path,
@@ -1071,6 +1107,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             find,
             timeout_secs,
             multi,
+            free_text,
         },
         CliVerb::Help | CliVerb::Agent => {
             unreachable!("Help/Agent return early above, before this match")
@@ -1198,6 +1235,7 @@ mod tests {
                 line,
                 find,
                 multi,
+                free_text,
                 ..
             } => {
                 assert_eq!(question, "Ship it?");
@@ -1206,6 +1244,7 @@ mod tests {
                 assert_eq!(line, None);
                 assert_eq!(find, None);
                 assert!(!multi, "multi should default to false when omitted");
+                assert!(!free_text, "free_text should default to false when omitted");
             }
             _ => panic!("expected Ask"),
         }
@@ -1219,6 +1258,18 @@ mod tests {
         .unwrap();
         match req {
             AiRequest::Ask { multi, .. } => assert!(multi),
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn parses_ask_with_free_text_true() {
+        let req = parse_request(
+            r#"{"v":1,"cmd":"ask","path":"/a.md","question":"Which?","options":["A","B"],"free_text":true}"#,
+        )
+        .unwrap();
+        match req {
+            AiRequest::Ask { free_text, .. } => assert!(free_text),
             _ => panic!("expected Ask"),
         }
     }
@@ -1289,6 +1340,59 @@ mod tests {
         assert!(!json.contains("changed_lines"));
     }
 
+    #[test]
+    fn ai_response_custom_only_round_trips() {
+        let resp = AiResponse {
+            ok: true,
+            error: None,
+            changed_lines: None,
+            answer: None,
+            answers: None,
+            custom: Some("Something else".to_string()),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert_eq!(json, r#"{"ok":true,"custom":"Something else"}"#);
+        assert!(!json.contains("\"answer\""));
+        assert!(!json.contains("\"answers\""));
+
+        let round_tripped: AiResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(round_tripped.custom.as_deref(), Some("Something else"));
+        assert_eq!(round_tripped.answer, None);
+        assert_eq!(round_tripped.answers, None);
+    }
+
+    #[test]
+    fn ai_response_answers_and_custom_round_trip_together() {
+        let resp = AiResponse {
+            ok: true,
+            error: None,
+            changed_lines: None,
+            answer: None,
+            answers: Some(vec!["A".to_string()]),
+            custom: Some("and also this".to_string()),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert_eq!(json, r#"{"ok":true,"answers":["A"],"custom":"and also this"}"#);
+
+        let round_tripped: AiResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(round_tripped.answers, Some(vec!["A".to_string()]));
+        assert_eq!(round_tripped.custom.as_deref(), Some("and also this"));
+    }
+
+    #[test]
+    fn ai_response_answer_only_shape_is_unchanged_by_custom_field() {
+        // Single-choice ask, no free text offered/typed — `custom` stays
+        // absent from the wire, exactly as before this field was added.
+        let json = r#"{"ok":true,"answer":"Yes"}"#;
+        let resp: AiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.answer.as_deref(), Some("Yes"));
+        assert_eq!(resp.custom, None);
+        assert_eq!(resp.answers, None);
+
+        let re_serialized = serde_json::to_string(&resp).unwrap();
+        assert_eq!(re_serialized, json);
+    }
+
     fn test_payload(cmd: &str) -> AiCommandPayload {
         AiCommandPayload {
             id: 1,
@@ -1302,6 +1406,7 @@ mod tests {
             options: Vec::new(),
             timeout_secs: 0,
             multi: false,
+            free_text: false,
         }
     }
 
@@ -1471,6 +1576,7 @@ mod tests {
                 find,
                 timeout_secs,
                 multi,
+                free_text,
             } => {
                 assert_eq!(question, "Ship it?");
                 assert_eq!(
@@ -1481,6 +1587,7 @@ mod tests {
                 assert_eq!(find, None);
                 assert_eq!(timeout_secs, 60);
                 assert!(!multi, "--multi not passed, should default to false");
+                assert!(!free_text, "--free-text not passed, should default to false");
             }
             _ => panic!("expected Ask"),
         }
@@ -1502,6 +1609,26 @@ mod tests {
         .unwrap();
         match parsed.verb {
             CliVerb::Ask { multi, .. } => assert!(multi),
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_ask_free_text_flag_parses() {
+        let parsed = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Ship it?",
+            "--option",
+            "Yes",
+            "--option",
+            "No",
+            "--free-text",
+        ]))
+        .unwrap();
+        match parsed.verb {
+            CliVerb::Ask { free_text, .. } => assert!(free_text),
             _ => panic!("expected Ask"),
         }
     }
@@ -1612,6 +1739,8 @@ mod tests {
         assert!(text.contains("--timeout"));
         assert!(text.contains("--multi"));
         assert!(text.contains("\"answers\""));
+        assert!(text.contains("--free-text"));
+        assert!(text.contains("\"custom\""));
     }
 
     #[test]

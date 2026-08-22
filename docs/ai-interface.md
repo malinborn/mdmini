@@ -8,7 +8,7 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 |---------|----------|
 | `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window) and scroll the target into view with a ~1.6s pulse highlight. `--line` is 1-based, clamped to the document. `--find` locates the first substring match (case-sensitive). Neither flag → just open/focus, no scroll. `--line` and `--find` are mutually exclusive. |
 | `cat new.md \| mdmini edit <file> [--show] [--allow-empty]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. Empty stdin is refused by default (`--allow-empty` to intentionally clear the buffer) — see below. |
-| `mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--at-line N \| --at-find TEXT] [--timeout SECS]` | Post `TEXT` as a question with 2-6 option buttons (one per `--option`, repeatable) inside the file's document, **blocking until the user answers**, and return the choice. Single-choice (default): blocks until one click, returns the chosen option's text as `answer`. `--multi`: checkbox mode — the user may check any number of options (including none) and confirms, returning the checked options as `answers` (an array; `[]` is a valid explicit "confirmed none"). `--at-line`/`--at-find` (mutually exclusive) place the question near a location, same semantics as `show`'s `--line`/`--find`. `--timeout` bounds the wait, default 300s, clamped to 10-3600s. The file must already be open, or exist on disk — unlike `edit`, `ask` cannot "start a new file". |
+| `mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N \| --at-find TEXT] [--timeout SECS]` | Post `TEXT` as a question with 2-6 option buttons (one per `--option`, repeatable) inside the file's document, **blocking until the user answers**, and return the choice. Single-choice (default): blocks until one click, returns the chosen option's text as `answer`. `--multi`: checkbox mode — the user may check any number of options (including none) and confirms, returning the checked options as `answers` (an array; `[]` is a valid explicit "confirmed none"). `--free-text`: also offers a free-text field — a typed answer comes back as `custom`, alongside `answers` in `--multi` mode. `--at-line`/`--at-find` (mutually exclusive) place the question near a location, same semantics as `show`'s `--line`/`--find`. `--timeout` bounds the wait, default 300s, clamped to 10-3600s. The file must already be open, or exist on disk — unlike `edit`, `ask` cannot "start a new file". |
 | `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit`/`ask` as MCP tools instead of CLI verbs — see "MCP server" below. |
 | `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
 | `mdmini agent` | Print a ready-to-paste instruction block for an AI agent's instruction file (CLAUDE.md, AGENTS.md, etc.) — see below. Local and offline. |
@@ -21,6 +21,7 @@ mdmini show notes.md --find "## Deploy"
 cat new.md | mdmini edit notes.md --show
 mdmini ask notes.md --question "Ship it?" --option Yes --option No
 mdmini ask notes.md --question "Which reviewers?" --option A --option B --option C --multi
+mdmini ask notes.md --question "Ship it?" --option Yes --option No --free-text
 ```
 
 All three verbs accept `--socket <path>` to target a non-default command socket (dev builds — see below).
@@ -49,6 +50,11 @@ One line of JSON on stdout, always. No JSON on stderr.
 {"ok": true, "answers": ["A", "C"]}
 {"ok": true, "answers": []}  // confirmed with nothing checked — a valid explicit "none"
 
+// ask --free-text, success — the user typed a custom answer instead of (single mode)
+// or alongside (--multi) picking options
+{"ok": true, "custom": "Something else"}
+{"ok": true, "answers": ["A"], "custom": "and also this"}
+
 // error (any verb)
 {"ok": false, "error": "target not found"}
 ```
@@ -73,10 +79,10 @@ Request shapes (`"v":1` is a protocol version, reserved for a future MCP wrapper
 {"v": 1, "cmd": "show", "path": "/abs/file.md", "line": 42, "find": null}
 {"v": 1, "cmd": "show", "path": "/abs/file.md", "line": null, "find": "## Deploy"}
 {"v": 1, "cmd": "edit", "path": "/abs/file.md", "content": "<full new document>", "show": false}
-{"v": 1, "cmd": "ask", "path": "/abs/file.md", "question": "Ship it?", "options": ["Yes", "No"], "line": null, "find": null, "timeout_secs": 300, "multi": false}
+{"v": 1, "cmd": "ask", "path": "/abs/file.md", "question": "Ship it?", "options": ["Yes", "No"], "line": null, "find": null, "timeout_secs": 300, "multi": false, "free_text": false}
 ```
 
-`ask`'s `timeout_secs` defaults to `300` and is clamped server-side to `10..=3600`; `question` must be non-empty and `options` must have 2 to 6 non-empty entries, checked before any window is touched. `multi` (default `false`, omittable) switches the response shape from a single `answer` string to an `answers` array — see the JSON response contract above.
+`ask`'s `timeout_secs` defaults to `300` and is clamped server-side to `10..=3600`; `question` must be non-empty and `options` must have 2 to 6 non-empty entries, checked before any window is touched. `multi` (default `false`, omittable) switches the response shape from a single `answer` string to an `answers` array; `free_text` (default `false`, omittable) additionally offers a free-text field, whose typed value comes back as `custom` — see the JSON response contract above.
 
 `path` must be absolute — the CLI resolves relative paths against the current directory (and canonicalizes them) before sending.
 
@@ -161,7 +167,7 @@ Same shapes as the CLI verbs, as MCP tools:
 
 - **`show`** — `path` (string, required, absolute), `line` (integer, 1-based) or `find` (string, first-occurrence text search); `line` and `find` are mutually exclusive.
 - **`edit`** — `path` (string, required), `content` (string, required, the **complete** new document), `show` (boolean, scroll to the change on completion). Empty `content` is refused with the same message the CLI gives for empty stdin — there's no `--allow-empty` equivalent over MCP, since an agent should never *mean* to send an empty document.
-- **`ask`** — `path` (string, required), `question` (string, required), `options` (array of string, required, 2-6 entries), `line` (integer, 1-based) or `find` (string), mutually exclusive, `timeout_secs` (integer, default 300, clamped to 10-3600), `multi` (boolean, default `false`). Blocks the `tools/call` response until the user answers. Single-choice (default): returns the chosen option's text as `answer`. `multi: true`: checkbox mode — the user may check any number of options (including none) and confirms; returns the checked options as `answers` (an array; `[]` is a valid explicit "confirmed none") instead of `answer`. Missing `path`/`question`/`options` is a JSON-RPC `-32602` ("invalid params") error, same as `show`'s missing `path` — the question/option-count and empty-string validation happens socket-side and comes back as a normal `isError: true` tool result instead. **Note:** a long `timeout_secs` may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.
+- **`ask`** — `path` (string, required), `question` (string, required), `options` (array of string, required, 2-6 entries), `line` (integer, 1-based) or `find` (string), mutually exclusive, `timeout_secs` (integer, default 300, clamped to 10-3600), `multi` (boolean, default `false`), `free_text` (boolean, default `false`). Blocks the `tools/call` response until the user answers. Single-choice (default): returns the chosen option's text as `answer`. `multi: true`: checkbox mode — the user may check any number of options (including none) and confirms; returns the checked options as `answers` (an array; `[]` is a valid explicit "confirmed none") instead of `answer`. `free_text: true`: also offers a free-text field — the user may type a custom answer instead of (single mode) or alongside (`multi`) picking options; a typed answer comes back as `custom`. Missing `path`/`question`/`options` is a JSON-RPC `-32602` ("invalid params") error, same as `show`'s missing `path` — the question/option-count and empty-string validation happens socket-side and comes back as a normal `isError: true` tool result instead. **Note:** a long `timeout_secs` may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.
 
 `tools/call` builds the matching command-socket request (`{"v":1,"cmd":...}`), sends it, and wraps the raw `AiResponse` JSON line as the tool result text:
 
@@ -169,6 +175,7 @@ Same shapes as the CLI verbs, as MCP tools:
 {"content": [{"type": "text", "text": "{\"ok\":true,\"changed_lines\":[[12,15]]}"}], "isError": false}
 {"content": [{"type": "text", "text": "{\"ok\":true,\"answer\":\"Yes\"}"}], "isError": false}
 {"content": [{"type": "text", "text": "{\"ok\":true,\"answers\":[\"A\",\"C\"]}"}], "isError": false}
+{"content": [{"type": "text", "text": "{\"ok\":true,\"custom\":\"Something else\"}"}], "isError": false}
 ```
 
 `isError` is `true` whenever the underlying response has `"ok":false` (routing failure, refusal, target not found, etc.) — this is a *tool-level* failure, reported inside a normal JSON-RPC success result, not a JSON-RPC protocol error. Only a malformed call itself (unknown tool name, missing required argument) becomes a JSON-RPC `-32602` ("invalid params") error.
@@ -194,9 +201,9 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
 - `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
-- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead.
+- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead. Add `--free-text` to also let the user type a custom answer — prints `{"ok":true,"custom":"..."}` (or alongside `answers` in `--multi` mode) when they do.
 
-All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, or `"answers":[...]` for `ask --multi`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff.
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff.
 ```
 
 Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed.

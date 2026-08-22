@@ -184,7 +184,7 @@ fn tools_list() -> Value {
         },
         {
             "name": "ask",
-            "description": "Ask the user a question with buttons rendered inside their open md-mini document; blocks until they answer. By default single-choice: returns the chosen option as `answer`. Set `multi: true` for checkbox mode — the user may check any number of options (including none) and confirms, and the response carries `answers` (an array) instead. Use for quick decisions while working on that document. Note: long timeout_secs values may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.",
+            "description": "Ask the user a question with buttons rendered inside their open md-mini document; blocks until they answer. By default single-choice: returns the chosen option as `answer`. Set `multi: true` for checkbox mode — the user may check any number of options (including none) and confirms, and the response carries `answers` (an array) instead. Set `free_text: true` to also offer a free-text field — a typed answer comes back as `custom` (alongside `answers` in multi mode). Use for quick decisions while working on that document. Note: long timeout_secs values may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -220,6 +220,11 @@ fn tools_list() -> Value {
                         "type": "boolean",
                         "default": false,
                         "description": "Checkbox mode: the user may check any number of options (including none) and confirms, instead of clicking exactly one. Response carries `answers` (an array) instead of `answer`."
+                    },
+                    "free_text": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Also offer a free-text field: the user may type a custom answer instead of (single mode) or alongside (`multi`) picking options. A typed answer comes back as `custom` in the response."
                     }
                 },
                 "required": ["path", "question", "options"]
@@ -286,6 +291,11 @@ fn build_show_request(arguments: &Value) -> Result<AiRequest, String> {
 /// Empty content is refused the same way the CLI refuses it (`--allow-empty`
 /// has no MCP equivalent — an agent should never mean an empty document), so
 /// this returns the refusal `AiResponse` directly instead of an `AiRequest`.
+// `AiResponse` crossed clippy's 128-byte result_large_err threshold once `ask`
+// picked up its `custom` field; this Result is returned once per call and
+// never stored or collected, so boxing it would add indirection for no
+// measurable benefit.
+#[allow(clippy::result_large_err)]
 fn build_edit_request(arguments: &Value) -> Result<AiRequest, AiResponse> {
     let path = arguments
         .get("path")
@@ -344,6 +354,10 @@ fn build_ask_request(arguments: &Value) -> Result<AiRequest, String> {
         .get("multi")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let free_text = arguments
+        .get("free_text")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     Ok(AiRequest::Ask {
         v: 1,
         path: crate::resolve_path(path, None),
@@ -353,6 +367,7 @@ fn build_ask_request(arguments: &Value) -> Result<AiRequest, String> {
         find,
         timeout_secs,
         multi,
+        free_text,
     })
 }
 
@@ -667,6 +682,7 @@ mod tests {
             changed_lines: None,
             answer: Some("Yes".to_string()),
             answers: None,
+            custom: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -687,6 +703,7 @@ mod tests {
         assert_eq!(req["options"], json!(["Yes", "No"]));
         assert_eq!(req["timeout_secs"], json!(60));
         assert_eq!(req["multi"], json!(false));
+        assert_eq!(req["free_text"], json!(false));
 
         let _ = std::fs::remove_file(&path);
     }
@@ -699,6 +716,7 @@ mod tests {
             changed_lines: None,
             answer: None,
             answers: Some(vec!["A".to_string(), "C".to_string()]),
+            custom: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -716,6 +734,36 @@ mod tests {
         let req: Value = serde_json::from_str(&req_line).unwrap();
         assert_eq!(req["cmd"], json!("ask"));
         assert_eq!(req["multi"], json!(true));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tools_call_ask_free_text_true_round_trips_request_and_custom() {
+        let canned = AiResponse {
+            ok: true,
+            error: None,
+            changed_lines: None,
+            answer: None,
+            answers: None,
+            custom: Some("Something else".to_string()),
+        };
+        let (path, rx) = spawn_fake_socket(canned);
+        let config = McpConfig {
+            socket_path: path.clone(),
+            allow_launch: false,
+        };
+        let request = r#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"ask","arguments":{"path":"/tmp/a.md","question":"Ship it?","options":["Yes","No"],"free_text":true}}}"#;
+        let response = handle_message(request, &config).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(false));
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(text, r#"{"ok":true,"custom":"Something else"}"#);
+
+        let req_line = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let req: Value = serde_json::from_str(&req_line).unwrap();
+        assert_eq!(req["cmd"], json!("ask"));
+        assert_eq!(req["free_text"], json!(true));
 
         let _ = std::fs::remove_file(&path);
     }
