@@ -92,39 +92,46 @@ Both variants use Inter (sans-serif) — Aurora is the "calm" family without ser
 
 ### Aurora Light (`src/lib/theme/aurora-light.css`, `:root[data-theme='aurora-light']`)
 
+The signature feature: the editor background is a **very subtle long diagonal gradient** in desaturated eggshell tones — grayish blue-green → gray → light peachy (user-picked variant "B" from the mockup iterations). `--bg-base` stays a solid mid-tone for components that need a plain color (surfaces, overlays).
+
 | Token | Value |
 |---|---|
-| `--bg-base` | `#f9faff` |
-| `--bg-surface` | `#f0f1fb` |
+| `--bg-base` | `#efeeec` |
+| `--bg-image` | `linear-gradient(150deg, #e7edea 0%, #efeeec 55%, #f6efe7 100%)` |
+| `--bg-surface` | `#e9e8e3` |
 | `--text-primary` | `#262a45` |
 | `--text-subtle` | `#6b6f92` |
-| `--text-muted` | `#9da1c0` |
-| `--highlight` | `#e1e3f5` |
+| `--text-muted` | `#a19e97` |
+| `--highlight` | `#e5e4de` |
 | `--color-heading` | `#5566ec` |
 | `--color-bold` | `#d6438f` |
 | `--color-italic` | `#8b6ce8` |
 | `--color-link` | `#0d9488` |
-| `--color-code-bg` | `#f0f1fb` |
+| `--color-code-bg` | `#e9e8e3` |
 | `--color-code-text` | `#262a45` |
 | `--color-selection` | `#d9ddf8` |
-| `--color-border` | `#e1e3f5` |
+| `--color-border` | `#dddcd5` |
 | `--color-cursor` | `#e0509f` (fallback for `caretColor`) |
 | `--color-caret-top` | `#e0509f` |
 | `--color-caret-bottom` | `#2bb3d9` |
-| `--color-line-highlight` | `#f0f1fb` |
+| `--color-line-highlight` | `#e9e8e3` |
 | `--color-strikethrough` | `#6b6f92` |
 | `--color-blockquote-border` | `#5566ec` |
-| `--color-hr` | `#e1e3f5` |
+| `--color-hr` | `#dddcd5` |
 | `--color-list-marker` | `#6b6f92` |
 | `--color-checkbox` | `#0d9488` |
-| `--color-table-border` | `#e1e3f5` |
-| `--color-table-header-bg` | `#f0f1fb` |
-| `--color-table-even-bg` | `#f2f3fc` |
+| `--color-table-border` | `#dddcd5` |
+| `--color-table-header-bg` | `#e9e8e3` |
+| `--color-table-even-bg` | `#edece7` |
 | `--color-glow` | `85, 102, 236` |
-| `--bg-overlay` | `rgba(249, 250, 255, 0.75)` |
-| `--border` | `#e1e3f5` |
+| `--bg-overlay` | `rgba(239, 238, 236, 0.75)` |
+| `--border` | `#dddcd5` |
 | `--font-text` | `'Inter', -apple-system, system-ui, sans-serif` |
 | `--font-code` | `'JetBrains Mono', 'SF Mono', monospace` |
+
+### Gradient background mechanism
+
+New optional token `--bg-image`. The `editor-theme.ts` root rule (`'&'`) gains `backgroundImage: 'var(--bg-image, none)'`; themes without the token (classic pair, aurora-dark) fall back to `none` and keep their solid `--bg-base`. The gradient sits on the editor root, which is window-sized (`.cm-scroller` scrolls inside it), so it does not scroll with content. `.cm-gutters` background becomes `transparent` so it doesn't paint a solid strip over the gradient — visually identical in solid themes, where it previously matched `--bg-base` anyway. Verify visually: an equal-specificity solid `background` rule declared later can silently override the gradient (this bit the HTML mockup).
 
 ### Gradient caret
 
