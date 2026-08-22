@@ -24,6 +24,14 @@
   --color-table-header-bg: #1f1d2e;
   --color-table-even-bg: #2d2a3e;
   --color-glow: 196, 167, 231;
+  --ai-edit-bg: rgba(49, 116, 143, 0.28);
+  --ai-edit-shimmer: rgba(110, 190, 214, 0.4);
+  --ai-ask-bg: rgba(156, 207, 216, 0.1);
+  --ai-ask-border: rgba(156, 207, 216, 0.3);
+  --ai-ask-chip-bg: rgba(255, 255, 255, 0.04);
+  --ai-ask-chip-hover-bg: rgba(156, 207, 216, 0.18);
+  --ai-ask-accent: #9ccfd8;
+  --ai-ask-accent-text: #191724;
   --bg-overlay: rgba(25, 23, 36, 0.75);
   --border: #403d52;
   --font-text: 'Inter', -apple-system, system-ui, sans-serif;

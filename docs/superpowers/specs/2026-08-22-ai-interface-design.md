@@ -1,0 +1,87 @@
+# md-mini AI Interface — Design Specification
+
+## Overview
+
+A CLI-based interface that lets AI agents (Claude Code and similar) drive the running md-mini directly instead of writing to files on disk. MVP covers two verbs: **show** (open/focus a document, scroll to a location, pulse-highlight it — "look here") and **edit** (apply new content to the live buffer with the changed spans highlighted as the latest AI edit).
+
+Nothing extra to run: the interface is the existing `mdmini` CLI plus a small command socket served by the already-running app. No daemons, no ports, no MCP registration required.
+
+## Goals
+
+- An AI agent can point the user at a specific place in a document.
+- An AI agent can edit an open document through md-mini; the user immediately sees *what* changed via highlights.
+- Editing through md-mini (instead of the file on disk) removes the watcher/autosave reload path and its race conditions entirely for AI-driven edits.
+- Zero setup for the agent: a paragraph in CLAUDE.md describing the CLI verbs is enough.
+
+## Non-Goals (backlog, not MVP)
+
+- Review/accept workflow (per-hunk confirmation) — the highlight is informational only in MVP.
+
+## Implemented since MVP
+
+- `mdmini mcp` — a stdio MCP server wrapping the same command socket protocol, exactly as anticipated above: one socket command (`show`/`edit`) maps to one MCP tool, no changes needed to the socket protocol itself. See `src-tauri/src/mcp_server.rs` and `docs/ai-interface.md` ("MCP server").
+- `mdmini ask <file> --question TEXT --option TEXT (repeatable, 2..=6) [--at-line N | --at-find TEXT] [--timeout SECS]` — an AI agent posts a question with option buttons into the open document; the call blocks until the user clicks one, and the chosen option's text comes back as `AiResponse.answer`. Same command socket, same `OpenFiles` routing as `show`/`edit`, plus a per-request timeout (default 300s, clamped to 10-3600s) instead of the fixed 8s show/edit wait, and a window-close cancellation path (`AiPending::cancel_for_window`, called from `window::untrack_window`) so a delivered-but-unanswered `ask` fails immediately with `"window closed"` instead of hanging until its timeout. Also exposed as an MCP tool (`ask`). See `src-tauri/src/ai_socket.rs` and `docs/ai-interface.md`.
+
+## CLI Surface
+
+| Command | Behavior |
+|---------|----------|
+| `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window via the `OpenFiles` dedup registry), scroll the target into view, pulse a temporary highlight on the target line. `--find` locates the first occurrence of the text; `--line` takes a 1-based line number. Without either, just open/focus. |
+| `mdmini edit <file> [--show]` | Read the complete new document content from **stdin**. The app computes a minimal diff against the live buffer (`computeReplacement`), applies only the changed spans, and highlights them as the current AI edit. `--show` additionally scrolls the first changed span into view. If the file is not open, it is opened first (through the normal open path), then the edit is applied. |
+
+Output contract (for machine parsing):
+
+- stdout: single-line JSON. `show` → `{"ok": true}`. `edit` → `{"ok": true, "changed_lines": [[12, 15]]}` (1-based inclusive line ranges after the edit; empty array when content was identical). Shaped as an array for forward compatibility, but the current implementation (`computeReplacement`'s single common-prefix/common-suffix span) always returns 0 or 1 pairs, never more.
+- Errors: `{"ok": false, "error": "<message>"}` on stdout, non-zero exit code — this covers errors the running app returns (socket dispatch, routing, frontend rejection). CLI usage errors (bad flags, missing file arg, unknown verb) print a plain message to **stderr** instead and exit `2`, before any socket connection is attempted.
+- Timeout: the CLI waits up to 10s for a response, then fails.
+
+## Transport
+
+The existing single-instance socket is one-way (launch args only, no reply channel), so it stays as-is for app launch. Commands go over a new **command socket**:
+
+- Unix domain socket, JSON-lines protocol: one request object per line, one response object per line.
+- Path derives from the product name via `paths` (same dev/release isolation rule as app data): release `/tmp/md_mini_cmd.sock`, dev build `/tmp/md_mini_dev_cmd.sock`. Created with `0600` permissions, removed on clean exit; a stale socket is unlinked and re-bound on startup.
+- Served by a small Rust listener inside the running app (spawned in `setup`, alongside the single-instance plugin). Requests are dispatched to the window that owns the file (via `OpenFiles`) as Tauri events; the frontend answers with an `invoke` carrying a request id, which the listener correlates back to the waiting connection.
+
+Launch-if-not-running (CLI side, mirrors the existing launcher logic in `scripts/mdmini`):
+
+1. If the command socket exists and accepts the connection — send the command.
+2. Otherwise launch the app via `open` (existing path), poll for the socket (up to ~5s), then send.
+
+Request/response shapes (versioned for the future MCP wrapper):
+
+```json
+{"v": 1, "cmd": "show", "path": "/abs/file.md", "line": 42, "find": null}
+{"v": 1, "cmd": "edit", "path": "/abs/file.md", "content": "<full new document>", "show": false}
+```
+
+## Frontend
+
+Two new Tauri events handled in `App.svelte`:
+
+- `ai-show` → resolve the target position (line or text search), dispatch `EditorView.scrollIntoView(pos, {y: "center"})` plus a short-lived pulse decoration (CSS animation, self-clearing).
+- `ai-edit` → reuse the external-reload machinery: `computeReplacement` against the live doc, single-span dispatch with the scroll snapshot mapped through the ChangeSet (as in `updateContent`). The changed span feeds a new **AI-highlight StateField**:
+  - Decoration: subtle background on the changed ranges (theme variable, light/dark aware).
+  - Ranges are mapped through subsequent user edits (`value.map(tr.changes)`), so the highlight survives typing nearby.
+  - Lifetime: cleared by the next `ai-edit` command (which installs its own ranges) or by Esc. Not persisted across restarts.
+
+Edits apply to the **live buffer**; autosave persists them to disk as usual. The `isSaving` suppression already prevents the app's own write from bouncing back through the watcher. Because the AI edit never touches the file directly, the dirty-file conflict dialog never triggers for this path.
+
+Concurrency: the socket listener does not serialize commands to a window — each connection is served on its own thread, and more than one `ai-command` event can reach the same window in flight. The actual guarantee is in the frontend: `handleAiCommand`'s edit branch reads `view.state.doc` and calls `view.dispatch` synchronously with no `await` between them, so two edits delivered back-to-back can't both diff against the same pre-edit state and clobber each other.
+
+## Error Handling
+
+- Unknown/unreadable path on `show` → open fails, error JSON returned.
+- `edit` for a file md-mini cannot open (permissions, binary) → error JSON, buffer untouched.
+- Window closed between dispatch and response → listener times out that request (8s) and returns an error.
+- Malformed request line → error response, connection stays usable.
+
+## Testing
+
+- `computeReplacement` span → line-range conversion, highlight range mapping through edits: Vitest (CM6 `EditorState` in-memory, per repo pattern).
+- Socket listener: `cargo test` — protocol parsing, request/response correlation, stale-socket rebinding.
+- CLI verbs: shell-level test against a dev build (`npm run dev:app`), manual visual verification of pulse and highlight.
+
+## Security Notes
+
+Local tool context (PoC bar per CLAUDE.md): the socket is user-local with `0600` permissions; no network exposure. The `edit` command can only modify documents the user's own processes could already write. No authentication in MVP; revisit if the protocol ever leaves the machine.

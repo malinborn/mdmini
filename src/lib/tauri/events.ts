@@ -1,4 +1,5 @@
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export type MenuAction =
   | 'new'
@@ -59,5 +60,44 @@ export function onUpdateAvailable(
 export function onUpdateDismissed(handler: () => void): Promise<() => void> {
   return listen('update-dismissed', () => {
     handler();
+  });
+}
+
+/**
+ * One `mdmini ai show`/`edit`/`ask` request, routed by Rust to the window
+ * that owns `path`. Mirrors the camelCase `AiCommandPayload` serialized by
+ * `src-tauri/src/ai_socket.rs` — field names and optionality must match.
+ * `question`/`options`/`multi`/`freeText`/`timeoutSecs` are only meaningful
+ * for `ask` (`options` empty, `multi`/`freeText` false, and `timeoutSecs` 0
+ * for `show`/`edit`).
+ */
+export interface AiCommandPayload {
+  id: number;
+  cmd: 'show' | 'edit' | 'ask';
+  path: string;
+  line: number | null;
+  find: string | null;
+  content: string | null;
+  show: boolean;
+  question: string | null;
+  options: string[];
+  /** Multi-choice (checkbox chips + confirm) vs single-choice (click an option). */
+  multi: boolean;
+  /** Adds a free-text input below the option row, in either mode. */
+  freeText: boolean;
+  timeoutSecs: number;
+}
+
+/**
+ * Emitted to the window that owns the file targeted by an AI command.
+ *
+ * Must listen via the current webview window, not the global `listen`: a
+ * global listener's target is `Any`, which matches *targeted* emits too, so
+ * every window would receive the command and the non-owners would race to
+ * answer it with an error.
+ */
+export function onAiCommand(handler: (payload: AiCommandPayload) => void): Promise<() => void> {
+  return getCurrentWebviewWindow().listen<AiCommandPayload>('ai-command', (event) => {
+    handler(event.payload);
   });
 }

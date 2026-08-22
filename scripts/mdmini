@@ -4,6 +4,51 @@ APP="/Applications/md-mini.app"
 BIN="$APP/Contents/MacOS/md-mini"
 SOCK="/tmp/com_md_mini_app_si.sock"
 PENDING="/tmp/md-mini-pending-files"
+CMD_SOCK="/tmp/md_mini_cmd.sock"
+
+# `mdmini help` / `mdmini agent` are local and offline (no socket, no running
+# app required) — hand off straight to the binary's `ai` client without the
+# launch-wait logic below.
+if [ "$1" = "help" ] || [ "$1" = "agent" ]; then
+  exec "$BIN" ai "$@"
+fi
+
+# `mdmini mcp` is a stdio MCP server (see docs/ai-interface.md) — the binary
+# itself owns socket resolution and the launch-if-not-running retry
+# (mcp_server::run), so this is a plain pass-through, not a rewrite into the
+# `ai` verb like help/agent above. "$@" already starts with "mcp" (that's
+# $1), so exec it unchanged rather than prefixing another "mcp".
+if [ "$1" = "mcp" ]; then
+  exec "$BIN" "$@"
+fi
+
+# AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` / `mdmini
+# ask <file> ...` talk to the running app's command socket instead of the
+# file-open path above. Launch the app first (no pending files needed — the
+# request itself carries the file) if the command socket isn't there yet,
+# then hand off to the binary's own `ai` client (see `run_ai_cli` in
+# src-tauri/src/ai_socket.rs). stdin passes through untouched for `edit`.
+if [ "$1" = "show" ] || [ "$1" = "edit" ] || [ "$1" = "ask" ]; then
+  if [ -S "$CMD_SOCK" ] && ! pgrep -f "md-mini.app/Contents/MacOS/md-mini" >/dev/null; then
+    # Socket file survived a crash/kill-9 of the process that owned it — a
+    # stale socket makes every command below hang until its own read times
+    # out. Treat it as absent so the launch path below rebinds it.
+    rm -f "$CMD_SOCK"
+  fi
+  if [ ! -S "$CMD_SOCK" ]; then
+    open "$APP"
+    waited=0
+    while [ ! -S "$CMD_SOCK" ]; do
+      sleep 0.1
+      waited=$((waited + 1))
+      if [ "$waited" -ge 50 ]; then
+        echo '{"ok":false,"error":"md-mini did not start in time"}'
+        exit 2
+      fi
+    done
+  fi
+  exec "$BIN" ai "$@"
+fi
 
 # Resolve relative paths to absolute
 args=()

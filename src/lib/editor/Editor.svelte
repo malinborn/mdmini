@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { EditorView } from '@codemirror/view';
-  import { EditorState, Transaction } from '@codemirror/state';
+  import { ChangeSet, EditorState, Transaction } from '@codemirror/state';
   import { createExtensions, languageCompartment, previewCompartment } from './setup';
   import { languages } from '@codemirror/language-data';
   import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -10,16 +10,20 @@
   import { Strikethrough, Table } from '@lezer/markdown';
   import { livePreviewPlugin } from './preview/plugin';
   import { envPreviewPlugin } from './preview/env';
+  import { computeReplacement } from './content-diff';
+  import { aiHighlightPresenceNotifier } from './ai-highlight';
 
   export interface EditorHandle {
     view: EditorView | undefined;
     replaceContent: (newContent: string) => void;
+    updateContent: (newContent: string) => void;
     setCodeMode: (ext: string | null, basename?: string) => void;
     setEnvMode: (enabled: boolean) => void;
   }
 
-  let { onchange, handle = $bindable() }: {
+  let { onchange, onAiHighlightVisibilityChange, handle = $bindable() }: {
     onchange?: (doc: string) => void;
+    onAiHighlightVisibilityChange?: (visible: boolean) => void;
     handle?: EditorHandle;
   } = $props();
 
@@ -42,6 +46,22 @@
         if (newContent.length > 0) {
           view.contentDOM.blur();
         }
+      },
+      updateContent(newContent: string) {
+        if (!view) return;
+        const repl = computeReplacement(view.state.doc.toString(), newContent);
+        if (!repl) return;
+        // Single-span diff keeps CM6's automatic selection mapping intact and
+        // preserves scroll position — unlike replaceContent's full-doc swap.
+        // scrollSnapshot() captures the anchor at pre-change offsets; it must be
+        // mapped through the same ChangeSet passed to dispatch, or a length-changing
+        // edit above the viewport leaves the anchor pointing at the wrong position.
+        const changes = ChangeSet.of(repl, view.state.doc.length);
+        view.dispatch({
+          changes,
+          effects: view.scrollSnapshot().map(changes) ?? [],
+          annotations: Transaction.addToHistory.of(false),
+        });
       },
       setCodeMode(ext: string | null, basename?: string) {
         if (!view) return;
@@ -106,6 +126,10 @@
             onchange(update.state.doc.toString());
           }
         }),
+        // Same "append at construction time via a prop callback" pattern as the
+        // onchange listener above — createExtensions() is a static list shared by
+        // every consumer, so per-window callbacks are wired here instead.
+        aiHighlightPresenceNotifier((visible) => onAiHighlightVisibilityChange?.(visible)),
       ],
     });
 

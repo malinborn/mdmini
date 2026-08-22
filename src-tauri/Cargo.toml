@@ -1,6 +1,6 @@
 [package]
 name = "md-mini"
-version = "0.1.0"
+version = "1.0.0"
 description = "Minimalist live-preview markdown editor for macOS"
 authors = ["md-mini"]
 edition = "2021"

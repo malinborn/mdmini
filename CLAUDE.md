@@ -39,6 +39,7 @@ src-tauri/src/          # Rust (Tauri backend)
   recovery.rs           # Crash recovery (temp files)
   session.rs            # Session restore (window list, geometry, caret, untitled buffers)
   watcher.rs            # File watcher (notify crate)
+  ai_socket.rs          # AI interface: command socket (mdmini show/edit) + CLI client
 
 src/                    # Frontend (Svelte + TypeScript)
   App.svelte            # Root component, event wiring
@@ -63,6 +64,8 @@ src/                    # Frontend (Svelte + TypeScript)
       mermaid-viewport.ts # Pan/zoom geometry (pure) + frame DOM controller
       mermaid-state.ts  # Per-diagram scale/pan/height (StateField, in-memory)
       utils.ts          # cursorInRange() helper
+    ai-highlight.ts     # AI-edit/pulse highlight StateField (mdmini show/edit), Esc to clear
+  lib/ai-commands.ts    # Pure helpers for AI commands (show target resolution, changed-line ranges)
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
   lib/toasts.svelte.ts  # Toast stack store (update + session notifications)
   lib/ToastStack.svelte # Bottom-right toast stack
@@ -78,6 +81,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - `docs/superpowers/specs/2026-03-19-md-mini-design.md` — Full design specification
 - `docs/superpowers/plans/2026-03-20-md-mini-implementation.md` — Implementation plan (16 tasks)
 - `docs/cli-launcher.md` — How the CLI launcher works (two-path approach: `open` + single-instance IPC)
+- `docs/ai-interface.md` — `mdmini show`/`edit`: CLI syntax, JSON contract, command socket protocol, CLAUDE.md paragraph to paste into other projects
 - `src-tauri/tauri.conf.json` — Tauri config (window defaults, CLI args, plugins)
 - `src-tauri/capabilities/default.json` — Tauri permissions
 - `src/lib/editor/setup.ts` — All CM6 extensions assembled here
@@ -151,6 +155,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - **CM6 widget-hosting line must stay visible:** When replacing a fenced block with a widget (`Decoration.replace`), the `.cm-line` that hosts the widget must NOT have `height: 0` or `overflow: hidden`. The widget is a child of `.cm-line` — hiding it clips the widget. Only hide subsequent lines.
 - **Mermaid render is async:** `mermaid.render()` returns a Promise but CM6 `WidgetType.toDOM()` is sync. Use placeholder widget + `StateEffect` to trigger decoration rebuild when SVG is ready. See `preview/mermaid.ts`.
 - **Natural-size SVG needs a contained host line:** giving a widget SVG its intrinsic width (required for exact zoom math) stretches `.cm-content` and breaks line wrapping *document-wide*, even with `overflow: hidden` on an inner wrapper. Put `contain: inline-size` on the hosting `.cm-line` via a line decoration. Symptom: `.cm-scroller` gains horizontal overflow.
+- **Block widgets must have ZERO vertical CSS margins on their root element.** CM6's height map measures widget height without margins, so every line below the widget sits lower in the DOM than the map thinks. `posAtCoords`'s vertical-scan mode then mis-resolves ArrowUp/Down across the widget — the caret skips all lines between it and the widget's host line. Put spacing as `padding` on an outer wrapper inside the widget DOM instead (padding is part of offsetHeight).
 - **Never dispatch a CM6 transaction per animation frame:** interactive gestures (pan/zoom) must write to the DOM directly and commit to a `StateField` on a trailing debounce. A dispatch per `wheel` event triggers a full decoration rebuild each frame.
 - **Widget `eq()` should exclude the document position** when the widget is expensive to build: including it rebuilds the DOM on every keystroke elsewhere in the file. Resolve the live position at commit time with `view.posAtDOM(dom)`, snapped to `doc.lineAt(...).from`.
 - **Reach the EditorView from the DOM in browser tests:** `document.querySelector('.cm-content').cmTile.root.view`. Useful with `npm run dev` + Playwright, since Tauri file I/O is unavailable there.

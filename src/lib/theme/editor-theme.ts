@@ -15,7 +15,20 @@ export const editorTheme = EditorView.theme({
     borderLeftColor: 'var(--color-cursor)',
     borderLeftWidth: '2px',
   },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+  // Selection is drawn by CM6's `drawSelection()` extension (see setup.ts) as
+  // `.cm-selectionBackground` rectangles, NOT native `::selection` — do not
+  // add `.cm-content ::selection` back here. `drawSelection()` ships its own
+  // `Prec.highest` rule that forces native `::selection` transparent so only
+  // its JS-drawn overlay shows; `Prec.highest` controls facet resolution
+  // order, not `<style>` insertion order, so that rule's `<style>` tag ends
+  // up mounted *before* this theme's — meaning an `!important` here on
+  // `::selection` used to win the cascade tie and made the browser paint a
+  // real native selection after all. That's what caused the ask widget's
+  // native-selection wash across its block-widget region (WebKit still
+  // fills the row for `user-select: none` content mid-drag) — switching to
+  // the drawn overlay computes background rectangles from real document
+  // ranges, which have no width where the widget's line holds no text.
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
     backgroundColor: 'var(--color-selection) !important',
   },
   '.cm-activeLine': {

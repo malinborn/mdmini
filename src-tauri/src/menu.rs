@@ -137,12 +137,27 @@ pub fn build_menu(
         .quit()
         .build()?;
 
+    let ai_menu = SubmenuBuilder::new(app, "AI")
+        .item(
+            &MenuItemBuilder::with_id("ai_connect_cli", "Connect AI via CLI").build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("ai_connect_mcp", "Connect AI via MCP").build(app)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("ai_teach", "Teach your AI md-mini").build(app)?,
+        )
+        .separator()
+        .item(&MenuItemBuilder::with_id("ai_playbook", "AI Playbook").build(app)?)
+        .build()?;
+
     let menu = MenuBuilder::new(app)
         .item(&app_menu)
         .item(&file_menu)
         .item(&edit_menu)
         .item(&view_menu)
         .item(&theme_menu)
+        .item(&ai_menu)
         .build()?;
 
     let theme_items = ThemeMenuItems {

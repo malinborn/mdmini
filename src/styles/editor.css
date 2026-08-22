@@ -1191,6 +1191,209 @@
   background: rgba(246, 193, 119, 0.1);
 }
 
+/* AI-driven edits (mdmini ai edit / show) */
+.cm-ai-edit {
+  background: var(--ai-edit-shimmer);
+  border-radius: 2px;
+}
+
+.cm-line.cm-ai-edit-line {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ai-edit-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-edit-bg) 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes cm-ai-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-line.cm-ai-edit-line {
+    animation: none;
+    background-position: 0 0;
+  }
+}
+
+.cm-line.cm-ai-pulse {
+  animation: cm-ai-pulse 1.6s ease-out;
+}
+
+@keyframes cm-ai-pulse {
+  0% {
+    background-color: var(--ai-edit-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* AI ask (mdmini ask) — a question card with option buttons, inserted as a
+ * widget. Never part of the document text.
+ *
+ * `.cm-ai-ask-wrap` is the widget's root element — CM6 measures a block
+ * widget's height straight from its root's DOM box, which excludes margin.
+ * Vertical spacing therefore lives here as padding (included in the box),
+ * not as margin on `.cm-ai-ask`: a margin on the root would still visually
+ * push every line below it down while CM6's height map stayed oblivious,
+ * desyncing the map from the DOM and breaking ArrowUp/posAtCoords for every
+ * line below the widget. */
+.cm-ai-ask-wrap {
+  padding: 6px 0 10px;
+  /* Keep the widget out of native text selection: a drag across the document
+   * otherwise paints the whole card as selected. Copying is unaffected — CM6
+   * builds clipboard text from the document, never from widget DOM. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.cm-ai-ask {
+  position: relative;
+  margin: 0;
+  padding: 10px 32px 10px 14px;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 8px;
+  /* Opaque stack: the ask tint over the editor base. --ai-ask-bg alone is a
+   * 10%-alpha wash — the selection layer (z:-2, behind content) would show
+   * straight through it whenever a drag spans the widget. */
+  background-color: var(--bg-base);
+  background-image: linear-gradient(var(--ai-ask-bg), var(--ai-ask-bg));
+  font-family: var(--font-code);
+  font-size: 0.85em;
+}
+
+.cm-ai-ask-question {
+  color: var(--text-primary);
+  white-space: normal;
+  line-height: 1.5;
+}
+
+/* Multi-choice mode hint next to the question — a colorblind/monochrome-safe
+ * fallback for the checkbox marker below. */
+.cm-ai-ask-mode {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.cm-ai-ask-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cm-ai-ask-option {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--ai-ask-chip-bg);
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.cm-ai-ask-option:hover {
+  background: var(--ai-ask-chip-hover-bg);
+}
+
+/* Multi-choice: an unchecked chip gets a leading empty-checkbox marker, so
+ * the toggle reads as checkbox semantics before the first click — a
+ * multi-choice ask would otherwise look identical to a single-choice one.
+ * Same specificity as the checked rule below (2 classes + a pseudo-element);
+ * source order lets that later rule's `✓ ` win once a chip is checked. */
+.cm-ai-ask-multi .cm-ai-ask-option::before {
+  content: '☐ ';
+}
+
+/* Multi-choice: a toggled-on chip. Two-class selector to outrank
+ * `.cm-ai-ask-option:hover`'s equal specificity. */
+.cm-ai-ask-option.cm-ai-ask-chip-checked {
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border-color: var(--ai-ask-accent);
+}
+
+.cm-ai-ask-option.cm-ai-ask-chip-checked::before {
+  content: '✓ ';
+}
+
+.cm-ai-ask-option.cm-ai-ask-chip-checked:hover {
+  background: var(--ai-ask-accent);
+}
+
+.cm-ai-ask-confirm {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border: 1px solid var(--ai-ask-accent);
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.cm-ai-ask-confirm:hover {
+  opacity: 0.85;
+}
+
+.cm-ai-ask-input {
+  /* Selectable only while focused: the widget lives outside .cm-line, so
+   * drawSelection's native-::selection kill switch doesn't reach it — an
+   * always-selectable input gets painted by a document-spanning drag. */
+  -webkit-user-select: none;
+  user-select: none;
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--ai-ask-chip-bg);
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+.cm-ai-ask-input::placeholder {
+  color: var(--text-muted);
+}
+
+.cm-ai-ask-input:focus {
+  outline: none;
+  border-color: var(--ai-ask-accent);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm-ai-ask-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9em;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.cm-ai-ask-dismiss:hover {
+  color: var(--text-subtle);
+}
+
 /* Active line glow — stronger in light theme */
 :root[data-theme='light'] .cm-activeLine {
   background-color: rgba(124, 58, 237, 0.06) !important;

@@ -11,19 +11,33 @@
     onSessionRestored,
     onUpdateAvailable,
     onUpdateDismissed,
+    onAiCommand,
+    type AiCommandPayload,
   } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
   import ToastStack from './lib/ToastStack.svelte';
+  import AiHintBadge from './lib/AiHintBadge.svelte';
   import { createToastStore } from './lib/toasts.svelte';
+  import { shouldShowHint, nextCheckDelay } from './lib/ai-hint';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
-  import { highlightActiveLine } from '@codemirror/view';
+  import { EditorView, highlightActiveLine } from '@codemirror/view';
+  import { ChangeSet } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
   import { isShellConfig } from './lib/editor/file-language';
   import { reinitializeTheme } from './lib/editor/preview/mermaid';
+  import { computeReplacement } from './lib/editor/content-diff';
+  import { resolveShowTarget, changedLineRanges } from './lib/ai-commands';
+  import {
+    setAiHighlights,
+    pulseAiLine,
+    clearAiHighlights,
+    aiHighlightRanges,
+  } from './lib/editor/ai-highlight';
+  import { addAiAsk, removeAiAsk } from './lib/editor/ai-ask';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -41,6 +55,77 @@
   let activePreview: 'markdown' | 'env' | 'code' | 'shell' = $state('markdown');
 
   let editorHandle: EditorHandle | undefined = $state(undefined);
+
+  // --- AI-edit highlight hint (bottom-left "Esc" nudge) ---
+  const AI_HINT_SEEN_KEY = 'md-mini.ai-hint-seen';
+  let showAiHint = $state(false);
+  // Plain (non-reactive) bookkeeping: when the current highlight became visible,
+  // and the pending "recheck at the 2h mark" timer. Neither needs to drive a
+  // render on its own — only showAiHint does.
+  let aiHighlightVisibleSince: number | null = null;
+  let aiHintTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function loadAiHintSeen(): boolean {
+    try {
+      return localStorage.getItem(AI_HINT_SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function markAiHintSeen(): void {
+    try {
+      localStorage.setItem(AI_HINT_SEEN_KEY, '1');
+    } catch {
+      // best-effort; a missing flag just means the hint may show again
+    }
+  }
+
+  function clearAiHintTimer(): void {
+    if (aiHintTimer !== null) {
+      clearTimeout(aiHintTimer);
+      aiHintTimer = null;
+    }
+  }
+
+  /** Re-evaluates whether the hint should be showing, and if not, schedules a
+   * single recheck for the moment this highlight crosses the 2h mark. */
+  function evaluateAiHint(): void {
+    if (aiHighlightVisibleSince === null) return;
+    const visibleSince = aiHighlightVisibleSince;
+    const now = Date.now();
+    if (shouldShowHint({ seenBefore: loadAiHintSeen(), visibleSince, now })) {
+      showAiHint = true;
+      clearAiHintTimer();
+      return;
+    }
+    clearAiHintTimer();
+    aiHintTimer = setTimeout(() => {
+      aiHintTimer = null;
+      // Guard: the highlight (or a later one) must still be visible — a
+      // clear in the meantime already reset aiHighlightVisibleSince to null.
+      if (aiHighlightVisibleSince !== null) evaluateAiHint();
+    }, nextCheckDelay({ visibleSince, now: Date.now() }));
+  }
+
+  function handleAiHighlightVisibilityChange(visible: boolean): void {
+    if (visible) {
+      // Replacing ranges while already visible re-fires this with visible=true
+      // only via a false->true transition (see aiHighlightPresenceNotifier), so
+      // this branch only ever runs once per empty->non-empty transition and
+      // aiHighlightVisibleSince keeps its original timestamp for the run.
+      if (aiHighlightVisibleSince === null) aiHighlightVisibleSince = Date.now();
+      evaluateAiHint();
+    } else {
+      // Only the flag the user actually saw the hint burns the one-time show —
+      // an unnoticed flash (highlight cleared before evaluateAiHint ever set
+      // showAiHint) must not silently consume it.
+      if (showAiHint) markAiHintSeen();
+      showAiHint = false;
+      aiHighlightVisibleSince = null;
+      clearAiHintTimer();
+    }
+  }
 
   // --- Timers ---
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -110,6 +195,13 @@
     try {
       const content = await readFile(path);
       fileState.filePath = path;
+      // Register this window as the owner of `path` in the Rust-side
+      // `OpenFiles` map and (re)start its watcher. Without this, a file
+      // opened via the dialog into an already-open window is invisible to
+      // every dedup/routing check that consults `OpenFiles` (AI commands,
+      // "already open" focus-instead-of-duplicate), and never gets watched
+      // for external changes either.
+      invoke('register_open_file', { path }).catch(() => {});
       fileState.isDirty = false;
       editorHandle?.replaceContent(content);
       recentFiles.add(path);
@@ -144,6 +236,10 @@
         editorHandle?.replaceContent('');
       }
       fileState.filePath = path;
+      // Register this window as the owner of `path` — see the matching call
+      // in `handleOpen`. Also (re)starts the file watcher, replacing the
+      // separate `start_watching` invoke this used to make.
+      invoke('register_open_file', { path }).catch(() => {});
       fileState.isDirty = false;
       recentFiles.add(path);
 
@@ -164,11 +260,6 @@
         editorHandle?.setCodeMode(null);
         activePreview = 'markdown';
       }
-
-      // Start watching file for external changes
-      if (exists) {
-        invoke('start_watching', { path }).catch(() => {});
-      }
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -179,7 +270,6 @@
     const view = editorHandle?.view;
     if (!view) return;
     const { clampCursor, clampTopLine } = await import('./lib/session-position');
-    const { EditorView } = await import('@codemirror/view');
 
     const anchor = clampCursor(cursor, view.state.doc.length);
     const line = view.state.doc.line(clampTopLine(topLine, view.state.doc.lines));
@@ -199,7 +289,7 @@
       // Silently reload
       try {
         const content = await readFile(path);
-        editorHandle?.replaceContent(content);
+        editorHandle?.updateContent(content);
         fileState.isDirty = false;
       } catch (err) {
         console.error('Failed to reload externally changed file:', err);
@@ -213,13 +303,182 @@
       if (reload) {
         try {
           const content = await readFile(path);
-          editorHandle?.replaceContent(content);
+          editorHandle?.updateContent(content);
           fileState.isDirty = false;
         } catch (err) {
           console.error('Failed to reload externally changed file:', err);
         }
       }
     }
+  }
+
+  // --- AI command handling (`mdmini show`/`edit`) ---
+  interface AiResponse {
+    ok: boolean;
+    error?: string;
+    changed_lines?: [number, number][];
+    answer?: string;
+    answers?: string[];
+    custom?: string;
+  }
+
+  async function respondToAi(id: number, response: AiResponse): Promise<void> {
+    await invoke('ai_respond', { id, response }).catch((err: unknown) => {
+      console.error('Failed to respond to AI command:', err);
+    });
+  }
+
+  /** Pulse is purely visual; clear it once its animation finishes unless a real
+   * edit highlight has since taken its place — an edit's highlight must
+   * outlive a pulse cleanup scheduled by an earlier `show`. */
+  function schedulePulseCleanup(): void {
+    setTimeout(() => {
+      const view = editorHandle?.view;
+      if (!view) return;
+      if (aiHighlightRanges(view.state).length === 0) {
+        view.dispatch({ effects: clearAiHighlights.of(null) });
+      }
+    }, 1600);
+  }
+
+  /** Invariant: the edit branch below must stay synchronous between reading
+   * `view.state.doc` (via `computeReplacement`) and calling `view.dispatch` —
+   * no `await` in between. Two AI edit commands delivered back-to-back would
+   * otherwise both read the same pre-edit state and diff against it, and
+   * whichever dispatches second would clobber the first's change instead of
+   * building on top of it. */
+  async function handleAiCommand(payload: AiCommandPayload): Promise<void> {
+    if (payload.path !== fileState.filePath) {
+      await respondToAi(payload.id, { ok: false, error: 'window does not own this file' });
+      return;
+    }
+    const view = editorHandle?.view;
+    if (!view) {
+      await respondToAi(payload.id, { ok: false, error: 'editor not ready' });
+      return;
+    }
+
+    if (payload.cmd === 'show') {
+      const pos = resolveShowTarget(view.state, { line: payload.line, find: payload.find });
+      if (pos === null) {
+        await respondToAi(payload.id, { ok: false, error: 'target not found' });
+        return;
+      }
+      // Move the caret along with the view: otherwise it stays wherever it
+      // was (often position 0 in a fresh window) and the next arrow key
+      // snaps the view back there — reads as "cursor jumped to the top".
+      view.dispatch({
+        selection: { anchor: pos },
+        effects: [EditorView.scrollIntoView(pos, { y: 'center' }), pulseAiLine.of(pos)],
+      });
+      schedulePulseCleanup();
+      await respondToAi(payload.id, { ok: true });
+      return;
+    }
+
+    if (payload.cmd === 'ask') {
+      let pos: number;
+      if (payload.line === null && payload.find === null) {
+        pos = view.state.doc.length;
+      } else {
+        const resolved = resolveShowTarget(view.state, { line: payload.line, find: payload.find });
+        if (resolved === null) {
+          await respondToAi(payload.id, { ok: false, error: 'target not found' });
+          return;
+        }
+        pos = resolved;
+      }
+
+      const askId = payload.id;
+      const onAnswer = (
+        answerId: number,
+        result: string | string[] | { custom: string } | { answers: string[]; custom: string } | null
+      ): void => {
+        const currentView = editorHandle?.view;
+        currentView?.dispatch({ effects: removeAiAsk.of(answerId) });
+        if (result === null) {
+          respondToAi(answerId, { ok: false, error: 'dismissed by user' });
+        } else if (Array.isArray(result)) {
+          respondToAi(answerId, { ok: true, answers: result });
+        } else if (typeof result === 'string') {
+          respondToAi(answerId, { ok: true, answer: result });
+        } else if ('answers' in result) {
+          respondToAi(answerId, { ok: true, answers: result.answers, custom: result.custom });
+        } else {
+          respondToAi(answerId, { ok: true, custom: result.custom });
+        }
+      };
+
+      view.dispatch({
+        // Caret follows the question's anchor for the same reason as `show`:
+        // a later arrow key must not yank the view back to a stale caret.
+        selection: { anchor: pos },
+        effects: [
+          addAiAsk.of({
+            spec: {
+              id: askId,
+              question: payload.question ?? '',
+              options: payload.options,
+              multi: payload.multi,
+              freeText: payload.freeText,
+              onAnswer,
+            },
+            pos,
+          }),
+          EditorView.scrollIntoView(pos, { y: 'center' }),
+        ],
+      });
+
+      // The Rust side owns the timeout/window-close deadline; this is only a
+      // fallback to drop a widget the server has already stopped waiting on.
+      // Answering after the server timeout is a harmless no-op there, and
+      // removing an id the field no longer has is a no-op here too.
+      setTimeout(
+        () => {
+          editorHandle?.view?.dispatch({ effects: removeAiAsk.of(askId) });
+        },
+        payload.timeoutSecs * 1000 + 2000
+      );
+
+      // The socket call is blocking on the user — respond only from the
+      // button callbacks above, never immediately here.
+      return;
+    }
+
+    // cmd === 'edit'
+    const repl = computeReplacement(view.state.doc.toString(), payload.content ?? '');
+    if (!repl) {
+      await respondToAi(payload.id, { ok: true, changed_lines: [] });
+      return;
+    }
+
+    // Single-span diff, exactly mirroring Editor.svelte's updateContent: keeps
+    // CM6's automatic selection mapping intact and preserves scroll position.
+    const changes = ChangeSet.of(repl, view.state.doc.length);
+    const scrollEffect = view.scrollSnapshot().map(changes);
+    const highlightRange = { from: repl.from, to: repl.from + repl.insert.length };
+    view.dispatch({
+      changes,
+      // With `show` the user is being led to the change — bring the caret
+      // too (post-change coordinates), so arrow keys continue from there.
+      ...(payload.show ? { selection: { anchor: repl.from } } : {}),
+      effects: [
+        ...(scrollEffect ? [scrollEffect] : []),
+        setAiHighlights.of([highlightRange]),
+        ...(payload.show ? [EditorView.scrollIntoView(repl.from, { y: 'center' })] : []),
+      ],
+      // Unlike an external-reload or an untitled-restore transaction, an AI
+      // edit must stay undoable — it's a content change the user did not
+      // author, and Cmd+Z is their way to reject it. No addToHistory(false)
+      // annotation here (contrast Editor.svelte's updateContent).
+    });
+    // docChanged still fires the update listener (handleChange), which arms
+    // dirty state + autosave — no separate call needed here.
+
+    await respondToAi(payload.id, {
+      ok: true,
+      changed_lines: [changedLineRanges(view.state, repl)],
+    });
   }
 
   // --- Recovery save (every 5s if dirty) ---
@@ -281,6 +540,14 @@
       }
       if (pending.cursor > 0 || pending.topLine > 1) {
         await applyRestorePosition(pending.cursor, pending.topLine);
+      }
+    }).then(async () => {
+      // Commands queued for this file before its window existed (e.g. an
+      // `ai edit` of a file that wasn't open yet triggered this window's
+      // creation) — drained once, after the pending-open/restore settles.
+      const queued = await invoke<AiCommandPayload[]>('ai_pull_pending').catch(() => []);
+      for (const command of queued) {
+        await handleAiCommand(command);
       }
     });
 
@@ -346,6 +613,10 @@
 
     const unlistenExternalChange = onFileChangedExternally((path) => {
       handleExternalChange(path);
+    });
+
+    const unlistenAiCommand = onAiCommand((payload) => {
+      handleAiCommand(payload);
     });
 
     // Drag & drop: open files dropped onto the window
@@ -422,6 +693,7 @@
       unlistenMenu.then((fn) => fn());
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
+      unlistenAiCommand.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
       unlistenSessionRestored.then((fn) => fn());
       unlistenUpdateAvailable.then((fn) => fn());
@@ -429,6 +701,7 @@
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
       if (recoveryInterval !== null) clearInterval(recoveryInterval);
+      clearAiHintTimer();
     };
   });
 
@@ -477,8 +750,14 @@
 </script>
 
 <main style="font-size: {zoom.level}rem;">
-  <Editor bind:handle={editorHandle} onchange={handleChange} />
+  <Editor
+    bind:handle={editorHandle}
+    onchange={handleChange}
+    onAiHighlightVisibilityChange={handleAiHighlightVisibilityChange}
+  />
 </main>
+
+<AiHintBadge visible={showAiHint} />
 
 {#if showRecentFiles}
   <RecentFilesPanel

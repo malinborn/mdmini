@@ -89,3 +89,7 @@ mdmini                    # Open empty editor
 mdmini README.md          # Open file (launches app if not running)
 mdmini file1.md file2.md  # Open multiple files in separate windows
 ```
+
+### AI interface passthrough
+
+`mdmini show <file> ...` and `mdmini edit <file> ...` don't go through either socket above — they talk to a separate **command socket** (`/tmp/md_mini_cmd.sock`) that the running app also serves, launching it first (via the same `open` path) if it isn't up yet. See `docs/ai-interface.md` for the full protocol.
