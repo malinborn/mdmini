@@ -8,6 +8,7 @@ import {
   clearAiHighlights,
   pulseAiLine,
   clearAiHighlightsCommand,
+  notifyHighlightPresenceChange,
 } from './ai-highlight';
 
 function makeState(doc: string): EditorState {
@@ -148,5 +149,63 @@ describe('clearAiHighlightsCommand', () => {
     expect(clearAiHighlightsCommand(view)).toBe(true);
     expect(calls).toHaveLength(1);
     expect(calls[0].effects).toBeDefined();
+  });
+});
+
+describe('notifyHighlightPresenceChange', () => {
+  it('fires with true on the empty->non-empty transition', () => {
+    const empty = makeState('hello world');
+    const nonEmpty = empty.update({ effects: setAiHighlights.of([{ from: 0, to: 5 }]) }).state;
+    const onChange = vi.fn();
+
+    notifyHighlightPresenceChange(empty, nonEmpty, onChange);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('does not fire again while replacing ranges with the highlight already visible', () => {
+    const first = makeState('abcdefghij').update({
+      effects: setAiHighlights.of([{ from: 0, to: 3 }]),
+    }).state;
+    const second = first.update({ effects: setAiHighlights.of([{ from: 5, to: 8 }]) }).state;
+    const onChange = vi.fn();
+
+    notifyHighlightPresenceChange(first, second, onChange);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('fires with false on the non-empty->empty transition (clear)', () => {
+    const visible = makeState('hello world').update({
+      effects: setAiHighlights.of([{ from: 0, to: 5 }]),
+    }).state;
+    const cleared = visible.update({ effects: clearAiHighlights.of(null) }).state;
+    const onChange = vi.fn();
+
+    notifyHighlightPresenceChange(visible, cleared, onChange);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
+
+  it('does not fire for a pulse alongside no marks (pulse-only is not "visible")', () => {
+    const empty = makeState('line1\nline2\n');
+    const pulsed = empty.update({ effects: pulseAiLine.of(empty.doc.line(1).from) }).state;
+    const onChange = vi.fn();
+
+    notifyHighlightPresenceChange(empty, pulsed, onChange);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does not fire for an unrelated edit while empty', () => {
+    const empty = makeState('hello world');
+    const stillEmpty = empty.update({ changes: { from: 0, to: 0, insert: 'X' } }).state;
+    const onChange = vi.fn();
+
+    notifyHighlightPresenceChange(empty, stillEmpty, onChange);
+
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

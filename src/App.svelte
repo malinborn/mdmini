@@ -18,7 +18,9 @@
   import { ask } from '@tauri-apps/plugin-dialog';
   import RecentFilesPanel from './lib/RecentFilesPanel.svelte';
   import ToastStack from './lib/ToastStack.svelte';
+  import AiHintBadge from './lib/AiHintBadge.svelte';
   import { createToastStore } from './lib/toasts.svelte';
+  import { shouldShowHint, nextCheckDelay } from './lib/ai-hint';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
   import { EditorView, highlightActiveLine } from '@codemirror/view';
   import { ChangeSet } from '@codemirror/state';
@@ -52,6 +54,77 @@
   let activePreview: 'markdown' | 'env' | 'code' | 'shell' = $state('markdown');
 
   let editorHandle: EditorHandle | undefined = $state(undefined);
+
+  // --- AI-edit highlight hint (bottom-left "Esc" nudge) ---
+  const AI_HINT_SEEN_KEY = 'md-mini.ai-hint-seen';
+  let showAiHint = $state(false);
+  // Plain (non-reactive) bookkeeping: when the current highlight became visible,
+  // and the pending "recheck at the 2h mark" timer. Neither needs to drive a
+  // render on its own — only showAiHint does.
+  let aiHighlightVisibleSince: number | null = null;
+  let aiHintTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function loadAiHintSeen(): boolean {
+    try {
+      return localStorage.getItem(AI_HINT_SEEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function markAiHintSeen(): void {
+    try {
+      localStorage.setItem(AI_HINT_SEEN_KEY, '1');
+    } catch {
+      // best-effort; a missing flag just means the hint may show again
+    }
+  }
+
+  function clearAiHintTimer(): void {
+    if (aiHintTimer !== null) {
+      clearTimeout(aiHintTimer);
+      aiHintTimer = null;
+    }
+  }
+
+  /** Re-evaluates whether the hint should be showing, and if not, schedules a
+   * single recheck for the moment this highlight crosses the 2h mark. */
+  function evaluateAiHint(): void {
+    if (aiHighlightVisibleSince === null) return;
+    const visibleSince = aiHighlightVisibleSince;
+    const now = Date.now();
+    if (shouldShowHint({ seenBefore: loadAiHintSeen(), visibleSince, now })) {
+      showAiHint = true;
+      clearAiHintTimer();
+      return;
+    }
+    clearAiHintTimer();
+    aiHintTimer = setTimeout(() => {
+      aiHintTimer = null;
+      // Guard: the highlight (or a later one) must still be visible — a
+      // clear in the meantime already reset aiHighlightVisibleSince to null.
+      if (aiHighlightVisibleSince !== null) evaluateAiHint();
+    }, nextCheckDelay({ visibleSince, now: Date.now() }));
+  }
+
+  function handleAiHighlightVisibilityChange(visible: boolean): void {
+    if (visible) {
+      // Replacing ranges while already visible re-fires this with visible=true
+      // only via a false->true transition (see aiHighlightPresenceNotifier), so
+      // this branch only ever runs once per empty->non-empty transition and
+      // aiHighlightVisibleSince keeps its original timestamp for the run.
+      if (aiHighlightVisibleSince === null) aiHighlightVisibleSince = Date.now();
+      evaluateAiHint();
+    } else {
+      // Only the flag the user actually saw the hint burns the one-time show —
+      // an unnoticed flash (highlight cleared before evaluateAiHint ever set
+      // showAiHint) must not silently consume it.
+      if (showAiHint) markAiHintSeen();
+      showAiHint = false;
+      aiHighlightVisibleSince = null;
+      clearAiHintTimer();
+    }
+  }
 
   // --- Timers ---
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -548,6 +621,7 @@
       window.removeEventListener('blur', handleWindowBlur);
       if (autoSaveTimer !== null) clearTimeout(autoSaveTimer);
       if (recoveryInterval !== null) clearInterval(recoveryInterval);
+      clearAiHintTimer();
     };
   });
 
@@ -596,8 +670,14 @@
 </script>
 
 <main style="font-size: {zoom.level}rem;">
-  <Editor bind:handle={editorHandle} onchange={handleChange} />
+  <Editor
+    bind:handle={editorHandle}
+    onchange={handleChange}
+    onAiHighlightVisibilityChange={handleAiHighlightVisibilityChange}
+  />
 </main>
+
+<AiHintBadge visible={showAiHint} />
 
 {#if showRecentFiles}
   <RecentFilesPanel

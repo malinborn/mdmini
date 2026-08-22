@@ -11,6 +11,7 @@
   import { livePreviewPlugin } from './preview/plugin';
   import { envPreviewPlugin } from './preview/env';
   import { computeReplacement } from './content-diff';
+  import { aiHighlightPresenceNotifier } from './ai-highlight';
 
   export interface EditorHandle {
     view: EditorView | undefined;
@@ -20,8 +21,9 @@
     setEnvMode: (enabled: boolean) => void;
   }
 
-  let { onchange, handle = $bindable() }: {
+  let { onchange, onAiHighlightVisibilityChange, handle = $bindable() }: {
     onchange?: (doc: string) => void;
+    onAiHighlightVisibilityChange?: (visible: boolean) => void;
     handle?: EditorHandle;
   } = $props();
 
@@ -124,6 +126,10 @@
             onchange(update.state.doc.toString());
           }
         }),
+        // Same "append at construction time via a prop callback" pattern as the
+        // onchange listener above — createExtensions() is a static list shared by
+        // every consumer, so per-window callbacks are wired here instead.
+        aiHighlightPresenceNotifier((visible) => onAiHighlightVisibilityChange?.(visible)),
       ],
     });
 

@@ -1,4 +1,4 @@
-import { StateEffect, StateField, type EditorState } from '@codemirror/state';
+import { StateEffect, StateField, type EditorState, type Extension } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, keymap } from '@codemirror/view';
 
 /** A highlighted span, in document coordinates. */
@@ -85,3 +85,32 @@ export function clearAiHighlightsCommand(view: EditorView): boolean {
 }
 
 export const aiHighlightKeymap = keymap.of([{ key: 'Escape', run: clearAiHighlightsCommand }]);
+
+/**
+ * Core of `aiHighlightPresenceNotifier`, split out so it can be exercised with
+ * a plain pair of states (as built by `EditorState.create`/`.update` in tests)
+ * instead of a live `EditorView` + `ViewUpdate` — this project's test env has
+ * no DOM. Notifies `onChange` only when the highlight goes from no marks to
+ * some marks, or back to none — not on every edit while marks are present
+ * (e.g. a later `setAiHighlights` replacing the current range, or a pulse
+ * alongside an existing highlight). Compares `aiHighlightRanges` (the mark
+ * ranges, same definition `clearAiHighlightsCommand` uses for "is there
+ * anything to clear") rather than raw field emptiness, so a pulse-only state —
+ * which Esc does not act on — never reports as "visible" either.
+ */
+export function notifyHighlightPresenceChange(
+  startState: EditorState,
+  state: EditorState,
+  onChange: (visible: boolean) => void
+): void {
+  const before = aiHighlightRanges(startState).length > 0;
+  const after = aiHighlightRanges(state).length > 0;
+  if (before !== after) onChange(after);
+}
+
+/** CM6 extension wrapper around `notifyHighlightPresenceChange` for wiring into an EditorView. */
+export function aiHighlightPresenceNotifier(onChange: (visible: boolean) => void): Extension {
+  return EditorView.updateListener.of((update) => {
+    notifyHighlightPresenceChange(update.startState, update.state, onChange);
+  });
+}
