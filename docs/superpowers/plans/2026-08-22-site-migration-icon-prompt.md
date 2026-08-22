@@ -88,7 +88,7 @@ git commit -m "feat: new app icon — gradient md with caret"
 
 ---
 
-Design a product landing page for **mdmini** — a minimalist live-preview markdown editor for macOS. Free, open source (GPL-3.0), built with Tauri. The audience is developers and technical users who live in the terminal and care about speed, focus, and native feel.
+Design a product landing page for **mdmini** — a minimalist live-preview markdown editor for macOS. Free, open source (GPL-3.0), built with Tauri. The audience is developers and technical users who live in the terminal and care about speed, focus, and native feel. mdmini is also **AI-native**: a local CLI/MCP interface lets coding agents drive the open document — treat this as a headline capability of the product, not a footnote.
 
 ## Brand
 
@@ -104,7 +104,7 @@ Tone: calm, precise, quietly confident. No marketing fluff, no exclamation marks
 
 ## Page structure (single page, anchor nav)
 
-1. **Hero** — app icon, name "mdmini", tagline: "A minimalist live-preview markdown editor for macOS. Lightweight, fast, and distraction-free." Install command in a copyable code block: `brew tap malinborn/mdmini && brew trust malinborn/mdmini && brew install --cask mdmini`. Badges: macOS · free · open source. The uploaded screenshot displayed prominently.
+1. **Hero** — app icon, name "mdmini", tagline: "A minimalist live-preview markdown editor for macOS. Lightweight, fast, and distraction-free." Install command in a copyable code block: `brew tap malinborn/mdmini && brew trust malinborn/mdmini && brew install --cask mdmini`. Badges: macOS · AI-native · free · open source. The uploaded screenshot displayed prominently.
 2. **Features** — 12 cards:
    - **Live Preview** — Markdown renders inline as you type. No split pane, no preview toggle.
    - **GFM Tables** — Create, edit, reorder, and delete table rows and columns. Drag to reorder.
@@ -118,9 +118,15 @@ Tone: calm, precise, quietly confident. No marketing fluff, no exclamation marks
    - **Session Restore** — Reopen the windows you had last time with ⇧⌘T — files, positions, scroll, and unsaved drafts.
    - **Dark & Light Themes** — Rosé Pine dark and Rosé Pine Dawn. Switch with a single keypress.
    - **Auto-Save & Recovery** — Changes are saved continuously. Crash recovery restores your last session.
-3. **Quick start** — a styled macOS terminal window showing: the brew install command, `mdmini README.md` ("Opens in a native macOS window"), `mdmini *.md notes/*.md` ("Each file gets its own window"), and `brew update && brew upgrade --cask mdmini`.
-4. **Changelog** — collapsible or compact release list (content will be carried over during integration; design the pattern for a version number + date + a few short entries per release).
-5. **Footer** — GitHub link (https://github.com/malinborn/mdmini), GPL-3.0 license note.
+3. **AI-native** — mdmini's differentiator; give this section real visual weight, second only to the hero. An AI agent (Claude Code or any MCP client) can drive the editor live:
+   - **Two ways to connect** — plain CLI verbs (`mdmini show / edit / ask`) or a local MCP server (`mdmini mcp`), registered once with `claude mcp add --scope user mdmini -- mdmini mcp`. No daemon, no cloud — a local socket into the running app.
+   - **Point** — the agent opens or focuses a file, scrolls to a line or a text match, and pulse-highlights it: "look here."
+   - **Edit, visibly** — the agent pushes new content into the live buffer; mdmini diffs it, applies only the changed span, and keeps it highlighted until you press Esc. Every AI edit is a normal undo step — Cmd+Z rejects it.
+   - **Ask in the document** — the agent posts questions with option buttons right where they belong in the text (anchored to a line or phrase): single choice, multi-select checkboxes, optional free-text answer, several questions in sequence — each answer arrives instantly, so the agent can chain follow-ups and highlight the passage a question refers to.
+   Suggested visual: a mock document showing a highlighted edit span plus an in-document question card with option buttons.
+4. **Quick start** — a styled macOS terminal window showing: the brew install command, `mdmini README.md` ("Opens in a native macOS window"), `mdmini *.md notes/*.md` ("Each file gets its own window"), and `brew update && brew upgrade --cask mdmini`.
+5. **Changelog** — collapsible or compact release list (content will be carried over during integration; design the pattern for a version number + date + a few short entries per release).
+6. **Footer** — GitHub link (https://github.com/malinborn/mdmini), GPL-3.0 license note.
 
 ## Hard constraints
 
