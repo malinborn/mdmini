@@ -1240,10 +1240,22 @@
 }
 
 /* AI ask (mdmini ask) — a question card with option buttons, inserted as a
- * widget. Never part of the document text. */
+ * widget. Never part of the document text.
+ *
+ * `.cm-ai-ask-wrap` is the widget's root element — CM6 measures a block
+ * widget's height straight from its root's DOM box, which excludes margin.
+ * Vertical spacing therefore lives here as padding (included in the box),
+ * not as margin on `.cm-ai-ask`: a margin on the root would still visually
+ * push every line below it down while CM6's height map stayed oblivious,
+ * desyncing the map from the DOM and breaking ArrowUp/posAtCoords for every
+ * line below the widget. */
+.cm-ai-ask-wrap {
+  padding: 6px 0 10px;
+}
+
 .cm-ai-ask {
   position: relative;
-  margin: 6px 0 10px;
+  margin: 0;
   padding: 10px 32px 10px 14px;
   border: 1px solid var(--ai-ask-border);
   border-radius: 8px;

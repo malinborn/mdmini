@@ -69,6 +69,18 @@ export class AskWidget extends WidgetType {
   toDOM(): HTMLElement {
     const { id, question, options, multi, freeText, onAnswer } = this.spec;
 
+    // CM6 measures a block widget's height from its root element's DOM box —
+    // which does NOT include CSS margin. A margin on the widget root (as
+    // `.cm-ai-ask` used to carry) still visually pushes every line below it
+    // down, but CM6's height map doesn't know that, so it drifts out of sync
+    // with the real DOM by exactly the margin — and posAtCoords's vertical
+    // scan (which compares the height map against measured line rects) walks
+    // straight past every line below the widget. Padding IS included in the
+    // box, so the vertical spacing lives on this outer wrapper's padding
+    // instead, and `.cm-ai-ask` itself carries no margin.
+    const wrap = document.createElement('div');
+    wrap.className = 'cm-ai-ask-wrap';
+
     const card = document.createElement('div');
     card.className = 'cm-ai-ask';
 
@@ -176,7 +188,8 @@ export class AskWidget extends WidgetType {
     card.appendChild(optionsRow);
     if (input) card.appendChild(input);
 
-    return card;
+    wrap.appendChild(card);
+    return wrap;
   }
 
   ignoreEvent(): boolean {

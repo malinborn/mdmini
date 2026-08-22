@@ -241,6 +241,29 @@ function findByClass(root: FakeElement, className: string): FakeElement[] {
   return out;
 }
 
+describe('AskWidget.toDOM root element', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns a cm-ai-ask-wrap root with the card nested one level inside', () => {
+    // Regression: `.cm-ai-ask-wrap` carries the widget's vertical spacing as
+    // padding. If that spacing ever moves back onto `.cm-ai-ask` as margin,
+    // CM6's block-widget height map (measured from the DOM box, which
+    // excludes margin) desyncs from the real line positions — margin still
+    // pushes lines below the widget down on screen, but CM6 doesn't count
+    // it, so `posAtCoords`'s vertical scan walks past every line below the
+    // widget. See the fix commit for a full repro.
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec());
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(dom.className).toBe('cm-ai-ask-wrap');
+    expect(dom.children).toHaveLength(1);
+    expect(dom.children[0].className).toBe('cm-ai-ask');
+  });
+});
+
 describe('AskWidget.toDOM click wiring', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -400,11 +423,12 @@ describe('AskWidget.toDOM free-text input', () => {
     const widget = new AskWidget(makeSpec({ freeText: true }));
 
     const dom = widget.toDOM() as unknown as FakeElement;
+    const [card] = findByClass(dom, 'cm-ai-ask');
     const [input] = findByClass(dom, 'cm-ai-ask-input');
     expect(findByClass(dom, 'cm-ai-ask-input')).toHaveLength(1);
     expect(input.placeholder).toBe('Your own answer…');
     // Card children, in DOM order: dismiss, question, options row, input.
-    expect(dom.children[dom.children.length - 1]).toBe(input);
+    expect(card.children[card.children.length - 1]).toBe(input);
   });
 
   it('single-choice: Enter in the input with non-empty trimmed text calls onAnswer with { custom }', () => {
