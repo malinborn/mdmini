@@ -73,6 +73,7 @@ pub fn run() {
             watcher::start_watching,
             ai_socket::ai_respond,
             ai_socket::ai_pull_pending,
+            commands::sync_theme_menu,
         ])
         .setup(|app| {
             // FIRST, before anything touches disk: decide which data directory this
@@ -96,6 +97,7 @@ pub fn run() {
 
             let (menu, theme_items) = menu::build_menu(app.handle(), pending_count)?;
             app.set_menu(menu)?;
+            app.manage(theme_items);
 
             let app_handle = app.handle().clone();
             app.on_menu_event(move |_app, event| {
@@ -155,13 +157,6 @@ pub fn run() {
                         }
                     }
                     return;
-                }
-
-                // Handle theme switching — radio behavior via direct CheckMenuItem refs
-                if id.starts_with("theme_") {
-                    let _ = theme_items.light.set_checked(id == "theme_light");
-                    let _ = theme_items.dark.set_checked(id == "theme_dark");
-                    let _ = theme_items.system.set_checked(id == "theme_system");
                 }
 
                 // Broadcast all other menu events to all windows
