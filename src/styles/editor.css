@@ -1280,6 +1280,38 @@
   background: var(--ai-ask-chip-hover-bg);
 }
 
+/* Multi-choice: a toggled-on chip. Two-class selector to outrank
+ * `.cm-ai-ask-option:hover`'s equal specificity. */
+.cm-ai-ask-option.cm-ai-ask-chip-checked {
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border-color: var(--ai-ask-accent);
+}
+
+.cm-ai-ask-option.cm-ai-ask-chip-checked::before {
+  content: '✓ ';
+}
+
+.cm-ai-ask-option.cm-ai-ask-chip-checked:hover {
+  background: var(--ai-ask-accent);
+}
+
+.cm-ai-ask-confirm {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border: 1px solid var(--ai-ask-accent);
+  border-radius: 999px;
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.cm-ai-ask-confirm:hover {
+  opacity: 0.85;
+}
+
 .cm-ai-ask-dismiss {
   position: absolute;
   top: 6px;

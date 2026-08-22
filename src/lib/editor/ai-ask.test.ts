@@ -11,6 +11,7 @@ function makeSpec(overrides: Partial<AskSpec> = {}): AskSpec {
     id: 1,
     question: 'Continue?',
     options: ['Yes', 'No'],
+    multi: false,
     onAnswer: vi.fn(),
     ...overrides,
   };
@@ -133,6 +134,12 @@ describe('AskWidget.eq', () => {
     const b = new AskWidget(makeSpec({ options: ['Yes'] }));
     expect(a.eq(b)).toBe(false);
   });
+
+  it('is false when multi differs', () => {
+    const a = new AskWidget(makeSpec({ multi: false }));
+    const b = new AskWidget(makeSpec({ multi: true }));
+    expect(a.eq(b)).toBe(false);
+  });
 });
 
 describe('AskWidget.ignoreEvent', () => {
@@ -191,9 +198,13 @@ function fire(el: FakeElement, type: string): void {
   }
 }
 
+/** `className` is a real DOM space-separated token list (e.g. a checked chip
+ * is `'cm-ai-ask-option cm-ai-ask-chip-checked'`) — match by word, not by
+ * exact string, so a single class name finds it regardless of what else is
+ * set alongside it. */
 function findByClass(root: FakeElement, className: string): FakeElement[] {
   const out: FakeElement[] = [];
-  if (root.className === className) out.push(root);
+  if (root.className.split(' ').includes(className)) out.push(root);
   for (const child of root.children) out.push(...findByClass(child, className));
   return out;
 }
@@ -236,5 +247,105 @@ describe('AskWidget.toDOM click wiring', () => {
     const dom = widget.toDOM() as unknown as FakeElement;
     expect(findByClass(dom, 'cm-ai-ask-option')).toHaveLength(3);
     expect(findByClass(dom, 'cm-ai-ask-question')[0].textContent).toBe('Pick one');
+  });
+
+  it('renders no confirm button (single-choice has nothing to confirm)', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: false }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-confirm')).toHaveLength(0);
+  });
+});
+
+describe('AskWidget.toDOM multi-choice click wiring', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders one chip per option, a confirm button, and the dismiss button', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: true, options: ['A', 'B', 'C'] }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-option')).toHaveLength(3);
+    expect(findByClass(dom, 'cm-ai-ask-confirm')).toHaveLength(1);
+    expect(findByClass(dom, 'cm-ai-ask-dismiss')).toHaveLength(1);
+  });
+
+  it('a chip toggles the checked class and aria-pressed on click, and back off on a second click', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ multi: true, options: ['A', 'B'] }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [chipA] = findByClass(dom, 'cm-ai-ask-option');
+    expect(chipA.attributes['aria-pressed']).toBe('false');
+
+    fire(chipA, 'click');
+    expect(chipA.className.split(' ')).toContain('cm-ai-ask-chip-checked');
+    expect(chipA.attributes['aria-pressed']).toBe('true');
+
+    fire(chipA, 'click');
+    expect(chipA.className.split(' ')).not.toContain('cm-ai-ask-chip-checked');
+    expect(chipA.attributes['aria-pressed']).toBe('false');
+  });
+
+  it('confirm calls onAnswer with the selected subset in original option order, regardless of click order', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 5, multi: true, options: ['A', 'B', 'C'], onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [chipA, , chipC] = findByClass(dom, 'cm-ai-ask-option');
+    const [confirm] = findByClass(dom, 'cm-ai-ask-confirm');
+
+    // Select C, then A — reverse of document order. Result must stay [A, C].
+    fire(chipC, 'click');
+    fire(chipA, 'click');
+    fire(confirm, 'click');
+
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenCalledWith(5, ['A', 'C']);
+  });
+
+  it('deselecting a chip removes it from the confirmed result', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 6, multi: true, options: ['A', 'B'], onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [chipA, chipB] = findByClass(dom, 'cm-ai-ask-option');
+    const [confirm] = findByClass(dom, 'cm-ai-ask-confirm');
+
+    fire(chipA, 'click'); // select A
+    fire(chipB, 'click'); // select B
+    fire(chipA, 'click'); // deselect A
+    fire(confirm, 'click');
+
+    expect(onAnswer).toHaveBeenCalledWith(6, ['B']);
+  });
+
+  it('confirm with nothing selected calls onAnswer with an empty array (an explicit "none")', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 7, multi: true, options: ['A', 'B'], onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [confirm] = findByClass(dom, 'cm-ai-ask-confirm');
+    fire(confirm, 'click');
+
+    expect(onAnswer).toHaveBeenCalledWith(7, []);
+  });
+
+  it('dismiss in multi mode calls onAnswer with null, not an empty array', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 8, multi: true, onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [dismissButton] = findByClass(dom, 'cm-ai-ask-dismiss');
+    fire(dismissButton, 'click');
+
+    expect(onAnswer).toHaveBeenCalledWith(8, null);
   });
 });

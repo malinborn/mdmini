@@ -30,6 +30,8 @@
   --ai-ask-border: rgba(37, 99, 235, 0.25);
   --ai-ask-chip-bg: #ffffff;
   --ai-ask-chip-hover-bg: rgba(37, 99, 235, 0.12);
+  --ai-ask-accent: #2563eb;
+  --ai-ask-accent-text: #ffffff;
   --bg-overlay: rgba(250, 250, 249, 0.75);
   --border: #e7e5e4;
   --font-text: 'Merriweather', Georgia, serif;

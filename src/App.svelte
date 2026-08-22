@@ -318,6 +318,7 @@
     error?: string;
     changed_lines?: [number, number][];
     answer?: string;
+    answers?: string[];
   }
 
   async function respondToAi(id: number, response: AiResponse): Promise<void> {
@@ -384,11 +385,13 @@
       }
 
       const askId = payload.id;
-      const onAnswer = (answerId: number, answer: string | null): void => {
+      const onAnswer = (answerId: number, result: string | string[] | null): void => {
         const currentView = editorHandle?.view;
         currentView?.dispatch({ effects: removeAiAsk.of(answerId) });
-        if (answer !== null) {
-          respondToAi(answerId, { ok: true, answer });
+        if (Array.isArray(result)) {
+          respondToAi(answerId, { ok: true, answers: result });
+        } else if (result !== null) {
+          respondToAi(answerId, { ok: true, answer: result });
         } else {
           respondToAi(answerId, { ok: false, error: 'dismissed by user' });
         }
@@ -397,7 +400,13 @@
       view.dispatch({
         effects: [
           addAiAsk.of({
-            spec: { id: askId, question: payload.question ?? '', options: payload.options, onAnswer },
+            spec: {
+              id: askId,
+              question: payload.question ?? '',
+              options: payload.options,
+              multi: payload.multi,
+              onAnswer,
+            },
             pos,
           }),
           EditorView.scrollIntoView(pos, { y: 'center' }),

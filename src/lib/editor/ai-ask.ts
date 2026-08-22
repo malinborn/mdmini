@@ -12,8 +12,15 @@ export interface AskSpec {
   id: number;
   question: string;
   options: string[];
-  /** Fires once: `answer` is the clicked option's text, or `null` for a dismiss. */
-  onAnswer: (id: number, answer: string | null) => void;
+  /** Single-choice (click an option) vs multi-choice (toggle chips, confirm). */
+  multi: boolean;
+  /**
+   * Fires once: for single-choice, `result` is the clicked option's text; for
+   * a multi-choice confirm, `result` is the selected options in `options`
+   * order (an empty array is a valid, explicit "none selected"); `null` is a
+   * dismiss in either mode.
+   */
+  onAnswer: (id: number, result: string | string[] | null) => void;
 }
 
 /** Adds an ask widget, anchored at the end of the line containing `pos`. */
@@ -25,6 +32,15 @@ export const removeAiAsk = StateEffect.define<number>();
 
 /** Exported for tests: `eq()` structural comparison and `toDOM()` wiring. */
 export class AskWidget extends WidgetType {
+  /**
+   * Multi-choice selection state. Lives on the widget instance, not in CM6
+   * state: toggling a chip must never dispatch a transaction (that would
+   * rebuild decorations on every click), so it mutates this set and the
+   * chip's DOM directly. `eq()` deliberately excludes it — reusing the same
+   * widget instance across unrelated document edits keeps the selection.
+   */
+  private readonly selected = new Set<string>();
+
   constructor(readonly spec: AskSpec) {
     super();
   }
@@ -33,13 +49,14 @@ export class AskWidget extends WidgetType {
     return (
       this.spec.id === other.spec.id &&
       this.spec.question === other.spec.question &&
+      this.spec.multi === other.spec.multi &&
       this.spec.options.length === other.spec.options.length &&
       this.spec.options.every((option, i) => option === other.spec.options[i])
     );
   }
 
   toDOM(): HTMLElement {
-    const { id, question, options, onAnswer } = this.spec;
+    const { id, question, options, multi, onAnswer } = this.spec;
 
     const card = document.createElement('div');
     card.className = 'cm-ai-ask';
@@ -61,14 +78,50 @@ export class AskWidget extends WidgetType {
 
     const optionsRow = document.createElement('div');
     optionsRow.className = 'cm-ai-ask-options';
-    for (const option of options) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'cm-ai-ask-option';
-      button.textContent = option;
-      button.addEventListener('mousedown', (event) => event.preventDefault());
-      button.addEventListener('click', () => onAnswer(id, option));
-      optionsRow.appendChild(button);
+
+    if (multi) {
+      for (const option of options) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'cm-ai-ask-option';
+        chip.setAttribute('aria-pressed', 'false');
+        chip.textContent = option;
+        chip.addEventListener('mousedown', (event) => event.preventDefault());
+        chip.addEventListener('click', () => {
+          const nowSelected = !this.selected.has(option);
+          if (nowSelected) {
+            this.selected.add(option);
+          } else {
+            this.selected.delete(option);
+          }
+          chip.setAttribute('aria-pressed', String(nowSelected));
+          chip.className = nowSelected ? 'cm-ai-ask-option cm-ai-ask-chip-checked' : 'cm-ai-ask-option';
+        });
+        optionsRow.appendChild(chip);
+      }
+
+      const confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.className = 'cm-ai-ask-confirm';
+      confirm.textContent = 'OK';
+      confirm.addEventListener('mousedown', (event) => event.preventDefault());
+      confirm.addEventListener('click', () => {
+        onAnswer(
+          id,
+          options.filter((option) => this.selected.has(option))
+        );
+      });
+      optionsRow.appendChild(confirm);
+    } else {
+      for (const option of options) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'cm-ai-ask-option';
+        button.textContent = option;
+        button.addEventListener('mousedown', (event) => event.preventDefault());
+        button.addEventListener('click', () => onAnswer(id, option));
+        optionsRow.appendChild(button);
+      }
     }
     card.appendChild(optionsRow);
 
