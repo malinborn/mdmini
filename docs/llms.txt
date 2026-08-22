@@ -27,7 +27,7 @@ brew install --cask mdmini
 
 ## Links
 
-- Website: https://malinborn.github.io/mdmini/
+- Website: https://md-mini.com/
 - Source: https://github.com/malinborn/mdmini
 - Releases: https://github.com/malinborn/mdmini/releases
 - License: GPL-3.0
