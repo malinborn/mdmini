@@ -16,30 +16,40 @@ Pushes to `main` touching `docs/**` auto-deploy via `.github/workflows/deploy-si
    sudo chown <deploy-user>:<deploy-user> /var/www/md-mini.com
    ```
 
-3. **Bootstrap nginx (port 80, needed for the certbot challenge)**
+3. **Bootstrap nginx (port 80, needed for the certbot challenge)** — run from the repo root:
    ```bash
-   sudo cp md-mini.com-bootstrap.conf /etc/nginx/sites-available/md-mini.com.conf
+   sudo cp deploy/nginx/md-mini.com-bootstrap.conf /etc/nginx/sites-available/md-mini.com.conf
    sudo ln -s /etc/nginx/sites-available/md-mini.com.conf /etc/nginx/sites-enabled/
    sudo nginx -t && sudo systemctl reload nginx
    ```
 
-4. **Certificate**
+4. **Install certbot** (skip if already installed)
+   ```bash
+   sudo apt install certbot python3-certbot-nginx
+   ```
+
+5. **Certificate**
    ```bash
    sudo certbot certonly --nginx -d md-mini.com -d www.md-mini.com
    ```
 
-5. **Final config**
+   Before applying the final config, confirm certbot's nginx plugin created its snippets:
    ```bash
-   sudo cp md-mini.com.conf /etc/nginx/sites-available/md-mini.com.conf
+   ls /etc/letsencrypt/options-ssl-nginx.conf /etc/letsencrypt/ssl-dhparams.pem
+   ```
+
+6. **Final config** — run from the repo root:
+   ```bash
+   sudo cp deploy/nginx/md-mini.com.conf /etc/nginx/sites-available/md-mini.com.conf
    sudo nginx -t && sudo systemctl reload nginx
    ```
 
-6. **GitHub secrets** (repo → Settings → Secrets → Actions):
+7. **GitHub secrets** (repo → Settings → Secrets → Actions):
    - `DEPLOY_SSH_KEY` — private key of a dedicated deploy keypair; public half in the deploy user's `~/.ssh/authorized_keys`
    - `DEPLOY_HOST` — server hostname or IP
    - `DEPLOY_USER` — deploy username
 
-7. **First deploy** — push to main (or run the workflow manually via workflow_dispatch).
+8. **First deploy** — push to main (or run the workflow manually via workflow_dispatch).
 
 ## Post-go-live checks
 
