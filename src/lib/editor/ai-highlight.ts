@@ -17,14 +17,17 @@ export const clearAiHighlights = StateEffect.define<null>();
 export const pulseAiLine = StateEffect.define<number>();
 
 const aiEditMark = Decoration.mark({ class: 'cm-ai-edit' });
+const aiEditLine = Decoration.line({ class: 'cm-ai-edit-line' });
 const aiPulseLine = Decoration.line({ class: 'cm-ai-pulse' });
 
 /**
  * Holds decorations for AI-driven edits: a subtle background mark on the spans
- * an `mdmini ai edit` just changed, and a self-describing pulse line for
- * `mdmini ai show`. Ranges are mapped through user edits so highlights survive
- * typing nearby, and a mark collapsed to zero width by a deletion is dropped
- * (CM6's default map behavior for non-inclusive marks).
+ * an `mdmini ai edit` just changed, a full-width line wash on every line those
+ * spans touch (so the edit reads at a glance, not just at the exact chars),
+ * and a self-describing pulse line for `mdmini ai show`. Ranges are mapped
+ * through user edits so highlights survive typing nearby, and a mark collapsed
+ * to zero width by a deletion is dropped (CM6's default map behavior for
+ * non-inclusive marks).
  */
 export const aiHighlightField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
@@ -34,10 +37,25 @@ export const aiHighlightField = StateField.define<DecorationSet>({
       if (effect.is(clearAiHighlights)) {
         deco = Decoration.none;
       } else if (effect.is(setAiHighlights)) {
-        const ranges = effect.value
-          .filter((r) => r.to > r.from)
-          .map((r) => aiEditMark.range(r.from, r.to));
-        deco = Decoration.set(ranges, true);
+        const ranges = effect.value.filter((r) => r.to > r.from);
+        const marks = ranges.map((r) => aiEditMark.range(r.from, r.to));
+
+        const seenLines = new Set<number>();
+        const lineStarts: number[] = [];
+        for (const r of ranges) {
+          let pos = r.from;
+          while (pos < r.to) {
+            const line = tr.state.doc.lineAt(pos);
+            if (!seenLines.has(line.from)) {
+              seenLines.add(line.from);
+              lineStarts.push(line.from);
+            }
+            pos = line.to + 1;
+          }
+        }
+        const lineDecos = lineStarts.map((from) => aiEditLine.range(from));
+
+        deco = Decoration.set([...marks, ...lineDecos], true);
       } else if (effect.is(pulseAiLine)) {
         const line = tr.state.doc.lineAt(effect.value);
         deco = deco.update({ add: [aiPulseLine.range(line.from)] });
@@ -48,7 +66,7 @@ export const aiHighlightField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-/** Current AI-edit highlight ranges (excludes the zero-width pulse line marker). */
+/** Current AI-edit highlight ranges (excludes the zero-width line-wash and pulse markers). */
 export function aiHighlightRanges(state: EditorState): AiHighlightRange[] {
   const set = state.field(aiHighlightField, false);
   if (!set) return [];

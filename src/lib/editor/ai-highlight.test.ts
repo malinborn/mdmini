@@ -33,6 +33,40 @@ describe('aiHighlightField', () => {
     expect(aiHighlightRanges(tr.state)).toEqual([{ from: 0, to: 5 }]);
   });
 
+  it('installs exactly one full-line decoration for a single-line range', () => {
+    const state = makeState('hello world\n');
+    const tr = state.update({ effects: setAiHighlights.of([{ from: 0, to: 5 }]) });
+    const lineDecos = collectDecos(tr.state).filter((d) => d.class === 'cm-ai-edit-line');
+    expect(lineDecos).toEqual([{ from: 0, to: 0, class: 'cm-ai-edit-line' }]);
+  });
+
+  it('installs one full-line decoration per line touched by a multi-line range, plus the mark', () => {
+    const state = makeState('line1\nline2\nline3\n');
+    const from = state.doc.line(1).from + 2; // mid line1
+    const to = state.doc.line(3).from + 2; // mid line3
+    const tr = state.update({ effects: setAiHighlights.of([{ from, to }]) });
+
+    const decos = collectDecos(tr.state);
+    const lineDecos = decos.filter((d) => d.class === 'cm-ai-edit-line');
+    expect(lineDecos.map((d) => d.from)).toEqual([
+      state.doc.line(1).from,
+      state.doc.line(2).from,
+      state.doc.line(3).from,
+    ]);
+    expect(decos.some((d) => d.class === 'cm-ai-edit' && d.from === from && d.to === to)).toBe(true);
+    // aiHighlightRanges still reports only the mark, not the line washes.
+    expect(aiHighlightRanges(tr.state)).toEqual([{ from, to }]);
+  });
+
+  it('clears full-line decorations along with the mark on clearAiHighlights', () => {
+    let state = makeState('line1\nline2\n');
+    state = state.update({
+      effects: setAiHighlights.of([{ from: 0, to: state.doc.line(2).from + 3 }]),
+    }).state;
+    state = state.update({ effects: clearAiHighlights.of(null) }).state;
+    expect(collectDecos(state)).toEqual([]);
+  });
+
   it('shifts ranges when a user edit happens before them', () => {
     let state = makeState('hello world\n');
     state = state.update({ effects: setAiHighlights.of([{ from: 6, to: 11 }]) }).state; // "world"

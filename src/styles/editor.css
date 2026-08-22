@@ -1193,8 +1193,37 @@
 
 /* AI-driven edits (mdmini ai edit / show) */
 .cm-ai-edit {
-  background: var(--ai-edit-bg);
+  background: var(--ai-edit-shimmer);
   border-radius: 2px;
+}
+
+.cm-line.cm-ai-edit-line {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ai-edit-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-edit-bg) 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes cm-ai-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cm-line.cm-ai-edit-line {
+    animation: none;
+    background-position: 0 0;
+  }
 }
 
 .cm-line.cm-ai-pulse {
