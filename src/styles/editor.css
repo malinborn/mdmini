@@ -1346,9 +1346,11 @@
 }
 
 .cm-ai-ask-input {
-  /* Re-enable selection inside the input — the wrap opts the widget out. */
-  -webkit-user-select: text;
-  user-select: text;
+  /* Selectable only while focused: the widget lives outside .cm-line, so
+   * drawSelection's native-::selection kill switch doesn't reach it — an
+   * always-selectable input gets painted by a document-spanning drag. */
+  -webkit-user-select: none;
+  user-select: none;
   display: block;
   width: 100%;
   margin-top: 8px;
@@ -1367,6 +1369,8 @@
 .cm-ai-ask-input:focus {
   outline: none;
   border-color: var(--ai-ask-accent);
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .cm-ai-ask-dismiss {
