@@ -52,6 +52,11 @@ pub enum AiRequest {
         find: Option<String>,
         #[serde(default = "default_ask_timeout")]
         timeout_secs: u64,
+        /// Checkbox mode: the user may select any number of options (including
+        /// zero) and confirms instead of picking exactly one. `false` keeps
+        /// today's single-choice behavior for callers who omit the field.
+        #[serde(default)]
+        multi: bool,
     },
 }
 
@@ -101,10 +106,18 @@ pub struct AiResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub changed_lines: Option<Vec<[usize; 2]>>,
-    /// The option text the user clicked, for `ask`. `None` for `show`/`edit`
-    /// responses and for any `ask` failure.
+    /// The option text the user clicked, for single-choice `ask`. `None` for
+    /// `show`/`edit` responses, for multi-choice `ask` (see `answers`), and for
+    /// any `ask` failure.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub answer: Option<String>,
+    /// The option texts the user checked, for multi-choice (`multi: true`)
+    /// `ask` only. `Some(vec![])` is a valid explicit "confirmed none
+    /// selected" — distinct from `None`, which means this wasn't a
+    /// multi-choice response at all (single-choice `ask`, `show`, `edit`, or
+    /// any failure).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answers: Option<Vec<String>>,
 }
 
 impl AiResponse {
@@ -119,6 +132,7 @@ impl AiResponse {
             error: None,
             changed_lines: None,
             answer: None,
+            answers: None,
         }
     }
 
@@ -128,6 +142,7 @@ impl AiResponse {
             error: Some(msg.into()),
             changed_lines: None,
             answer: None,
+            answers: None,
         }
     }
 }
@@ -405,6 +420,8 @@ pub struct AiCommandPayload {
     pub options: Vec<String>,
     /// `ask` only — `0` for `show`/`edit`.
     pub timeout_secs: u64,
+    /// `ask` only — checkbox mode. `false` for `show`/`edit`.
+    pub multi: bool,
 }
 
 /// How long to wait for `open_file_window` (run on the main thread) to register
@@ -501,6 +518,10 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
         timeout_secs: match &req {
             AiRequest::Ask { timeout_secs, .. } => clamp_ask_timeout(*timeout_secs),
             _ => 0,
+        },
+        multi: match &req {
+            AiRequest::Ask { multi, .. } => *multi,
+            _ => false,
         },
     };
 
@@ -614,6 +635,7 @@ enum CliVerb {
         line: Option<usize>,
         find: Option<String>,
         timeout_secs: u64,
+        multi: bool,
     },
     /// Local, offline: prints the full CLI reference. No file arg, no flags.
     Help,
@@ -622,7 +644,7 @@ enum CliVerb {
     Agent,
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
@@ -709,6 +731,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
             let mut line: Option<usize> = None;
             let mut find: Option<String> = None;
             let mut timeout_secs = default_ask_timeout();
+            let mut multi = false;
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--question" => {
@@ -719,6 +742,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                         let v = iter.next().ok_or("--option requires a value")?;
                         options.push(v.clone());
                     }
+                    "--multi" => multi = true,
                     "--at-line" => {
                         let v = iter.next().ok_or("--at-line requires a value")?;
                         line = Some(
@@ -758,6 +782,7 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
                     line,
                     find,
                     timeout_secs: clamp_ask_timeout(timeout_secs),
+                    multi,
                 },
                 socket,
             })
@@ -805,7 +830,7 @@ USAGE
   mdmini <file>...                          Open one or more files (or focus existing windows)
   mdmini show <file> [--line N | --find TEXT] [--socket PATH]
   mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
-  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+  mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
   mdmini mcp [--socket PATH]
   mdmini help
   mdmini agent
@@ -855,26 +880,32 @@ EDIT — replace the live buffer with new content, diffed and highlighted
   Example:
     cat new.md | mdmini edit notes.md --show
 
-ASK — post a question with option buttons, block until the user clicks
+ASK — post a question with option buttons, block until the user answers
   mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] \
-    [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+    [--multi] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
 
   Renders the question and 2-6 option buttons inside the open (or newly
-  opened) document, blocks until the user clicks one, and returns the chosen
-  option's text. Use for a quick decision while working on that document.
+  opened) document, blocks until the user answers, and returns the choice.
+  Use for a quick decision while working on that document.
     --question TEXT   The question text. Required.
     --option TEXT     One button's label. Repeat 2-6 times. Required.
+    --multi           Checkbox mode: the user may check any number of
+                       options (including none) and confirms, instead of
+                       clicking exactly one. Response carries "answers" (an
+                       array) instead of "answer" — see JSON RESPONSE
+                       CONTRACT below.
     --at-line N       Show the question near this 1-based line number.
                        Mutually exclusive with --at-find.
     --at-find TEXT    Show the question near the first substring match.
                        Mutually exclusive with --at-line.
-    --timeout SECS    How long to wait for a click. Default 300, clamped to
-                       10-3600.
+    --timeout SECS    How long to wait for an answer. Default 300, clamped
+                       to 10-3600.
     --socket PATH     Talk to a non-default command socket.
   Neither --at-line nor --at-find: the question appears at the current view.
 
-  Example:
+  Examples:
     mdmini ask notes.md --question "Ship it?" --option Yes --option No
+    mdmini ask notes.md --question "Which reviewers?" --option A --option B --option C --multi
 
 JSON RESPONSE CONTRACT
   show, edit, and ask each print exactly one line of JSON to stdout, never
@@ -884,6 +915,8 @@ JSON RESPONSE CONTRACT
     edit, success:                    {"ok":true,"changed_lines":[[12,15]]}
     edit, no-op (identical content):  {"ok":true,"changed_lines":[]}
     ask, success:                     {"ok":true,"answer":"Yes"}
+    ask --multi, success:             {"ok":true,"answers":["A","C"]}
+    ask --multi, confirmed none:      {"ok":true,"answers":[]}
     error (any verb):                 {"ok":false,"error":"target not found"}
 
   changed_lines is a [start,end] pair, 1-based inclusive line numbers in the
@@ -942,9 +975,9 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini show <file> --line N` — scroll to line N in the open window and pulse-highlight it.
 - `mdmini show <file> --find "some text"` — same, but locate the first match of the text instead of a line number.
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
-- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text.
+- `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead.
 
-All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, or `"answer":"..."` for `ask`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, or `"answers":[...]` for `ask --multi`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
 
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
@@ -1028,6 +1061,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             line,
             find,
             timeout_secs,
+            multi,
         } => AiRequest::Ask {
             v: 1,
             path: abs_path,
@@ -1036,6 +1070,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             line,
             find,
             timeout_secs,
+            multi,
         },
         CliVerb::Help | CliVerb::Agent => {
             unreachable!("Help/Agent return early above, before this match")
@@ -1162,6 +1197,7 @@ mod tests {
                 timeout_secs,
                 line,
                 find,
+                multi,
                 ..
             } => {
                 assert_eq!(question, "Ship it?");
@@ -1169,7 +1205,20 @@ mod tests {
                 assert_eq!(timeout_secs, 300);
                 assert_eq!(line, None);
                 assert_eq!(find, None);
+                assert!(!multi, "multi should default to false when omitted");
             }
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn parses_ask_with_multi_true() {
+        let req = parse_request(
+            r#"{"v":1,"cmd":"ask","path":"/a.md","question":"Which?","options":["A","B"],"multi":true}"#,
+        )
+        .unwrap();
+        match req {
+            AiRequest::Ask { multi, .. } => assert!(multi),
             _ => panic!("expected Ask"),
         }
     }
@@ -1252,6 +1301,7 @@ mod tests {
             question: None,
             options: Vec::new(),
             timeout_secs: 0,
+            multi: false,
         }
     }
 
@@ -1420,6 +1470,7 @@ mod tests {
                 line,
                 find,
                 timeout_secs,
+                multi,
             } => {
                 assert_eq!(question, "Ship it?");
                 assert_eq!(
@@ -1429,7 +1480,28 @@ mod tests {
                 assert_eq!(line, Some(5));
                 assert_eq!(find, None);
                 assert_eq!(timeout_secs, 60);
+                assert!(!multi, "--multi not passed, should default to false");
             }
+            _ => panic!("expected Ask"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_ask_multi_flag_parses() {
+        let parsed = parse_cli_args(&args(&[
+            "ask",
+            "/a.md",
+            "--question",
+            "Which reviewers?",
+            "--option",
+            "A",
+            "--option",
+            "B",
+            "--multi",
+        ]))
+        .unwrap();
+        match parsed.verb {
+            CliVerb::Ask { multi, .. } => assert!(multi),
             _ => panic!("expected Ask"),
         }
     }
@@ -1538,6 +1610,8 @@ mod tests {
         assert!(text.contains("--at-line"));
         assert!(text.contains("--at-find"));
         assert!(text.contains("--timeout"));
+        assert!(text.contains("--multi"));
+        assert!(text.contains("\"answers\""));
     }
 
     #[test]

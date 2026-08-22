@@ -184,7 +184,7 @@ fn tools_list() -> Value {
         },
         {
             "name": "ask",
-            "description": "Ask the user a question with buttons rendered inside their open md-mini document; blocks until they click and returns the chosen option. Use for quick decisions while working on that document. Note: long timeout_secs values may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.",
+            "description": "Ask the user a question with buttons rendered inside their open md-mini document; blocks until they answer. By default single-choice: returns the chosen option as `answer`. Set `multi: true` for checkbox mode — the user may check any number of options (including none) and confirms, and the response carries `answers` (an array) instead. Use for quick decisions while working on that document. Note: long timeout_secs values may exceed the calling MCP client's own request timeout — pick a value the client can actually wait for.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -214,7 +214,12 @@ fn tools_list() -> Value {
                     "timeout_secs": {
                         "type": "integer",
                         "default": 300,
-                        "description": "How long to wait for the user to click, in seconds. Clamped to 10-3600."
+                        "description": "How long to wait for the user to answer, in seconds. Clamped to 10-3600."
+                    },
+                    "multi": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Checkbox mode: the user may check any number of options (including none) and confirms, instead of clicking exactly one. Response carries `answers` (an array) instead of `answer`."
                     }
                 },
                 "required": ["path", "question", "options"]
@@ -335,6 +340,10 @@ fn build_ask_request(arguments: &Value) -> Result<AiRequest, String> {
         .get("timeout_secs")
         .and_then(Value::as_u64)
         .unwrap_or_else(ai_socket::default_ask_timeout);
+    let multi = arguments
+        .get("multi")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     Ok(AiRequest::Ask {
         v: 1,
         path: crate::resolve_path(path, None),
@@ -343,6 +352,7 @@ fn build_ask_request(arguments: &Value) -> Result<AiRequest, String> {
         line,
         find,
         timeout_secs,
+        multi,
     })
 }
 
@@ -656,6 +666,7 @@ mod tests {
             error: None,
             changed_lines: None,
             answer: Some("Yes".to_string()),
+            answers: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -675,6 +686,36 @@ mod tests {
         assert_eq!(req["question"], json!("Ship it?"));
         assert_eq!(req["options"], json!(["Yes", "No"]));
         assert_eq!(req["timeout_secs"], json!(60));
+        assert_eq!(req["multi"], json!(false));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn tools_call_ask_multi_true_round_trips_request_and_answers() {
+        let canned = AiResponse {
+            ok: true,
+            error: None,
+            changed_lines: None,
+            answer: None,
+            answers: Some(vec!["A".to_string(), "C".to_string()]),
+        };
+        let (path, rx) = spawn_fake_socket(canned);
+        let config = McpConfig {
+            socket_path: path.clone(),
+            allow_launch: false,
+        };
+        let request = r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"ask","arguments":{"path":"/tmp/a.md","question":"Which reviewers?","options":["A","B","C"],"multi":true}}}"#;
+        let response = handle_message(request, &config).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(false));
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(text, r#"{"ok":true,"answers":["A","C"]}"#);
+
+        let req_line = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let req: Value = serde_json::from_str(&req_line).unwrap();
+        assert_eq!(req["cmd"], json!("ask"));
+        assert_eq!(req["multi"], json!(true));
 
         let _ = std::fs::remove_file(&path);
     }
