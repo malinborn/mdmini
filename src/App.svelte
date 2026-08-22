@@ -37,6 +37,7 @@
     clearAiHighlights,
     aiHighlightRanges,
   } from './lib/editor/ai-highlight';
+  import { addAiAsk, removeAiAsk } from './lib/editor/ai-ask';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -316,6 +317,7 @@
     ok: boolean;
     error?: string;
     changed_lines?: [number, number][];
+    answer?: string;
   }
 
   async function respondToAi(id: number, response: AiResponse): Promise<void> {
@@ -365,6 +367,56 @@
       });
       schedulePulseCleanup();
       await respondToAi(payload.id, { ok: true });
+      return;
+    }
+
+    if (payload.cmd === 'ask') {
+      let pos: number;
+      if (payload.line === null && payload.find === null) {
+        pos = view.state.doc.length;
+      } else {
+        const resolved = resolveShowTarget(view.state, { line: payload.line, find: payload.find });
+        if (resolved === null) {
+          await respondToAi(payload.id, { ok: false, error: 'target not found' });
+          return;
+        }
+        pos = resolved;
+      }
+
+      const askId = payload.id;
+      const onAnswer = (answerId: number, answer: string | null): void => {
+        const currentView = editorHandle?.view;
+        currentView?.dispatch({ effects: removeAiAsk.of(answerId) });
+        if (answer !== null) {
+          respondToAi(answerId, { ok: true, answer });
+        } else {
+          respondToAi(answerId, { ok: false, error: 'dismissed by user' });
+        }
+      };
+
+      view.dispatch({
+        effects: [
+          addAiAsk.of({
+            spec: { id: askId, question: payload.question ?? '', options: payload.options, onAnswer },
+            pos,
+          }),
+          EditorView.scrollIntoView(pos, { y: 'center' }),
+        ],
+      });
+
+      // The Rust side owns the timeout/window-close deadline; this is only a
+      // fallback to drop a widget the server has already stopped waiting on.
+      // Answering after the server timeout is a harmless no-op there, and
+      // removing an id the field no longer has is a no-op here too.
+      setTimeout(
+        () => {
+          editorHandle?.view?.dispatch({ effects: removeAiAsk.of(askId) });
+        },
+        payload.timeoutSecs * 1000 + 2000
+      );
+
+      // The socket call is blocking on the user — respond only from the
+      // button callbacks above, never immediately here.
       return;
     }
 

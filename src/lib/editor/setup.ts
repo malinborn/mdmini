@@ -22,6 +22,7 @@ import { hoverBlockMenu } from './hover-menu';
 import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from './folding';
 import { headingSlugsField, navigateToHeading } from './heading-slugs';
 import { aiHighlightField, aiHighlightKeymap } from './ai-highlight';
+import { aiAskField } from './ai-ask';
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -35,6 +36,7 @@ export function createExtensions(): Extension[] {
     headingSlugsField,
     aiHighlightField,
     aiHighlightKeymap,
+    aiAskField,
     lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),

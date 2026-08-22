@@ -1239,6 +1239,64 @@
   }
 }
 
+/* AI ask (mdmini ask) — a question card with option buttons, inserted as a
+ * widget. Never part of the document text. */
+.cm-ai-ask {
+  position: relative;
+  margin: 6px 0 10px;
+  padding: 10px 32px 10px 14px;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 8px;
+  background: var(--ai-ask-bg);
+  font-family: var(--font-code);
+  font-size: 0.85em;
+}
+
+.cm-ai-ask-question {
+  color: var(--text-primary);
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.cm-ai-ask-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cm-ai-ask-option {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--ai-ask-chip-bg);
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.cm-ai-ask-option:hover {
+  background: var(--ai-ask-chip-hover-bg);
+}
+
+.cm-ai-ask-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9em;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.cm-ai-ask-dismiss:hover {
+  color: var(--text-subtle);
+}
+
 /* Active line glow — stronger in light theme */
 :root[data-theme='light'] .cm-activeLine {
   background-color: rgba(124, 58, 237, 0.06) !important;

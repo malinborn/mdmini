@@ -64,18 +64,23 @@ export function onUpdateDismissed(handler: () => void): Promise<() => void> {
 }
 
 /**
- * One `mdmini ai show`/`edit` request, routed by Rust to the window that owns
- * `path`. Mirrors the camelCase `AiCommandPayload` serialized by
+ * One `mdmini ai show`/`edit`/`ask` request, routed by Rust to the window
+ * that owns `path`. Mirrors the camelCase `AiCommandPayload` serialized by
  * `src-tauri/src/ai_socket.rs` — field names and optionality must match.
+ * `question`/`options`/`timeoutSecs` are only meaningful for `ask` (`options`
+ * empty and `timeoutSecs` 0 for `show`/`edit`).
  */
 export interface AiCommandPayload {
   id: number;
-  cmd: 'show' | 'edit';
+  cmd: 'show' | 'edit' | 'ask';
   path: string;
   line: number | null;
   find: string | null;
   content: string | null;
   show: boolean;
+  question: string | null;
+  options: string[];
+  timeoutSecs: number;
 }
 
 /**
