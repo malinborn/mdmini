@@ -3,6 +3,7 @@ import { EditorView } from '@codemirror/view';
 export const editorTheme = EditorView.theme({
   '&': {
     backgroundColor: 'var(--bg-base)',
+    backgroundImage: 'var(--bg-image, none)',
     color: 'var(--text-primary)',
     fontFamily: 'var(--font-text)',
   },
@@ -40,7 +41,7 @@ export const editorTheme = EditorView.theme({
     borderRadius: '2px',
   },
   '.cm-gutters': {
-    backgroundColor: 'var(--bg-base)',
+    backgroundColor: 'transparent',
     color: 'var(--text-muted)',
     border: 'none',
   },
