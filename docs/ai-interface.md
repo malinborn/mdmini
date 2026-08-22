@@ -7,7 +7,7 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 | Command | Behavior |
 |---------|----------|
 | `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window) and scroll the target into view with a ~1.6s pulse highlight. `--line` is 1-based, clamped to the document. `--find` locates the first substring match (case-sensitive). Neither flag → just open/focus, no scroll. `--line` and `--find` are mutually exclusive. |
-| `cat new.md \| mdmini edit <file> [--show]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. |
+| `cat new.md \| mdmini edit <file> [--show] [--allow-empty]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. Empty stdin is refused by default (`--allow-empty` to intentionally clear the buffer) — see below. |
 
 Examples:
 
@@ -20,6 +20,8 @@ cat new.md | mdmini edit notes.md --show
 Both verbs accept `--socket <path>` to target a non-default command socket (dev builds — see below).
 
 Always send the **full** new document on stdin for `edit`, not a diff or patch — md-mini computes the diff itself against what's currently in the buffer.
+
+By default, `edit` refuses empty stdin — `{"ok": false, "error": "refusing to apply empty content (use --allow-empty)"}`, exit `2`, checked locally before any socket connection is attempted. This guards against a shell mistake (`cat /dev/null | mdmini edit file.md`, or piping in the empty output of a failed upstream command) silently truncating the live buffer. Pass `--allow-empty` to intentionally clear a file.
 
 ## JSON response contract
 
@@ -46,7 +48,7 @@ One line of JSON on stdout, always. No JSON on stderr.
 |------|---------|
 | `0` | Request reached md-mini and succeeded (`"ok":true`). |
 | `1` | Request reached md-mini but it rejected it (`"ok":false"`), or the CLI's own 10s read timed out waiting for a reply after the socket accepted the request (`{"ok":false,"error":"timeout waiting for response"}`). |
-| `2` | Usage error (bad flags, missing file arg, unknown verb), or md-mini isn't running / didn't start in time (`{"ok":false,"error":"md-mini is not running"}` or `"md-mini did not start in time"`). |
+| `2` | Usage error (bad flags, missing file arg, unknown verb), `edit` refused empty stdin without `--allow-empty`, or md-mini isn't running / didn't start in time (`{"ok":false,"error":"md-mini is not running"}` or `"md-mini did not start in time"`). |
 
 ## Socket protocol
 
@@ -77,9 +79,10 @@ Server-side, a request that reaches a live window but gets no frontend reply wit
 
 Requests are dispatched to the window that owns `path`, looked up in the existing `OpenFiles` registry:
 
+- `show` on a path that doesn't exist on disk fails immediately with `{"ok":false,"error":"file does not exist"}`, without going through the open-window path at all. `edit` is unaffected — a nonexistent path there still opens a fresh window and applies the edit as a new file.
 - File already open → the payload is emitted as an `ai-command` event to that window; the frontend answers by invoking `ai_respond` with the same request id, which the socket listener correlates back to the waiting connection.
-- File not open → md-mini opens a new window for it on the main thread (`window::open_file_window`), polls `OpenFiles` for up to 2s for the new window's label, and queues the command for it. The new window's frontend drains its queue once, on mount, via `ai_pull_pending`. If the window never registers within 2s, the request fails with `"failed to open window for file"`.
-- Commands for one file are effectively serialized: only one is in flight per window at a time (the socket thread blocks on the reply channel before returning).
+- File not open → md-mini opens a new window for it on the main thread (`window::open_file_window`), polls `OpenFiles` for up to 2s for the new window's label, and queues the command for it. The new window's frontend drains its queue once, on mount, via `ai_pull_pending`. If the window never registers within 2s, the request fails with `"failed to open window for file"`. If the window is closed before it ever mounts to pull that queue, the queued command is failed with `"window closed before the command was delivered"` instead of hanging until the 8s listener timeout.
+- Each socket connection is served on its own thread and blocks on its own reply channel, but that is not the same as one-command-per-window serialization — two connections can dispatch to the same window concurrently. What actually prevents two concurrent `edit`s from clobbering each other is the frontend: `handleAiCommand`'s edit branch reads the document and calls `dispatch` synchronously, with no `await` in between.
 
 ## Launch-if-not-running flow
 
@@ -98,7 +101,7 @@ The `ai` subcommand is intercepted in `main.rs` before Tauri initializes anythin
   - the **next** `edit` command (installs its own range, replacing the old one), or
   - pressing **Esc** in the editor (`aiHighlightKeymap`; a no-op, falling through to other Esc handlers, if there's nothing to clear).
   - Not persisted across app restarts — it's in-memory CM6 state (`aiHighlightField`), not saved with the document.
-- Edits go through the same single-span `ChangeSet` + scroll-snapshot mechanism as an external file reload, with `Transaction.addToHistory.of(false)` (doesn't add an undo step). The document-changed listener still fires normally, so the edit still marks the file dirty and schedules the regular autosave — the file on disk catches up like any other in-app edit.
+- Edits go through the same single-span `ChangeSet` + scroll-snapshot mechanism as an external file reload, but — unlike a reload — stay a normal, undoable history step: an AI edit is content the user didn't author, and Cmd+Z is how they reject it. (Contrast an external-reload or session-restore transaction, which does use `Transaction.addToHistory.of(false)`.) The document-changed listener still fires normally, so the edit still marks the file dirty and schedules the regular autosave — the file on disk catches up like any other in-app edit.
 
 ## Using this from an AI agent's CLAUDE.md
 
@@ -124,6 +127,8 @@ Both verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines
 | `{"ok":false,"error":"md-mini did not start in time"}`, exit 2 | App didn't finish launching within the wrapper's 5s poll. | Launch it manually once (`open /Applications/md-mini.app`) and retry. |
 | `{"ok":false,"error":"window does not own this file"}` | The request's `path` doesn't exactly match the path the target window has open (symlink, relative-vs-canonical, or the file is genuinely open in a different window / not open at all and routing raced). | Pass the same absolute, canonicalized path used to open the file; avoid symlinks. |
 | `{"ok":false,"error":"target not found"}` (`show`) | `--find` text isn't a substring of the current buffer (exact, case-sensitive match). | Check the text against the file's current content — it may have changed since you last read it. |
+| `{"ok":false,"error":"file does not exist"}` (`show`) | Target path doesn't exist on disk. | `show` requires the file to already exist; check the path. `edit` has no such restriction — it opens a window and applies the edit as a new file. |
+| `{"ok":false,"error":"refusing to apply empty content (use --allow-empty)"}`, exit `2` (`edit`) | stdin was empty and `--allow-empty` wasn't passed. | Pass `--allow-empty` if clearing the file is actually intended; otherwise check what produced the empty stdin. |
 | `{"ok":false,"error":"timeout waiting for editor"}` | Socket accepted the request, but the frontend didn't answer within 8s (window frozen or closed mid-request). | Check the app isn't hung; retry. |
 | `{"ok":false,"error":"timeout waiting for response"}`, exit 1 | CLI's own 10s wait for any reply line expired. | App likely crashed after accepting the connection; check for a crash and relaunch. |
 | `{"ok":false,"error":"failed to open window for file"}` | File wasn't open, and the new window didn't register within 2s. | Verify the file exists and is readable; retry. |

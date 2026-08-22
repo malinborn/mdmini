@@ -57,6 +57,7 @@ pub fn run() {
             commands::file_exists,
             commands::get_pending_file,
             window::open_file_window_cmd,
+            window::register_open_file,
             recovery::save_recovery,
             recovery::delete_recovery,
             recovery::check_recovery,

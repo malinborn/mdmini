@@ -13,6 +13,12 @@ CMD_SOCK="/tmp/md_mini_cmd.sock"
 # `ai` client (see `run_ai_cli` in src-tauri/src/ai_socket.rs). stdin passes
 # through untouched for `edit`.
 if [ "$1" = "show" ] || [ "$1" = "edit" ]; then
+  if [ -S "$CMD_SOCK" ] && ! pgrep -f "md-mini.app/Contents/MacOS/md-mini" >/dev/null; then
+    # Socket file survived a crash/kill-9 of the process that owned it — a
+    # stale socket makes every command below hang until its own read times
+    # out. Treat it as absent so the launch path below rebinds it.
+    rm -f "$CMD_SOCK"
+  fi
   if [ ! -S "$CMD_SOCK" ]; then
     open "$APP"
     waited=0

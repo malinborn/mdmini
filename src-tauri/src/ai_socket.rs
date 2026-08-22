@@ -172,9 +172,17 @@ fn handle_connection(app: &AppHandle, stream: UnixStream) {
         let response = match parse_request(trimmed) {
             Ok(req) => {
                 let (tx, rx) = mpsc::channel::<AiResponse>();
-                dispatch(app, req, tx);
-                rx.recv_timeout(Duration::from_secs(8))
-                    .unwrap_or_else(|_| AiResponse::error("timeout waiting for editor"))
+                let id = dispatch(app, req, tx);
+                match rx.recv_timeout(Duration::from_secs(8)) {
+                    Ok(resp) => resp,
+                    Err(_) => {
+                        // Drop the waiting entry so a response that arrives after
+                        // we've given up on it is a harmless no-op instead of a
+                        // permanent leak in `AiPending`'s map.
+                        app.state::<AiPending>().cancel(id);
+                        AiResponse::error("timeout waiting for editor")
+                    }
+                }
             }
             Err(e) => AiResponse::error(e),
         };
@@ -224,6 +232,15 @@ impl AiPending {
             let _ = tx.send(response);
         }
     }
+
+    /// Remove a waiting request without delivering anything — used once the
+    /// caller has already given up (the socket listener's own timeout), so a
+    /// `respond` that arrives afterwards for the same id finds nothing to
+    /// deliver instead of resurrecting a stale sender that nobody is
+    /// receiving on anymore.
+    pub fn cancel(&self, id: u64) {
+        self.map.lock().unwrap().remove(&id);
+    }
 }
 
 /// Commands for windows created by an AI request, pulled by the frontend on mount.
@@ -255,6 +272,25 @@ impl AiQueue {
     }
 }
 
+/// Fail every AI command still queued for a window that's closing before its
+/// frontend ever pulled the queue — e.g. `open_file_window`'s new window was
+/// closed between creation and mount. Without this each queued command's
+/// `AiPending` sender leaks until the socket listener's own 8s timeout, and
+/// the CLI caller hangs the whole time for no reason.
+pub fn cancel_queued_for_window(app: &AppHandle, label: &str) {
+    let queued = app.state::<AiQueue>().pull(label);
+    if queued.is_empty() {
+        return;
+    }
+    let pending = app.state::<AiPending>();
+    for payload in queued {
+        pending.respond(
+            payload.id,
+            AiResponse::error("window closed before the command was delivered"),
+        );
+    }
+}
+
 /// The event payload sent to the owning window as `ai-command`, and the shape
 /// queued in `AiQueue` for a window still being created.
 #[derive(Clone, Debug, serde::Serialize)]
@@ -275,11 +311,26 @@ const OPEN_WINDOW_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Route a parsed request to the window that owns the file, opening one first if
 /// it isn't open yet, and arrange for the response to come back on `tx`.
-fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) {
+/// Returns the id registered for this request in `AiPending` — `0` (never a
+/// real id, since `AiPending::next` starts at 1) if the request was answered
+/// directly on `tx` without ever registering, so the caller's later
+/// `AiPending::cancel(id)` on timeout is a harmless no-op.
+fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u64 {
     let path = match &req {
         AiRequest::Show { path, .. } => path.clone(),
         AiRequest::Edit { path, .. } => path.clone(),
     };
+
+    // `show` on a path that doesn't exist would otherwise fall through to
+    // `open_file_window`, happily creating a new empty window for a file that
+    // can never be shown. Fail fast instead. `edit` keeps the
+    // create-window-then-apply behavior — a nonexistent path there is a
+    // normal "start a new file" request.
+    if matches!(&req, AiRequest::Show { .. }) && !std::path::Path::new(&path).exists() {
+        let _ = tx.send(AiResponse::error("file does not exist"));
+        return 0;
+    }
+
     let payload = AiCommandPayload {
         id: app.state::<AiPending>().register(tx),
         cmd: match &req {
@@ -317,7 +368,7 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) {
             // emit() broadcasts to every window — a window that does not own the
             // file would race to answer with an error. Target the owner only.
             if win.emit_to(label.as_str(), "ai-command", &payload).is_ok() {
-                return;
+                return id;
             }
         }
         // Label was in OpenFiles but the window is already gone (closed between
@@ -334,7 +385,7 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) {
     {
         app.state::<AiPending>()
             .respond(id, AiResponse::error("failed to open window for file"));
-        return;
+        return id;
     }
 
     // `open_file_window` registers the new label in `OpenFiles` synchronously,
@@ -348,12 +399,12 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) {
         };
         if let Some(label) = label {
             app.state::<AiQueue>().push(&label, payload);
-            return;
+            return id;
         }
         if Instant::now() >= deadline {
             app.state::<AiPending>()
                 .respond(id, AiResponse::error("failed to open window for file"));
-            return;
+            return id;
         }
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -403,10 +454,11 @@ enum CliVerb {
     },
     Edit {
         show: bool,
+        allow_empty: bool,
     },
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--socket PATH]";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
@@ -451,9 +503,11 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
         }
         "edit" => {
             let mut show = false;
+            let mut allow_empty = false;
             while let Some(arg) = iter.next() {
                 match arg.as_str() {
                     "--show" => show = true,
+                    "--allow-empty" => allow_empty = true,
                     "--socket" => {
                         let v = iter.next().ok_or("--socket requires a value")?;
                         socket = Some(v.clone());
@@ -463,11 +517,26 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
             }
             Ok(CliArgs {
                 path,
-                verb: CliVerb::Edit { show },
+                verb: CliVerb::Edit { show, allow_empty },
                 socket,
             })
         }
         other => Err(format!("unknown command: {}", other)),
+    }
+}
+
+/// Whether an `edit` with this stdin content should be refused before ever
+/// touching the socket: empty content without `--allow-empty` is almost
+/// always a shell mistake (`cat /dev/null | mdmini edit file.md`, a failed
+/// upstream command whose empty output got piped in) that would otherwise
+/// silently truncate the live buffer to nothing.
+fn refuse_empty_edit(content: &str, allow_empty: bool) -> Option<AiResponse> {
+    if content.is_empty() && !allow_empty {
+        Some(AiResponse::error(
+            "refusing to apply empty content (use --allow-empty)",
+        ))
+    } else {
+        None
     }
 }
 
@@ -507,6 +576,13 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
         None
     };
 
+    if let CliVerb::Edit { allow_empty, .. } = &parsed.verb {
+        if let Some(resp) = refuse_empty_edit(content.as_deref().unwrap_or(""), *allow_empty) {
+            println!("{}", serde_json::to_string(&resp).unwrap());
+            return 2;
+        }
+    }
+
     let request = match parsed.verb {
         CliVerb::Show { line, find } => AiRequest::Show {
             v: 1,
@@ -514,7 +590,7 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             line,
             find,
         },
-        CliVerb::Edit { show } => AiRequest::Edit {
+        CliVerb::Edit { show, .. } => AiRequest::Edit {
             v: 1,
             path: abs_path,
             content: content.unwrap_or_default(),
@@ -720,21 +796,34 @@ mod tests {
 
     #[test]
     fn ai_cli_args_edit_reads_flags() {
-        let parsed = parse_cli_args(&args(&["edit", "/a.md", "--show", "--socket", "/tmp/s.sock"]))
-            .unwrap();
+        let parsed = parse_cli_args(&args(&[
+            "edit",
+            "/a.md",
+            "--show",
+            "--allow-empty",
+            "--socket",
+            "/tmp/s.sock",
+        ]))
+        .unwrap();
         assert_eq!(parsed.path, "/a.md");
         assert_eq!(parsed.socket, Some("/tmp/s.sock".to_string()));
         match parsed.verb {
-            CliVerb::Edit { show } => assert!(show),
+            CliVerb::Edit { show, allow_empty } => {
+                assert!(show);
+                assert!(allow_empty);
+            }
             _ => panic!("expected Edit"),
         }
     }
 
     #[test]
-    fn ai_cli_args_edit_defaults_show_false() {
+    fn ai_cli_args_edit_defaults_show_and_allow_empty_false() {
         let parsed = parse_cli_args(&args(&["edit", "/a.md"])).unwrap();
         match parsed.verb {
-            CliVerb::Edit { show } => assert!(!show),
+            CliVerb::Edit { show, allow_empty } => {
+                assert!(!show);
+                assert!(!allow_empty);
+            }
             _ => panic!("expected Edit"),
         }
     }
@@ -766,5 +855,43 @@ mod tests {
         );
         // Malformed JSON also falls through to the non-zero exit path.
         assert_eq!(print_response_and_exit_code("not json"), 1);
+    }
+
+    #[test]
+    fn refuse_empty_edit_blocks_empty_content_without_flag() {
+        let resp = refuse_empty_edit("", false).expect("should refuse");
+        assert!(!resp.ok);
+        assert_eq!(
+            resp.error.as_deref(),
+            Some("refusing to apply empty content (use --allow-empty)")
+        );
+    }
+
+    #[test]
+    fn refuse_empty_edit_allows_empty_content_with_flag() {
+        assert!(refuse_empty_edit("", true).is_none());
+    }
+
+    #[test]
+    fn refuse_empty_edit_allows_nonempty_content_regardless_of_flag() {
+        assert!(refuse_empty_edit("hello", false).is_none());
+        assert!(refuse_empty_edit("hello", true).is_none());
+    }
+
+    #[test]
+    fn cancel_makes_a_later_respond_a_noop() {
+        let pending = AiPending::new();
+        let (tx, rx) = mpsc::channel();
+        let id = pending.register(tx);
+
+        pending.cancel(id);
+        // A response that arrives after the caller gave up must not be
+        // delivered — the receiver should see nothing, ever.
+        pending.respond(id, AiResponse::ok());
+        assert!(rx.try_recv().is_err());
+
+        // Cancelling twice, or an id that was never registered, must not panic.
+        pending.cancel(id);
+        pending.cancel(9999);
     }
 }

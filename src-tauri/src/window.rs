@@ -153,6 +153,11 @@ pub fn untrack_window(app: &AppHandle, label: &str) {
     wmap.remove(label); // dropping RecommendedWatcher stops watching
     drop(wmap);
 
+    // Fail any AI command still queued for this window (closed before it ever
+    // mounted to pull its queue) instead of leaking the waiting CLI connection
+    // until the socket listener's own timeout.
+    crate::ai_socket::cancel_queued_for_window(app, label);
+
     // Clean up recovery file in background
     if let Some(path) = file_path {
         std::thread::spawn(move || {
@@ -166,6 +171,44 @@ pub fn untrack_window(app: &AppHandle, label: &str) {
 #[tauri::command]
 pub async fn open_file_window_cmd(app: AppHandle, path: Option<String>) -> Result<(), String> {
     open_file_window(&app, path);
+    Ok(())
+}
+
+/// IPC command: register `path` as owned by the calling window and (re)start
+/// its file watcher.
+///
+/// A window that opens a file directly — `Cmd+O`, a drag-drop, a restored
+/// pending payload — never goes through `open_file_window`'s registration, so
+/// without this the path stays invisible to `OpenFiles`. That breaks every
+/// dedup check that consults it: the AI-command router would open a second,
+/// duplicate window for a file already sitting in this one, and reopening the
+/// file from the Open dialog wouldn't find/focus the existing window either.
+#[tauri::command]
+pub async fn register_open_file(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<(), String> {
+    let label = window.label().to_string();
+
+    {
+        let open_files = app.state::<OpenFiles>();
+        let mut map = open_files.0.lock().unwrap();
+        // The window is switching files — drop whatever it used to point at
+        // before inserting the new path, so the old path doesn't keep
+        // resolving to this window.
+        map.retain(|_, v| v != &label);
+        map.insert(path.clone(), label.clone());
+    }
+
+    // Replacing any existing entry under this label drops (and thus stops)
+    // the previous watcher.
+    if let Ok(watcher) = crate::watcher::watch_file(&app, label.clone(), path) {
+        let watchers = app.state::<FileWatchers>();
+        let mut wmap = watchers.0.lock().unwrap();
+        wmap.insert(label, watcher);
+    }
+
     Ok(())
 }
 

@@ -21,7 +21,7 @@
   import { createToastStore } from './lib/toasts.svelte';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
   import { EditorView, highlightActiveLine } from '@codemirror/view';
-  import { ChangeSet, Transaction } from '@codemirror/state';
+  import { ChangeSet } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
@@ -121,6 +121,13 @@
     try {
       const content = await readFile(path);
       fileState.filePath = path;
+      // Register this window as the owner of `path` in the Rust-side
+      // `OpenFiles` map and (re)start its watcher. Without this, a file
+      // opened via the dialog into an already-open window is invisible to
+      // every dedup/routing check that consults `OpenFiles` (AI commands,
+      // "already open" focus-instead-of-duplicate), and never gets watched
+      // for external changes either.
+      invoke('register_open_file', { path }).catch(() => {});
       fileState.isDirty = false;
       editorHandle?.replaceContent(content);
       recentFiles.add(path);
@@ -155,6 +162,10 @@
         editorHandle?.replaceContent('');
       }
       fileState.filePath = path;
+      // Register this window as the owner of `path` — see the matching call
+      // in `handleOpen`. Also (re)starts the file watcher, replacing the
+      // separate `start_watching` invoke this used to make.
+      invoke('register_open_file', { path }).catch(() => {});
       fileState.isDirty = false;
       recentFiles.add(path);
 
@@ -174,11 +185,6 @@
         editorHandle?.setEnvMode(false);
         editorHandle?.setCodeMode(null);
         activePreview = 'markdown';
-      }
-
-      // Start watching file for external changes
-      if (exists) {
-        invoke('start_watching', { path }).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to open file:', err);
@@ -258,6 +264,12 @@
     }, 1600);
   }
 
+  /** Invariant: the edit branch below must stay synchronous between reading
+   * `view.state.doc` (via `computeReplacement`) and calling `view.dispatch` —
+   * no `await` in between. Two AI edit commands delivered back-to-back would
+   * otherwise both read the same pre-edit state and diff against it, and
+   * whichever dispatches second would clobber the first's change instead of
+   * building on top of it. */
   async function handleAiCommand(payload: AiCommandPayload): Promise<void> {
     if (payload.path !== fileState.filePath) {
       await respondToAi(payload.id, { ok: false, error: 'window does not own this file' });
@@ -302,7 +314,10 @@
         setAiHighlights.of([highlightRange]),
         ...(payload.show ? [EditorView.scrollIntoView(repl.from, { y: 'center' })] : []),
       ],
-      annotations: Transaction.addToHistory.of(false),
+      // Unlike an external-reload or an untitled-restore transaction, an AI
+      // edit must stay undoable — it's a content change the user did not
+      // author, and Cmd+Z is their way to reject it. No addToHistory(false)
+      // annotation here (contrast Editor.svelte's updateContent).
     });
     // docChanged still fires the update listener (handleChange), which arms
     // dirty state + autosave — no separate call needed here.

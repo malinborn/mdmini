@@ -28,8 +28,8 @@ Nothing extra to run: the interface is the existing `mdmini` CLI plus a small co
 
 Output contract (for machine parsing):
 
-- stdout: single-line JSON. `show` → `{"ok": true}`. `edit` → `{"ok": true, "changed_lines": [[12, 15], [40, 40]]}` (1-based inclusive line ranges after the edit; empty array when content was identical).
-- Errors: `{"ok": false, "error": "<message>"}` on stdout, non-zero exit code.
+- stdout: single-line JSON. `show` → `{"ok": true}`. `edit` → `{"ok": true, "changed_lines": [[12, 15]]}` (1-based inclusive line ranges after the edit; empty array when content was identical). Shaped as an array for forward compatibility, but the current implementation (`computeReplacement`'s single common-prefix/common-suffix span) always returns 0 or 1 pairs, never more.
+- Errors: `{"ok": false, "error": "<message>"}` on stdout, non-zero exit code — this covers errors the running app returns (socket dispatch, routing, frontend rejection). CLI usage errors (bad flags, missing file arg, unknown verb) print a plain message to **stderr** instead and exit `2`, before any socket connection is attempted.
 - Timeout: the CLI waits up to 10s for a response, then fails.
 
 ## Transport
@@ -64,13 +64,13 @@ Two new Tauri events handled in `App.svelte`:
 
 Edits apply to the **live buffer**; autosave persists them to disk as usual. The `isSaving` suppression already prevents the app's own write from bouncing back through the watcher. Because the AI edit never touches the file directly, the dirty-file conflict dialog never triggers for this path.
 
-Concurrency: commands for one file are serialized by the socket listener (one in-flight command per window); a second command queues behind the first.
+Concurrency: the socket listener does not serialize commands to a window — each connection is served on its own thread, and more than one `ai-command` event can reach the same window in flight. The actual guarantee is in the frontend: `handleAiCommand`'s edit branch reads `view.state.doc` and calls `view.dispatch` synchronously with no `await` between them, so two edits delivered back-to-back can't both diff against the same pre-edit state and clobber each other.
 
 ## Error Handling
 
 - Unknown/unreadable path on `show` → open fails, error JSON returned.
 - `edit` for a file md-mini cannot open (permissions, binary) → error JSON, buffer untouched.
-- Window closed between dispatch and response → listener times out that request (5s) and returns an error.
+- Window closed between dispatch and response → listener times out that request (8s) and returns an error.
 - Malformed request line → error response, connection stays usable.
 
 ## Testing
