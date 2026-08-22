@@ -14,6 +14,8 @@ export const editorTheme = EditorView.theme({
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--color-cursor)',
     borderLeftWidth: '2px',
+    borderImage:
+      'linear-gradient(180deg, var(--color-caret-top, var(--color-cursor)), var(--color-caret-bottom, var(--color-cursor))) 1',
   },
   // Selection is drawn by CM6's `drawSelection()` extension (see setup.ts) as
   // `.cm-selectionBackground` rectangles, NOT native `::selection` — do not
