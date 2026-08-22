@@ -16,8 +16,11 @@ Nothing extra to run: the interface is the existing `mdmini` CLI plus a small co
 ## Non-Goals (backlog, not MVP)
 
 - `mdmini ask` — interactive choice buttons rendered in md-mini, answer returned to the agent.
-- `mdmini mcp` — a stdio MCP server wrapping the same socket protocol (one socket command = one future MCP tool; the protocol is designed so this wrapper needs no changes underneath).
 - Review/accept workflow (per-hunk confirmation) — the highlight is informational only in MVP.
+
+## Implemented since MVP
+
+- `mdmini mcp` — a stdio MCP server wrapping the same command socket protocol, exactly as anticipated above: one socket command (`show`/`edit`) maps to one MCP tool, no changes needed to the socket protocol itself. See `src-tauri/src/mcp_server.rs` and `docs/ai-interface.md` ("MCP server").
 
 ## CLI Surface
 

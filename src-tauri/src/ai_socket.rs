@@ -587,6 +587,7 @@ USAGE
   mdmini <file>...                          Open one or more files (or focus existing windows)
   mdmini show <file> [--line N | --find TEXT] [--socket PATH]
   mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
+  mdmini mcp [--socket PATH]
   mdmini help
   mdmini agent
 
@@ -655,6 +656,16 @@ EXIT CODES
         empty stdin without --allow-empty, or md-mini isn't running /
         didn't start in time.
 
+MCP — stdio MCP server exposing show/edit as tools, for agents that speak MCP
+  mdmini mcp [--socket PATH]
+      Runs a Model Context Protocol server on stdin/stdout instead of the CLI
+      verbs above: same show/edit operations, wrapped as MCP tools over
+      JSON-RPC 2.0. Launches md-mini via `open` if the command socket is down
+      (skipped when --socket is given explicitly). Register once with:
+        claude mcp add --scope user mdmini -- mdmini mcp
+      See docs/ai-interface.md ("MCP server") for the generic mcpServers JSON
+      shape and the full method/tool reference.
+
 HELP
   mdmini help
       Prints this reference. Exit 0. Local and offline — works even if
@@ -701,7 +712,8 @@ fn agent_text() -> String {
         \x20 .cursor/rules or .cursorrules     Cursor\n\
         \x20 .github/copilot-instructions.md   GitHub Copilot\n\n\
         --- copy from here ---\n\
-        {}",
+        {}\n\n\
+        Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit tools directly — then no instruction-file snippet is needed.",
         AGENT_SNIPPET
     )
 }
@@ -1027,7 +1039,7 @@ mod tests {
     #[test]
     fn help_text_mentions_all_verbs() {
         let text = help_text();
-        for verb in ["show", "edit", "help", "agent"] {
+        for verb in ["show", "edit", "mcp", "help", "agent"] {
             assert!(text.contains(verb), "help text missing verb: {}", verb);
         }
         assert!(text.contains("--line"));

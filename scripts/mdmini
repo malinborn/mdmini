@@ -13,6 +13,15 @@ if [ "$1" = "help" ] || [ "$1" = "agent" ]; then
   exec "$BIN" ai "$@"
 fi
 
+# `mdmini mcp` is a stdio MCP server (see docs/ai-interface.md) — the binary
+# itself owns socket resolution and the launch-if-not-running retry
+# (mcp_server::run), so this is a plain pass-through, not a rewrite into the
+# `ai` verb like help/agent above. "$@" already starts with "mcp" (that's
+# $1), so exec it unchanged rather than prefixing another "mcp".
+if [ "$1" = "mcp" ]; then
+  exec "$BIN" "$@"
+fi
+
 # AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` talk to the
 # running app's command socket instead of the file-open path above. Launch the
 # app first (no pending files needed — the request itself carries the file)

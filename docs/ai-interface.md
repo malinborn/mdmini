@@ -1,6 +1,6 @@
 # AI Interface — `mdmini show` / `mdmini edit`
 
-Lets an AI agent (Claude Code and similar) drive a running md-mini window directly: point at a location ("look here") or push new content into the live buffer, instead of writing the file to disk and hoping the watcher/autosave/reload path catches up. No daemon, no MCP registration — the interface is the existing `mdmini` CLI plus a small command socket served by the already-running app.
+Lets an AI agent (Claude Code and similar) drive a running md-mini window directly: point at a location ("look here") or push new content into the live buffer, instead of writing the file to disk and hoping the watcher/autosave/reload path catches up. No daemon required either way — the interface is the existing `mdmini` CLI plus a small command socket served by the already-running app, reachable either as plain CLI verbs or, for agents that speak it, as an MCP server (`mdmini mcp`) wrapping the same socket protocol — see "MCP server" below.
 
 ## CLI verbs
 
@@ -8,7 +8,8 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 |---------|----------|
 | `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window) and scroll the target into view with a ~1.6s pulse highlight. `--line` is 1-based, clamped to the document. `--find` locates the first substring match (case-sensitive). Neither flag → just open/focus, no scroll. `--line` and `--find` are mutually exclusive. |
 | `cat new.md \| mdmini edit <file> [--show] [--allow-empty]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. Empty stdin is refused by default (`--allow-empty` to intentionally clear the buffer) — see below. |
-| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
+| `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit` as MCP tools instead of CLI verbs — see "MCP server" below. |
+| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
 | `mdmini agent` | Print a ready-to-paste instruction block for an AI agent's instruction file (CLAUDE.md, AGENTS.md, etc.) — see below. Local and offline. |
 
 Examples:
@@ -105,6 +106,63 @@ The `ai` subcommand is intercepted in `main.rs` before Tauri initializes anythin
   - Not persisted across app restarts — it's in-memory CM6 state (`aiHighlightField`), not saved with the document.
 - Edits go through the same single-span `ChangeSet` + scroll-snapshot mechanism as an external file reload, but — unlike a reload — stay a normal, undoable history step: an AI edit is content the user didn't author, and Cmd+Z is how they reject it. (Contrast an external-reload or session-restore transaction, which does use `Transaction.addToHistory.of(false)`.) The document-changed listener still fires normally, so the edit still marks the file dirty and schedules the regular autosave — the file on disk catches up like any other in-app edit.
 
+## MCP server
+
+`mdmini mcp` runs a stdio [MCP](https://modelcontextprotocol.io) server instead of the CLI verbs above: same `show`/`edit` operations, same command socket underneath, wrapped as two MCP tools over JSON-RPC 2.0 on stdin/stdout. Nothing new to run — it's the existing socket protocol with a different transport in front, implemented in `mcp_server.rs` (`ai_socket.rs` stays focused on the socket protocol itself).
+
+Register it once and CLAUDE.md/AGENTS.md instruction snippets become unnecessary — the tools are discoverable natively:
+
+```bash
+claude mcp add --scope user mdmini -- mdmini mcp
+```
+
+Generic `mcpServers` config (Claude Desktop, other MCP clients):
+
+```json
+{
+  "mcpServers": {
+    "mdmini": {
+      "command": "mdmini",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Methods
+
+| Method | Behavior |
+|--------|----------|
+| `initialize` | Echoes the client's `protocolVersion` back (defaults to `2025-06-18` if absent). Result includes `capabilities: {"tools": {}}` and `serverInfo: {"name": "mdmini", "version": "<crate version>"}`. |
+| `notifications/initialized` | Notification, no response. |
+| `ping` | `{}`. |
+| `tools/list` | Returns the `show` and `edit` tools, each with a JSON Schema `inputSchema`. |
+| `tools/call` | Dispatches to the command socket — see below. |
+
+Any other method that carries an `id` gets a JSON-RPC `-32601` ("method not found") error. A message with no `id` at all is treated as a notification and never gets a response, regardless of method. Malformed JSON gets a `-32700` ("parse error") response with `id: null`.
+
+### Tools
+
+Same shapes as the CLI verbs, as MCP tools:
+
+- **`show`** — `path` (string, required, absolute), `line` (integer, 1-based) or `find` (string, first-occurrence text search); `line` and `find` are mutually exclusive.
+- **`edit`** — `path` (string, required), `content` (string, required, the **complete** new document), `show` (boolean, scroll to the change on completion). Empty `content` is refused with the same message the CLI gives for empty stdin — there's no `--allow-empty` equivalent over MCP, since an agent should never *mean* to send an empty document.
+
+`tools/call` builds the matching command-socket request (`{"v":1,"cmd":...}`), sends it, and wraps the raw `AiResponse` JSON line as the tool result text:
+
+```jsonc
+{"content": [{"type": "text", "text": "{\"ok\":true,\"changed_lines\":[[12,15]]}"}], "isError": false}
+```
+
+`isError` is `true` whenever the underlying response has `"ok":false` (routing failure, refusal, target not found, etc.) — this is a *tool-level* failure, reported inside a normal JSON-RPC success result, not a JSON-RPC protocol error. Only a malformed call itself (unknown tool name, missing required argument) becomes a JSON-RPC `-32602` ("invalid params") error.
+
+### Socket resolution and launch
+
+Same default socket as the CLI (`ai_socket::socket_path("md-mini")`, i.e. `/tmp/md_mini_cmd.sock`), overridable with `mdmini mcp --socket PATH`. On `tools/call`, if the socket isn't there:
+
+- **No `--socket` override** (the normal case): launch `open /Applications/md-mini.app` and poll for the socket up to 5s, same as `scripts/mdmini`'s launch-if-not-running step, then retry the connection once.
+- **`--socket` given explicitly** (dev/test socket): never attempt a launch — a dev socket being down just means the dev build isn't running, and launching the *release* app would be wrong. Fails straight to `{"ok":false,"error":"md-mini is not running"}` as an `isError: true` text result.
+
 ## Using this from an AI agent's CLAUDE.md
 
 Run `mdmini agent` to print this block along with a list of common instruction-file locations (CLAUDE.md, AGENTS.md, GEMINI.md, `.cursor/rules`, `.github/copilot-instructions.md`) — generated by `mdmini agent` (`agent_text` in `ai_socket.rs`); keep this fenced block in sync with that function if either changes. Paste it into a project's `CLAUDE.md` if the user has md-mini installed:
@@ -120,6 +178,8 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 
 Both verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk. Always send the full document on stdin for `edit`, never a diff.
 ```
+
+Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit tools directly — then no instruction-file snippet is needed.
 
 ## Troubleshooting
 
