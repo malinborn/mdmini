@@ -2,15 +2,15 @@
 
 Practical ways to put md-mini's AI interface to work once an agent is connected (via CLI snippet or MCP).
 
-## Живое ревью ИИ-правок
+## Live review of AI edits
 
 Instead of reading a diff after the fact, watch it happen. The agent edits your open document directly — the changed span shimmers with a highlight until you press **Esc** or edit near it again. You stay in control the whole time: **Cmd+Z** undoes an AI edit exactly like any other change, and nothing is final until you say so by moving on.
 
-## Решения не выпадают из потока
+## Decisions without leaving the flow
 
 An agent that needs a decision from you doesn't have to interrupt the chat — it can `ask` right at the spot in the document the decision concerns, anchored with `--line` or `--find`. A single-choice question gets buttons; `--multi` gets checkboxes for picking several; `--free-text` adds a field for when your own words matter more than a preset option. The question sits where the context already is, so you never lose your place figuring out what's being asked.
 
-## Документ как канал
+## The document as a channel
 
 Meeting notes, runbooks, checklists — let the agent maintain the document while you read it live. It pushes updates with `edit`, points you at the part that changed with `show`, and checks in with `ask` when it needs a call only you can make. The document becomes the shared surface, not a file you occasionally re-open to see what happened.
 
