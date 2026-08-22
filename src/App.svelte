@@ -11,6 +11,8 @@
     onSessionRestored,
     onUpdateAvailable,
     onUpdateDismissed,
+    onAiCommand,
+    type AiCommandPayload,
   } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
@@ -18,12 +20,21 @@
   import ToastStack from './lib/ToastStack.svelte';
   import { createToastStore } from './lib/toasts.svelte';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
-  import { highlightActiveLine } from '@codemirror/view';
+  import { EditorView, highlightActiveLine } from '@codemirror/view';
+  import { ChangeSet, Transaction } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
   import { isShellConfig } from './lib/editor/file-language';
   import { reinitializeTheme } from './lib/editor/preview/mermaid';
+  import { computeReplacement } from './lib/editor/content-diff';
+  import { resolveShowTarget, changedLineRanges } from './lib/ai-commands';
+  import {
+    setAiHighlights,
+    pulseAiLine,
+    clearAiHighlights,
+    aiHighlightRanges,
+  } from './lib/editor/ai-highlight';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './styles/global.css';
@@ -179,7 +190,6 @@
     const view = editorHandle?.view;
     if (!view) return;
     const { clampCursor, clampTopLine } = await import('./lib/session-position');
-    const { EditorView } = await import('@codemirror/view');
 
     const anchor = clampCursor(cursor, view.state.doc.length);
     const line = view.state.doc.line(clampTopLine(topLine, view.state.doc.lines));
@@ -220,6 +230,87 @@
         }
       }
     }
+  }
+
+  // --- AI command handling (`mdmini show`/`edit`) ---
+  interface AiResponse {
+    ok: boolean;
+    error?: string;
+    changed_lines?: [number, number][];
+  }
+
+  async function respondToAi(id: number, response: AiResponse): Promise<void> {
+    await invoke('ai_respond', { id, response }).catch((err: unknown) => {
+      console.error('Failed to respond to AI command:', err);
+    });
+  }
+
+  /** Pulse is purely visual; clear it once its animation finishes unless a real
+   * edit highlight has since taken its place — an edit's highlight must
+   * outlive a pulse cleanup scheduled by an earlier `show`. */
+  function schedulePulseCleanup(): void {
+    setTimeout(() => {
+      const view = editorHandle?.view;
+      if (!view) return;
+      if (aiHighlightRanges(view.state).length === 0) {
+        view.dispatch({ effects: clearAiHighlights.of(null) });
+      }
+    }, 1600);
+  }
+
+  async function handleAiCommand(payload: AiCommandPayload): Promise<void> {
+    if (payload.path !== fileState.filePath) {
+      await respondToAi(payload.id, { ok: false, error: 'window does not own this file' });
+      return;
+    }
+    const view = editorHandle?.view;
+    if (!view) {
+      await respondToAi(payload.id, { ok: false, error: 'editor not ready' });
+      return;
+    }
+
+    if (payload.cmd === 'show') {
+      const pos = resolveShowTarget(view.state, { line: payload.line, find: payload.find });
+      if (pos === null) {
+        await respondToAi(payload.id, { ok: false, error: 'target not found' });
+        return;
+      }
+      view.dispatch({
+        effects: [EditorView.scrollIntoView(pos, { y: 'center' }), pulseAiLine.of(pos)],
+      });
+      schedulePulseCleanup();
+      await respondToAi(payload.id, { ok: true });
+      return;
+    }
+
+    // cmd === 'edit'
+    const repl = computeReplacement(view.state.doc.toString(), payload.content ?? '');
+    if (!repl) {
+      await respondToAi(payload.id, { ok: true, changed_lines: [] });
+      return;
+    }
+
+    // Single-span diff, exactly mirroring Editor.svelte's updateContent: keeps
+    // CM6's automatic selection mapping intact and preserves scroll position.
+    const changes = ChangeSet.of(repl, view.state.doc.length);
+    const scrollEffect = view.scrollSnapshot().map(changes);
+    const highlightRange = { from: repl.from, to: repl.from + repl.insert.length };
+    view.dispatch({
+      changes,
+      effects: [
+        ...(scrollEffect ? [scrollEffect] : []),
+        setAiHighlights.of([highlightRange]),
+        ...(payload.show ? [EditorView.scrollIntoView(repl.from, { y: 'center' })] : []),
+      ],
+      annotations: Transaction.addToHistory.of(false),
+    });
+    // docChanged still fires the update listener (handleChange), which arms
+    // dirty state + autosave — no separate call needed here.
+
+    await respondToAi(payload.id, {
+      ok: true,
+      changed_lines: [changedLineRanges(view.state, repl)],
+    });
   }
 
   // --- Recovery save (every 5s if dirty) ---
@@ -281,6 +372,14 @@
       }
       if (pending.cursor > 0 || pending.topLine > 1) {
         await applyRestorePosition(pending.cursor, pending.topLine);
+      }
+    }).then(async () => {
+      // Commands queued for this file before its window existed (e.g. an
+      // `ai edit` of a file that wasn't open yet triggered this window's
+      // creation) — drained once, after the pending-open/restore settles.
+      const queued = await invoke<AiCommandPayload[]>('ai_pull_pending').catch(() => []);
+      for (const command of queued) {
+        await handleAiCommand(command);
       }
     });
 
@@ -346,6 +445,10 @@
 
     const unlistenExternalChange = onFileChangedExternally((path) => {
       handleExternalChange(path);
+    });
+
+    const unlistenAiCommand = onAiCommand((payload) => {
+      handleAiCommand(payload);
     });
 
     // Drag & drop: open files dropped onto the window
@@ -422,6 +525,7 @@
       unlistenMenu.then((fn) => fn());
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
+      unlistenAiCommand.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
       unlistenSessionRestored.then((fn) => fn());
       unlistenUpdateAvailable.then((fn) => fn());

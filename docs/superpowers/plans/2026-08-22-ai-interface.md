@@ -120,10 +120,10 @@ export const aiHighlightKeymap = keymap.of([{ key: 'Escape',
 - Create: `src/lib/ai-commands.ts` (pure helpers) + `src/lib/ai-commands.test.ts`
 - Modify: `src/lib/tauri/events.ts` (`onAiCommand`), `src/App.svelte` (handler + pull on mount)
 
-- [ ] **Step 1: Failing vitest** for pure helpers in `ai-commands.ts`:
+- [x] **Step 1: Failing vitest** for pure helpers in `ai-commands.ts`:
   - `resolveShowTarget(state, {line, find})` → doc position: line is 1-based and clamped to `[1, doc.lines]`; `find` → first `indexOf` in `doc.toString()`, miss → `null`; both absent → 0.
   - `changedLineRanges(state, span)` → 1-based inclusive `[start, end]` for the *inserted* span in the new doc (`{from, from + insert.length}`); empty insert (pure deletion) → the single line containing `from`.
-- [ ] **Step 2: Implement helpers + wiring.** `events.ts`:
+- [x] **Step 2: Implement helpers + wiring.** `events.ts`:
 
 ```ts
 export interface AiCommandPayload { id: number; cmd: 'show' | 'edit'; path: string;
@@ -137,15 +137,15 @@ export function onAiCommand(handler: (p: AiCommandPayload) => void): Promise<() 
   - **edit**: `computeReplacement(doc, p.content)`; null → `{ok:true, changed_lines: []}`; else one transaction exactly like `updateContent` (single-span `ChangeSet`, `scrollSnapshot().map(changes)`, `addToHistory.of(false)`) **plus** `setAiHighlights.of([{from: repl.from, to: repl.from + repl.insert.length}])` (mapped: effect ranges are in post-change coordinates — set them via a second dispatch or `StateEffect` appended after `changes` in the same spec, ranges computed against the new doc); `p.show` → also `scrollIntoView(repl.from, {y:'center'})`; respond `{ok:true, changed_lines: changedLineRanges(view.state, repl)}`; autosave: call `handleChange`-equivalent (`fileState.isDirty = true; scheduleAutoSave()`) since `addToHistory(false)` still triggers the update listener — verify, don't double-arm.
   - respond via `invoke('ai_respond', { id: p.id, response })`.
   In `onMount`, after the `get_pending_file` block resolves: `const queued = await invoke<AiCommandPayload[]>('ai_pull_pending'); queued.forEach(handleAiCommand);` and register `onAiCommand(handleAiCommand)` with the other listeners (+ cleanup).
-- [ ] **Step 3: Run** `npx vitest run --dir src` + `npm run check` — PASS.
-- [ ] **Step 4: Commit** `feat(ai): handle show/edit commands in the editor`
+- [x] **Step 3: Run** `npx vitest run --dir src` + `npm run check` — PASS.
+- [x] **Step 4: Commit** `feat(ai): handle show/edit commands in the editor`
 
 ### Task 5: CLI — client in the binary, wrapper subcommands
 
 **Files:**
 - Modify: `src-tauri/src/main.rs` (intercept `ai` before Tauri starts), `src-tauri/src/lib.rs` or `ai_socket.rs` (`pub fn run_ai_cli(args: Vec<String>) -> i32`), `scripts/mdmini`
 
-- [ ] **Step 1: Implement `run_ai_cli`** (std only, no Tauri): parse `ai show <file> [--line N | --find TEXT]` / `ai edit <file> [--show]`; resolve the file to an absolute path (reuse the logic of `resolve_path`); `edit` reads full stdin as content; socket = `--socket <path>` flag if given else `/tmp/md_mini_cmd.sock`; connect `UnixStream` (set `read_timeout(10s)`), write request line, read one response line, print it to stdout verbatim, return exit code 0 if `"ok":true` else 1; connection failure → print `{"ok":false,"error":"md-mini is not running"}`, exit 2. In `main.rs`:
+- [x] **Step 1: Implement `run_ai_cli`** (std only, no Tauri): parse `ai show <file> [--line N | --find TEXT]` / `ai edit <file> [--show]`; resolve the file to an absolute path (reuse the logic of `resolve_path`); `edit` reads full stdin as content; socket = `--socket <path>` flag if given else `/tmp/md_mini_cmd.sock`; connect `UnixStream` (set `read_timeout(10s)`), write request line, read one response line, print it to stdout verbatim, return exit code 0 if `"ok":true` else 1; connection failure → print `{"ok":false,"error":"md-mini is not running"}`, exit 2. In `main.rs`:
 
 ```rust
 fn main() {
@@ -157,8 +157,8 @@ fn main() {
 }
 ```
 
-- [ ] **Step 2: Cargo tests** for the arg parser (`ai_cli_args_show_with_line`, `ai_cli_args_edit_reads_flags`, unknown verb → usage error). Run + clippy — PASS.
-- [ ] **Step 3: Extend `scripts/mdmini`**: if `$1` is `show` or `edit`: if the command socket is missing → start the app (existing pending-files + `open` path, no file args) and poll for the socket up to 5s; then `exec "$BIN" ai "$@"` (stdin passes through for `edit`). Existing file-open behavior for all other invocations unchanged. Remember the deployed copy rule: `/usr/local/bin/mdmini` is a COPY — doc the re-copy step, do not overwrite it yourself.
+- [x] **Step 2: Cargo tests** for the arg parser (`ai_cli_args_show_with_line`, `ai_cli_args_edit_reads_flags`, unknown verb → usage error). Run + clippy — PASS.
+- [x] **Step 3: Extend `scripts/mdmini`**: if `$1` is `show` or `edit`: if the command socket is missing → start the app (existing pending-files + `open` path, no file args) and poll for the socket up to 5s; then `exec "$BIN" ai "$@"` (stdin passes through for `edit`). Existing file-open behavior for all other invocations unchanged. Remember the deployed copy rule: `/usr/local/bin/mdmini` is a COPY — doc the re-copy step, do not overwrite it yourself.
 - [ ] **Step 4: Manual e2e** (dev build, per CLAUDE.md isolation rules): `npm run build:dev`, launch `md-mini-dev.app` binary from a terminal, then against the dev socket:
   `"$DEVBIN" ai show /tmp/demo.md --line 20 --socket /tmp/md_mini_dev_cmd.sock` → window focuses, line pulses;
   `printf '…new content…' | "$DEVBIN" ai edit /tmp/demo.md --socket /tmp/md_mini_dev_cmd.sock` → span highlighted, `changed_lines` correct, scroll stays put; Esc clears; second edit replaces highlight; edit of a not-open file opens a window and applies.

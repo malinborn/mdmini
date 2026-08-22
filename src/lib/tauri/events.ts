@@ -61,3 +61,25 @@ export function onUpdateDismissed(handler: () => void): Promise<() => void> {
     handler();
   });
 }
+
+/**
+ * One `mdmini ai show`/`edit` request, routed by Rust to the window that owns
+ * `path`. Mirrors the camelCase `AiCommandPayload` serialized by
+ * `src-tauri/src/ai_socket.rs` — field names and optionality must match.
+ */
+export interface AiCommandPayload {
+  id: number;
+  cmd: 'show' | 'edit';
+  path: string;
+  line: number | null;
+  find: string | null;
+  content: string | null;
+  show: boolean;
+}
+
+/** Emitted to the window that owns the file targeted by an AI command. */
+export function onAiCommand(handler: (payload: AiCommandPayload) => void): Promise<() => void> {
+  return listen<AiCommandPayload>('ai-command', (event) => {
+    handler(event.payload);
+  });
+}
