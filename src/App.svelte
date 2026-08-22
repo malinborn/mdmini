@@ -364,7 +364,11 @@
         await respondToAi(payload.id, { ok: false, error: 'target not found' });
         return;
       }
+      // Move the caret along with the view: otherwise it stays wherever it
+      // was (often position 0 in a fresh window) and the next arrow key
+      // snaps the view back there — reads as "cursor jumped to the top".
       view.dispatch({
+        selection: { anchor: pos },
         effects: [EditorView.scrollIntoView(pos, { y: 'center' }), pulseAiLine.of(pos)],
       });
       schedulePulseCleanup();
@@ -406,6 +410,9 @@
       };
 
       view.dispatch({
+        // Caret follows the question's anchor for the same reason as `show`:
+        // a later arrow key must not yank the view back to a stale caret.
+        selection: { anchor: pos },
         effects: [
           addAiAsk.of({
             spec: {
@@ -452,6 +459,9 @@
     const highlightRange = { from: repl.from, to: repl.from + repl.insert.length };
     view.dispatch({
       changes,
+      // With `show` the user is being led to the change — bring the caret
+      // too (post-change coordinates), so arrow keys continue from there.
+      ...(payload.show ? { selection: { anchor: repl.from } } : {}),
       effects: [
         ...(scrollEffect ? [scrollEffect] : []),
         setAiHighlights.of([highlightRange]),
