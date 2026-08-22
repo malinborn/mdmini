@@ -4,6 +4,29 @@ APP="/Applications/md-mini.app"
 BIN="$APP/Contents/MacOS/md-mini"
 SOCK="/tmp/com_md_mini_app_si.sock"
 PENDING="/tmp/md-mini-pending-files"
+CMD_SOCK="/tmp/md_mini_cmd.sock"
+
+# AI interface: `mdmini show <file> ...` / `mdmini edit <file> ...` talk to the
+# running app's command socket instead of the file-open path above. Launch the
+# app first (no pending files needed — the request itself carries the file)
+# if the command socket isn't there yet, then hand off to the binary's own
+# `ai` client (see `run_ai_cli` in src-tauri/src/ai_socket.rs). stdin passes
+# through untouched for `edit`.
+if [ "$1" = "show" ] || [ "$1" = "edit" ]; then
+  if [ ! -S "$CMD_SOCK" ]; then
+    open "$APP"
+    waited=0
+    while [ ! -S "$CMD_SOCK" ]; do
+      sleep 0.1
+      waited=$((waited + 1))
+      if [ "$waited" -ge 50 ]; then
+        echo '{"ok":false,"error":"md-mini did not start in time"}'
+        exit 2
+      fi
+    done
+  fi
+  exec "$BIN" ai "$@"
+fi
 
 # Resolve relative paths to absolute
 args=()

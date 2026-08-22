@@ -5,7 +5,7 @@
 //! `docs/superpowers/specs/2026-08-22-ai-interface-design.md`.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ use crate::window;
 
 /// A parsed command socket request. `v` (protocol version) is accepted but not
 /// yet branched on — kept for the future MCP wrapper mentioned in the spec.
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "cmd", rename_all = "lowercase")]
 pub enum AiRequest {
     Show {
@@ -196,6 +196,12 @@ pub struct AiPending {
     next: AtomicU64,
 }
 
+impl Default for AiPending {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AiPending {
     pub fn new() -> Self {
         Self {
@@ -222,6 +228,12 @@ impl AiPending {
 
 /// Commands for windows created by an AI request, pulled by the frontend on mount.
 pub struct AiQueue(pub Mutex<HashMap<String, Vec<AiCommandPayload>>>);
+
+impl Default for AiQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl AiQueue {
     pub fn new() -> Self {
@@ -364,6 +376,207 @@ pub async fn ai_pull_pending(
     Ok(state.pull(window.label()))
 }
 
+// ---------------------------------------------------------------------------
+// CLI client (`mdmini ai show|edit ...`) — std only, never touches Tauri.
+// ---------------------------------------------------------------------------
+
+/// Default command socket path, overridable with `--socket` for dev builds
+/// and tests (the dev app binds `/tmp/md_mini_dev_cmd.sock` instead — see
+/// `socket_path`).
+const DEFAULT_SOCKET_PATH: &str = "/tmp/md_mini_cmd.sock";
+
+/// Parsed `ai <verb> <file> [flags]` arguments, verb-specific flags in `verb`.
+#[derive(Debug, PartialEq)]
+struct CliArgs {
+    path: String,
+    verb: CliVerb,
+    socket: Option<String>,
+}
+
+#[derive(Debug, PartialEq)]
+enum CliVerb {
+    Show {
+        line: Option<usize>,
+        find: Option<String>,
+    },
+    Edit {
+        show: bool,
+    },
+}
+
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--socket PATH]";
+
+/// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
+/// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
+fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
+    let mut iter = args.iter();
+    let verb = iter.next().ok_or_else(|| USAGE.to_string())?;
+    let path = iter.next().ok_or_else(|| USAGE.to_string())?.clone();
+    let mut socket: Option<String> = None;
+
+    match verb.as_str() {
+        "show" => {
+            let mut line: Option<usize> = None;
+            let mut find: Option<String> = None;
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--line" => {
+                        let v = iter.next().ok_or("--line requires a value")?;
+                        line = Some(
+                            v.parse::<usize>()
+                                .map_err(|_| format!("invalid --line value: {}", v))?,
+                        );
+                    }
+                    "--find" => {
+                        let v = iter.next().ok_or("--find requires a value")?;
+                        find = Some(v.clone());
+                    }
+                    "--socket" => {
+                        let v = iter.next().ok_or("--socket requires a value")?;
+                        socket = Some(v.clone());
+                    }
+                    other => return Err(format!("unknown flag: {}", other)),
+                }
+            }
+            if line.is_some() && find.is_some() {
+                return Err("--line and --find are mutually exclusive".to_string());
+            }
+            Ok(CliArgs {
+                path,
+                verb: CliVerb::Show { line, find },
+                socket,
+            })
+        }
+        "edit" => {
+            let mut show = false;
+            while let Some(arg) = iter.next() {
+                match arg.as_str() {
+                    "--show" => show = true,
+                    "--socket" => {
+                        let v = iter.next().ok_or("--socket requires a value")?;
+                        socket = Some(v.clone());
+                    }
+                    other => return Err(format!("unknown flag: {}", other)),
+                }
+            }
+            Ok(CliArgs {
+                path,
+                verb: CliVerb::Edit { show },
+                socket,
+            })
+        }
+        other => Err(format!("unknown command: {}", other)),
+    }
+}
+
+/// Print `response` to stdout and return the process exit code: `0` if it
+/// deserializes to an `ok: true` `AiResponse`, `1` otherwise.
+fn print_response_and_exit_code(response_json: &str) -> i32 {
+    println!("{}", response_json);
+    match serde_json::from_str::<AiResponse>(response_json) {
+        Ok(resp) if resp.ok => 0,
+        _ => 1,
+    }
+}
+
+/// Entry point for `mdmini ai <verb> ...`, called from `main.rs` before Tauri
+/// is touched. `args` is the full `std::env::args()` vector (`args[0]` is the
+/// binary path, `args[1]` is `"ai"`); everything from `args[2]` on is the verb
+/// and its flags. Returns the process exit code.
+pub fn run_ai_cli(args: Vec<String>) -> i32 {
+    let parsed = match parse_cli_args(&args[2.min(args.len())..]) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}", e);
+            return 2;
+        }
+    };
+
+    let abs_path = crate::resolve_path(&parsed.path, None);
+
+    let content = if matches!(parsed.verb, CliVerb::Edit { .. }) {
+        let mut buf = String::new();
+        if std::io::stdin().read_to_string(&mut buf).is_err() {
+            eprintln!("failed to read stdin");
+            return 2;
+        }
+        Some(buf)
+    } else {
+        None
+    };
+
+    let request = match parsed.verb {
+        CliVerb::Show { line, find } => AiRequest::Show {
+            v: 1,
+            path: abs_path,
+            line,
+            find,
+        },
+        CliVerb::Edit { show } => AiRequest::Edit {
+            v: 1,
+            path: abs_path,
+            content: content.unwrap_or_default(),
+            show,
+        },
+    };
+
+    let socket_path = parsed
+        .socket
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_SOCKET_PATH));
+
+    let mut stream = match UnixStream::connect(&socket_path) {
+        Ok(s) => s,
+        Err(_) => {
+            println!(
+                "{}",
+                serde_json::to_string(&AiResponse::error("md-mini is not running")).unwrap()
+            );
+            return 2;
+        }
+    };
+
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+
+    let mut request_line = match serde_json::to_string(&request) {
+        Ok(s) => s,
+        Err(e) => {
+            println!(
+                "{}",
+                serde_json::to_string(&AiResponse::error(format!(
+                    "failed to encode request: {}",
+                    e
+                )))
+                .unwrap()
+            );
+            return 1;
+        }
+    };
+    request_line.push('\n');
+
+    if stream.write_all(request_line.as_bytes()).is_err() {
+        println!(
+            "{}",
+            serde_json::to_string(&AiResponse::error("md-mini is not running")).unwrap()
+        );
+        return 2;
+    }
+
+    let mut reader = BufReader::new(stream);
+    let mut response_line = String::new();
+    match reader.read_line(&mut response_line) {
+        Ok(0) | Err(_) => {
+            println!(
+                "{}",
+                serde_json::to_string(&AiResponse::error("timeout waiting for response"))
+                    .unwrap()
+            );
+            1
+        }
+        Ok(_) => print_response_and_exit_code(response_line.trim()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,5 +668,101 @@ mod tests {
 
         // Unknown id is a no-op — must not panic or block.
         pending.respond(9999, AiResponse::error("ignored"));
+    }
+
+    fn args(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn ai_cli_args_show_with_line() {
+        let parsed = parse_cli_args(&args(&["show", "/a.md", "--line", "42"])).unwrap();
+        assert_eq!(parsed.path, "/a.md");
+        assert_eq!(parsed.socket, None);
+        match parsed.verb {
+            CliVerb::Show { line, find } => {
+                assert_eq!(line, Some(42));
+                assert_eq!(find, None);
+            }
+            _ => panic!("expected Show"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_show_with_find_and_socket() {
+        let parsed = parse_cli_args(&args(&[
+            "show",
+            "/a.md",
+            "--find",
+            "hello world",
+            "--socket",
+            "/tmp/custom.sock",
+        ]))
+        .unwrap();
+        assert_eq!(parsed.socket, Some("/tmp/custom.sock".to_string()));
+        match parsed.verb {
+            CliVerb::Show { line, find } => {
+                assert_eq!(line, None);
+                assert_eq!(find, Some("hello world".to_string()));
+            }
+            _ => panic!("expected Show"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_show_line_and_find_conflict() {
+        let err = parse_cli_args(&args(&["show", "/a.md", "--line", "1", "--find", "x"]))
+            .unwrap_err();
+        assert!(err.contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn ai_cli_args_edit_reads_flags() {
+        let parsed = parse_cli_args(&args(&["edit", "/a.md", "--show", "--socket", "/tmp/s.sock"]))
+            .unwrap();
+        assert_eq!(parsed.path, "/a.md");
+        assert_eq!(parsed.socket, Some("/tmp/s.sock".to_string()));
+        match parsed.verb {
+            CliVerb::Edit { show } => assert!(show),
+            _ => panic!("expected Edit"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_edit_defaults_show_false() {
+        let parsed = parse_cli_args(&args(&["edit", "/a.md"])).unwrap();
+        match parsed.verb {
+            CliVerb::Edit { show } => assert!(!show),
+            _ => panic!("expected Edit"),
+        }
+    }
+
+    #[test]
+    fn ai_cli_args_unknown_verb_errors() {
+        let err = parse_cli_args(&args(&["delete", "/a.md"])).unwrap_err();
+        assert!(err.contains("unknown command"));
+    }
+
+    #[test]
+    fn ai_cli_args_missing_file_errors() {
+        assert!(parse_cli_args(&args(&["show"])).is_err());
+        assert!(parse_cli_args(&args(&[])).is_err());
+    }
+
+    #[test]
+    fn ai_cli_args_unknown_flag_errors() {
+        let err = parse_cli_args(&args(&["show", "/a.md", "--bogus"])).unwrap_err();
+        assert!(err.contains("unknown flag"));
+    }
+
+    #[test]
+    fn print_response_and_exit_code_matches_ok_field() {
+        assert_eq!(print_response_and_exit_code(r#"{"ok":true}"#), 0);
+        assert_eq!(
+            print_response_and_exit_code(r#"{"ok":false,"error":"boom"}"#),
+            1
+        );
+        // Malformed JSON also falls through to the non-zero exit path.
+        assert_eq!(print_response_and_exit_code("not json"), 1);
     }
 }

@@ -1,4 +1,4 @@
-mod ai_socket;
+pub mod ai_socket;
 mod commands;
 mod menu;
 mod paths;
@@ -309,7 +309,7 @@ fn assign_file_to_main(app: &tauri::AppHandle, path: String) {
 }
 
 /// Resolve a potentially relative path to an absolute path.
-fn resolve_path(path: &str, cwd: Option<&str>) -> String {
+pub(crate) fn resolve_path(path: &str, cwd: Option<&str>) -> String {
     let p = std::path::Path::new(path);
     if p.is_absolute() {
         return path.to_string();
