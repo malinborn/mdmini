@@ -2,6 +2,7 @@ pub mod ai_socket;
 mod commands;
 pub mod mcp_server;
 mod menu;
+mod onboarding;
 mod paths;
 mod recovery;
 mod session;
@@ -164,6 +165,10 @@ pub fn run() {
             // it can dispatch to windows created earlier in setup, but nothing
             // earlier in setup depends on it.
             ai_socket::start(app.handle());
+
+            // One-time "what's new" window on a version bump. Never breaks
+            // startup on failure — see `onboarding::maybe_show`.
+            onboarding::maybe_show(app.handle());
 
             Ok(())
         })
