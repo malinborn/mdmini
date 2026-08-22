@@ -613,6 +613,15 @@
           showRecentFiles = true;
           break;
       }
+
+      // macOS/muda toggles the clicked CheckMenuItem natively before this
+      // handler runs. Re-clicking the already-active theme assigns the same
+      // preference value, so the $effect below never reruns and the native
+      // toggle leaves the submenu with nothing checked. Force a corrective
+      // sync on every theme_* event, independent of whether the value changed.
+      if (action.startsWith('theme_')) {
+        syncThemeMenu(theme.preference);
+      }
     });
 
     const unlistenOpenFile = onOpenFile((path) => {
