@@ -67,8 +67,9 @@ export function onUpdateDismissed(handler: () => void): Promise<() => void> {
  * One `mdmini ai show`/`edit`/`ask` request, routed by Rust to the window
  * that owns `path`. Mirrors the camelCase `AiCommandPayload` serialized by
  * `src-tauri/src/ai_socket.rs` — field names and optionality must match.
- * `question`/`options`/`multi`/`timeoutSecs` are only meaningful for `ask`
- * (`options` empty, `multi` false, and `timeoutSecs` 0 for `show`/`edit`).
+ * `question`/`options`/`multi`/`freeText`/`timeoutSecs` are only meaningful
+ * for `ask` (`options` empty, `multi`/`freeText` false, and `timeoutSecs` 0
+ * for `show`/`edit`).
  */
 export interface AiCommandPayload {
   id: number;
@@ -82,6 +83,8 @@ export interface AiCommandPayload {
   options: string[];
   /** Multi-choice (checkbox chips + confirm) vs single-choice (click an option). */
   multi: boolean;
+  /** Adds a free-text input below the option row, in either mode. */
+  freeText: boolean;
   timeoutSecs: number;
 }
 

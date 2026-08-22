@@ -12,6 +12,7 @@ function makeSpec(overrides: Partial<AskSpec> = {}): AskSpec {
     question: 'Continue?',
     options: ['Yes', 'No'],
     multi: false,
+    freeText: false,
     onAnswer: vi.fn(),
     ...overrides,
   };
@@ -140,6 +141,12 @@ describe('AskWidget.eq', () => {
     const b = new AskWidget(makeSpec({ multi: true }));
     expect(a.eq(b)).toBe(false);
   });
+
+  it('is false when freeText differs', () => {
+    const a = new AskWidget(makeSpec({ freeText: false }));
+    const b = new AskWidget(makeSpec({ freeText: true }));
+    expect(a.eq(b)).toBe(false);
+  });
 });
 
 describe('AskWidget.ignoreEvent', () => {
@@ -157,16 +164,28 @@ describe('AskWidget.ignoreEvent', () => {
 // enough surface (createElement/appendChild/addEventListener/setAttribute)
 // for `toDOM()` to run, and fire the recorded listeners directly.
 
+/** Event shape the widget's listeners actually call methods on: mouse
+ * listeners call `preventDefault`, keyboard listeners on the free-text input
+ * call `stopPropagation` and read `key`. */
+interface FakeEvent {
+  preventDefault(): void;
+  stopPropagation(): void;
+  key?: string;
+}
+
 interface FakeElement {
   tagName: string;
   className: string;
   type: string;
   textContent: string;
+  /** Only meaningful for the free-text `<input>`. */
+  value: string;
+  placeholder: string;
   children: FakeElement[];
   attributes: Record<string, string>;
-  listeners: Record<string, Array<(event: { preventDefault(): void }) => void>>;
+  listeners: Record<string, Array<(event: FakeEvent) => void>>;
   appendChild(child: FakeElement): void;
-  addEventListener(type: string, handler: (event: { preventDefault(): void }) => void): void;
+  addEventListener(type: string, handler: (event: FakeEvent) => void): void;
   setAttribute(name: string, value: string): void;
 }
 
@@ -176,6 +195,8 @@ function createFakeElement(tagName: string): FakeElement {
     className: '',
     type: '',
     textContent: '',
+    value: '',
+    placeholder: '',
     children: [],
     attributes: {},
     listeners: {},
@@ -192,10 +213,21 @@ function createFakeElement(tagName: string): FakeElement {
   return el;
 }
 
-function fire(el: FakeElement, type: string): void {
+/** Fires all listeners registered for `type`, with spy `preventDefault`/
+ * `stopPropagation` so a test can assert on whether they were called, plus
+ * any extra event fields (e.g. `{ key: 'Enter' }`) the handler reads. */
+function fire(
+  el: FakeElement,
+  type: string,
+  extra: Partial<Pick<FakeEvent, 'key'>> = {}
+): { preventDefault: ReturnType<typeof vi.fn>; stopPropagation: ReturnType<typeof vi.fn> } {
+  const preventDefault = vi.fn();
+  const stopPropagation = vi.fn();
+  const event: FakeEvent = { preventDefault, stopPropagation, ...extra };
   for (const handler of el.listeners[type] ?? []) {
-    handler({ preventDefault: () => {} });
+    handler(event);
   }
+  return { preventDefault, stopPropagation };
 }
 
 /** `className` is a real DOM space-separated token list (e.g. a checked chip
@@ -347,5 +379,145 @@ describe('AskWidget.toDOM multi-choice click wiring', () => {
     fire(dismissButton, 'click');
 
     expect(onAnswer).toHaveBeenCalledWith(8, null);
+  });
+});
+
+describe('AskWidget.toDOM free-text input', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders no input when freeText is false', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ freeText: false }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    expect(findByClass(dom, 'cm-ai-ask-input')).toHaveLength(0);
+  });
+
+  it('renders one input, below the option row, when freeText is true', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ freeText: true }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    expect(findByClass(dom, 'cm-ai-ask-input')).toHaveLength(1);
+    expect(input.placeholder).toBe('Your own answer…');
+    // Card children, in DOM order: dismiss, question, options row, input.
+    expect(dom.children[dom.children.length - 1]).toBe(input);
+  });
+
+  it('single-choice: Enter in the input with non-empty trimmed text calls onAnswer with { custom }', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 10, freeText: true, onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    input.value = '  hello there  ';
+    fire(input, 'keydown', { key: 'Enter' });
+
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenCalledWith(10, { custom: 'hello there' });
+  });
+
+  it('single-choice: Enter with only whitespace is a no-op', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 11, freeText: true, onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    input.value = '   ';
+    fire(input, 'keydown', { key: 'Enter' });
+
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('single-choice: a non-Enter keydown in the input never calls onAnswer', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 12, freeText: true, onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    input.value = 'hello';
+    fire(input, 'keydown', { key: 'a' });
+
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('multi-choice: Enter in the input never calls onAnswer — only the confirm button does', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(makeSpec({ id: 13, multi: true, freeText: true, options: ['A'], onAnswer }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    input.value = 'text';
+    fire(input, 'keydown', { key: 'Enter' });
+
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('multi-choice: confirm with typed text sends { answers, custom }', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(
+      makeSpec({ id: 20, multi: true, freeText: true, options: ['A', 'B'], onAnswer })
+    );
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [chipA] = findByClass(dom, 'cm-ai-ask-option');
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    const [confirm] = findByClass(dom, 'cm-ai-ask-confirm');
+
+    fire(chipA, 'click');
+    input.value = '  extra detail  ';
+    fire(confirm, 'click');
+
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer).toHaveBeenCalledWith(20, { answers: ['A'], custom: 'extra detail' });
+  });
+
+  it('multi-choice: confirm with an empty text field sends the plain array (no custom key)', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const onAnswer = vi.fn();
+    const widget = new AskWidget(
+      makeSpec({ id: 21, multi: true, freeText: true, options: ['A', 'B'], onAnswer })
+    );
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [chipA] = findByClass(dom, 'cm-ai-ask-option');
+    const [confirm] = findByClass(dom, 'cm-ai-ask-confirm');
+
+    fire(chipA, 'click');
+    fire(confirm, 'click');
+
+    expect(onAnswer).toHaveBeenCalledWith(21, ['A']);
+  });
+
+  it('keydown, keypress, and keyup on the input stop propagation, so CM6 keymaps never see them', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ freeText: true }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+
+    expect(fire(input, 'keydown', { key: 'Escape' }).stopPropagation).toHaveBeenCalledTimes(1);
+    expect(fire(input, 'keypress').stopPropagation).toHaveBeenCalledTimes(1);
+    expect(fire(input, 'keyup').stopPropagation).toHaveBeenCalledTimes(1);
+  });
+
+  it('mousedown on the input stops propagation but does not preventDefault, so focus/caret placement still works', () => {
+    vi.stubGlobal('document', { createElement: createFakeElement });
+    const widget = new AskWidget(makeSpec({ freeText: true }));
+
+    const dom = widget.toDOM() as unknown as FakeElement;
+    const [input] = findByClass(dom, 'cm-ai-ask-input');
+    const { stopPropagation, preventDefault } = fire(input, 'mousedown');
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 });

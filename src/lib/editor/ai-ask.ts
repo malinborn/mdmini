@@ -14,13 +14,23 @@ export interface AskSpec {
   options: string[];
   /** Single-choice (click an option) vs multi-choice (toggle chips, confirm). */
   multi: boolean;
+  /** Renders a free-text input below the option row, in either mode. */
+  freeText: boolean;
   /**
-   * Fires once: for single-choice, `result` is the clicked option's text; for
-   * a multi-choice confirm, `result` is the selected options in `options`
-   * order (an empty array is a valid, explicit "none selected"); `null` is a
-   * dismiss in either mode.
+   * Fires once, in one of five shapes:
+   * - `string` — single-choice: the clicked option's text.
+   * - `string[]` — multi-choice confirm, free-text field left empty
+   *   (possibly `[]`, a valid, explicit "none selected").
+   * - `{ custom: string }` — single-choice: Enter in the free-text field
+   *   with a non-empty trimmed value.
+   * - `{ answers: string[]; custom: string }` — multi-choice confirm with a
+   *   non-empty trimmed value in the free-text field.
+   * - `null` — dismiss, in any mode.
    */
-  onAnswer: (id: number, result: string | string[] | null) => void;
+  onAnswer: (
+    id: number,
+    result: string | string[] | { custom: string } | { answers: string[]; custom: string } | null
+  ) => void;
 }
 
 /** Adds an ask widget, anchored at the end of the line containing `pos`. */
@@ -50,13 +60,14 @@ export class AskWidget extends WidgetType {
       this.spec.id === other.spec.id &&
       this.spec.question === other.spec.question &&
       this.spec.multi === other.spec.multi &&
+      this.spec.freeText === other.spec.freeText &&
       this.spec.options.length === other.spec.options.length &&
       this.spec.options.every((option, i) => option === other.spec.options[i])
     );
   }
 
   toDOM(): HTMLElement {
-    const { id, question, options, multi, onAnswer } = this.spec;
+    const { id, question, options, multi, freeText, onAnswer } = this.spec;
 
     const card = document.createElement('div');
     card.className = 'cm-ai-ask';
@@ -78,6 +89,35 @@ export class AskWidget extends WidgetType {
 
     const optionsRow = document.createElement('div');
     optionsRow.className = 'cm-ai-ask-options';
+
+    // Built up front (if requested) so the multi-choice confirm handler
+    // below can read its value; appended to the card last regardless, so it
+    // always lands below the option row.
+    let input: HTMLInputElement | undefined;
+    if (freeText) {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'cm-ai-ask-input';
+      input.placeholder = 'Your own answer…';
+      // ignoreEvent() (below) only tells CM6's own handling to leave widget
+      // events alone — it does not stop the DOM event from bubbling past
+      // contentDOM to document-level listeners (e.g. the Escape-clears-
+      // highlights keymap, or table.ts's own `document.addEventListener`
+      // Escape handlers). A real, focusable, editable input needs an
+      // explicit stopPropagation on every key event, or typing in it would
+      // trigger those handlers. mousedown must stop propagation too, but
+      // NOT preventDefault — preventDefault there would block the browser
+      // from focusing/placing the caret in the input at all.
+      input.addEventListener('mousedown', (event) => event.stopPropagation());
+      input.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+        if (multi || event.key !== 'Enter') return;
+        const text = input!.value.trim();
+        if (text) onAnswer(id, { custom: text });
+      });
+      input.addEventListener('keypress', (event) => event.stopPropagation());
+      input.addEventListener('keyup', (event) => event.stopPropagation());
+    }
 
     if (multi) {
       for (const option of options) {
@@ -106,10 +146,9 @@ export class AskWidget extends WidgetType {
       confirm.textContent = 'OK';
       confirm.addEventListener('mousedown', (event) => event.preventDefault());
       confirm.addEventListener('click', () => {
-        onAnswer(
-          id,
-          options.filter((option) => this.selected.has(option))
-        );
+        const answers = options.filter((option) => this.selected.has(option));
+        const text = input?.value.trim();
+        onAnswer(id, text ? { answers, custom: text } : answers);
       });
       optionsRow.appendChild(confirm);
     } else {
@@ -124,6 +163,7 @@ export class AskWidget extends WidgetType {
       }
     }
     card.appendChild(optionsRow);
+    if (input) card.appendChild(input);
 
     return card;
   }

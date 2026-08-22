@@ -1312,6 +1312,27 @@
   opacity: 0.85;
 }
 
+.cm-ai-ask-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--ai-ask-chip-bg);
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+.cm-ai-ask-input::placeholder {
+  color: var(--text-muted);
+}
+
+.cm-ai-ask-input:focus {
+  outline: none;
+  border-color: var(--ai-ask-accent);
+}
+
 .cm-ai-ask-dismiss {
   position: absolute;
   top: 6px;

@@ -319,6 +319,7 @@
     changed_lines?: [number, number][];
     answer?: string;
     answers?: string[];
+    custom?: string;
   }
 
   async function respondToAi(id: number, response: AiResponse): Promise<void> {
@@ -385,15 +386,22 @@
       }
 
       const askId = payload.id;
-      const onAnswer = (answerId: number, result: string | string[] | null): void => {
+      const onAnswer = (
+        answerId: number,
+        result: string | string[] | { custom: string } | { answers: string[]; custom: string } | null
+      ): void => {
         const currentView = editorHandle?.view;
         currentView?.dispatch({ effects: removeAiAsk.of(answerId) });
-        if (Array.isArray(result)) {
-          respondToAi(answerId, { ok: true, answers: result });
-        } else if (result !== null) {
-          respondToAi(answerId, { ok: true, answer: result });
-        } else {
+        if (result === null) {
           respondToAi(answerId, { ok: false, error: 'dismissed by user' });
+        } else if (Array.isArray(result)) {
+          respondToAi(answerId, { ok: true, answers: result });
+        } else if (typeof result === 'string') {
+          respondToAi(answerId, { ok: true, answer: result });
+        } else if ('answers' in result) {
+          respondToAi(answerId, { ok: true, answers: result.answers, custom: result.custom });
+        } else {
+          respondToAi(answerId, { ok: true, custom: result.custom });
         }
       };
 
@@ -405,6 +413,7 @@
               question: payload.question ?? '',
               options: payload.options,
               multi: payload.multi,
+              freeText: payload.freeText,
               onAnswer,
             },
             pos,
