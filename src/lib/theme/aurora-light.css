@@ -1,0 +1,33 @@
+:root[data-theme='aurora-light'] {
+  --bg-base: #f9faff;
+  --bg-surface: #f0f1fb;
+  --text-primary: #262a45;
+  --text-subtle: #6b6f92;
+  --text-muted: #9da1c0;
+  --highlight: #e1e3f5;
+  --color-heading: #5566ec;
+  --color-bold: #d6438f;
+  --color-italic: #8b6ce8;
+  --color-link: #0d9488;
+  --color-code-bg: #f0f1fb;
+  --color-code-text: #262a45;
+  --color-selection: #d9ddf8;
+  --color-border: #e1e3f5;
+  --color-cursor: #e0509f;
+  --color-caret-top: #e0509f;
+  --color-caret-bottom: #2bb3d9;
+  --color-line-highlight: #f0f1fb;
+  --color-strikethrough: #6b6f92;
+  --color-hr: #e1e3f5;
+  --color-blockquote-border: #5566ec;
+  --color-list-marker: #6b6f92;
+  --color-checkbox: #0d9488;
+  --color-table-border: #e1e3f5;
+  --color-table-header-bg: #f0f1fb;
+  --color-table-even-bg: #f2f3fc;
+  --color-glow: 85, 102, 236;
+  --bg-overlay: rgba(249, 250, 255, 0.75);
+  --border: #e1e3f5;
+  --font-text: 'Inter', -apple-system, system-ui, sans-serif;
+  --font-code: 'JetBrains Mono', 'SF Mono', monospace;
+}

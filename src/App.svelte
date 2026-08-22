@@ -40,6 +40,8 @@
   import { addAiAsk, removeAiAsk } from './lib/editor/ai-ask';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
+  import './lib/theme/aurora-dark.css';
+  import './lib/theme/aurora-light.css';
   import './styles/global.css';
   import './styles/editor.css';
 
