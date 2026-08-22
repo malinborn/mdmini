@@ -113,6 +113,39 @@ pub fn run() {
                     return;
                 }
 
+                // AI menu — each item (re)writes its doc into app_data_dir() with
+                // fresh content and opens it in a new window, so it always reflects
+                // the current snippets rather than a stale cached copy.
+                if id == "ai_connect_cli" {
+                    let content = onboarding::connect_cli_doc();
+                    if let Err(e) = onboarding::open_bundled_doc(&app_handle, "ai-connect-cli.md", &content) {
+                        eprintln!("AI menu: {}", e);
+                    }
+                    return;
+                }
+                if id == "ai_connect_mcp" {
+                    let content = onboarding::connect_mcp_doc();
+                    if let Err(e) = onboarding::open_bundled_doc(&app_handle, "ai-connect-mcp.md", &content) {
+                        eprintln!("AI menu: {}", e);
+                    }
+                    return;
+                }
+                if id == "ai_teach" {
+                    let content = onboarding::teach_doc();
+                    if let Err(e) = onboarding::open_bundled_doc(&app_handle, "ai-teach.md", &content) {
+                        eprintln!("AI menu: {}", e);
+                    }
+                    return;
+                }
+                if id == "ai_playbook" {
+                    if let Err(e) =
+                        onboarding::open_bundled_doc(&app_handle, "ai-playbook.md", onboarding::playbook_doc())
+                    {
+                        eprintln!("AI menu: {}", e);
+                    }
+                    return;
+                }
+
                 // Handle "close" — close the focused window directly from Rust
                 if id == "close" {
                     for (_label, win) in _app.webview_windows() {

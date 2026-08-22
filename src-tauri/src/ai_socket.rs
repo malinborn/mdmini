@@ -1024,7 +1024,7 @@ routing behavior, and troubleshooting."###
 /// The fenced instruction block reused verbatim by `mdmini agent` and by
 /// `docs/ai-interface.md`'s "Using this from an AI agent's CLAUDE.md"
 /// section. Keep both in sync by hand when this changes.
-const AGENT_SNIPPET: &str = r#"## md-mini AI interface
+pub(crate) const AGENT_SNIPPET: &str = r#"## md-mini AI interface
 
 If `mdmini` is available, use it to point at things in the user's open editor and to push edits into the live buffer, instead of only writing files to disk:
 
@@ -1037,7 +1037,7 @@ All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_
 
 /// Common instruction-file locations, shared by `mdmini agent`'s CLI-syntax
 /// snippet and its `--mcp` behavioral-snippet counterpart below.
-const INSTRUCTION_FILE_LOCATIONS: &str = "\
+pub(crate) const INSTRUCTION_FILE_LOCATIONS: &str = "\
 \x20 CLAUDE.md                         Claude Code — project root, or ~/.claude/CLAUDE.md for all projects\n\
 \x20 AGENTS.md                         Codex CLI / generic agent standard — project root\n\
 \x20 GEMINI.md                         Gemini CLI\n\
@@ -1066,7 +1066,7 @@ fn agent_text() -> String {
 /// What it needs instead is usage culture: when to reach for `ask` over
 /// chatting, how to read multi-choice/free-text answers, and how to be
 /// considerate of the user's attention.
-const MCP_AGENT_SNIPPET: &str = r#"## md-mini via MCP — how to use it well
+pub(crate) const MCP_AGENT_SNIPPET: &str = r#"## md-mini via MCP — how to use it well
 
 - Before asking the user something about a document, use `show` (line or find) so they're looking at the relevant part when the question arrives — or anchor the `ask` itself there with line/find.
 - Prefer `ask` in the document over asking in chat when the question is about the document the user has open: single choice for decisions, `multi` for pick-several, `free_text` when their own words matter. An empty `answers` array means "none of these", not an error.
