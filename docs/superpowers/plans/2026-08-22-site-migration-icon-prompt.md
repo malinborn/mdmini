@@ -421,6 +421,10 @@ on:
     paths: ['docs/**']
   workflow_dispatch:
 
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
