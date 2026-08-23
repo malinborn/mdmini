@@ -64,6 +64,14 @@ src/                    # Frontend (Svelte + TypeScript)
       mermaid-viewport.ts # Pan/zoom geometry (pure) + frame DOM controller
       mermaid-state.ts  # Per-diagram scale/pan/height (StateField, in-memory)
       utils.ts          # cursorInRange() helper
+      flavour.ts        # Per-element reveal policy (Facet) — shouldReveal()
+    live-render/        # The Notion-like beta mode; installed only when active
+      index.ts          # liveRenderExtensions() bundle for previewCompartment
+      atomic.ts         # atomicRanges + the mandatory caret transactionFilter
+      block-format.ts   # Backspace strips heading/list/quote formatting
+      inline-continuation.ts # Typing at a span boundary continues its format
+      selection-toolbar.ts   # Floating inline-format toolbar (floating-ui)
+      inspector.ts / inspector-model.ts # Link URL + fenced-code language
     ai-highlight.ts     # AI-edit/pulse highlight StateField (mdmini show/edit), Esc to clear
   lib/ai-commands.ts    # Pure helpers for AI commands (show target resolution, changed-line ranges)
   lib/stores.svelte.ts  # Svelte stores (fileState, theme, mode, zoom, recentFiles)
@@ -172,7 +180,12 @@ src/                    # Frontend (Svelte + TypeScript)
 - **`pkill -f "src-tauri/target/debug/md-mini"` does not match the dev app:** its cmdline holds the relative path `target/debug/md-mini`. Use `pkill -f "debug/md-mini"`.
 - **Never delete `/tmp/com_md_mini_dev_si.sock` while the dev app is alive:** the single-instance plugin then lets a second instance start alongside the first, and you end up with two dev apps on bridge ports 9223 and 9224.
 - **On-disk state must go through `paths::app_data_dir()`,** never `dirs::data_dir().join("md-mini")`. The directory is named after the product name, so a dev build gets `md-mini-dev/` and cannot overwrite an installed release app's `recovery/` (which holds the user's unsaved work) or `session.json`. `paths::init` runs as the first statement in `setup`, before anything reads or writes.
-- **`npm run test` overcounts:** vitest picks up stale copies under `.claude/worktrees/`. Use `npx vitest run --dir src` for a true count (252 at the time of writing).
+- **`npm run test` overcounts:** vitest picks up stale copies under `.claude/worktrees/`. Use `npx vitest run --dir src` for a true count (513 at the time of writing).
+- **Backspace needs `Prec.highest`, not `Prec.high`.** Backspace is in the view's `PendingKeys` table paired with `inputType: "deleteContentBackward"`, so on a contenteditable the native edit is allowed to land and is reconciled afterwards rather than being resolved from `keydown` alone. A binding at `Prec.high` is **never entered at all**, and the failure is not a clean fall-through — the DOM-derived change is applied instead. With the list bullet rendered as a widget, that reconciliation rewrote `- b` as `  b`: a silent outdent, text still inside the item. Measured in a browser; unit tests calling the command directly all passed throughout. Escape at `Prec.high` is fine — this is specific to keys that carry an `inputType`.
+- **Reveal policy is per element, not per mode** (`preview/flavour.ts`). Decorators call `shouldReveal(view, kind, from, to, blockLevel?)`, never `cursorInRange` directly; `cursorInRange` stays pure and is called from inside it. `live-preview` is `{default: 'on-cursor'}` — today's behaviour comes out of the same code path instead of being preserved by discipline. Adding a flavour means adding a `Flavour` literal, not a branch.
+- **`- [x] done` is `Task > TaskMarker`, never `Link`.** `markdownLanguage` already bundles GFM, so task lists parse natively and there is no checkbox/link collision to guard against. The real lookalike is `- [x](url) text`: `TaskList.parseBlock` requires whitespace after the bracket, so that parses as a plain inline `Link`, while `lists.ts`'s text-only regex still draws a checkbox over it. Also note that regex is case-**sensitive** — `[X]` renders no checkbox at all.
+- **Hiding markers permanently does not remove reflow, it moves it.** A marker is only hidden once Lezer has a completed node, so while typing `**bol` you see raw text and the four characters vanish at once when the closing `*` lands. The jump is sharper than the one it replaces, just at a different moment.
+- **Search in `live-render` runs against the source, not the screen.** `boldtext` inside `**bold**text` is unfindable, and searching `**` yields hits that are not rendered. A visual-text search index is the only real fix; until then it is a documented limitation of the mode.
 
 ## Workflow
 
