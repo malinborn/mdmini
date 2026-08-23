@@ -1,0 +1,15 @@
+/* Live-render — caret affordance for inline-format continuation (Phase 5).
+   Under the permanent-hide reveal policy, the position right after a
+   hidden closing marker (e.g. `**bold**`) paints at the same pixel as the
+   position right after it — there is no visual difference between "about
+   to continue the bold" and "about to type plain text". `inline-continuation.ts`
+   toggles `.cm-continuation-active` on the editor root while the caret sits
+   in a continuing position; this file is the entire visual side of that
+   signal. Deliberately subtle — it's a hint, not an alarm — so it only adds
+   a soft glow on top of the caret gradient `editor-theme.ts` already draws,
+   using the same `--color-glow` token as the active-line highlight. */
+
+.cm-continuation-active .cm-cursor-primary {
+  box-shadow: 0 0 3px 1px rgba(var(--color-glow, 124, 58, 237), 0.55);
+  border-radius: 1px;
+}

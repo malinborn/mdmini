@@ -1,0 +1,76 @@
+/* Live-render — floating selection formatting toolbar (Phase 6) */
+
+.cm-selection-toolbar-popup {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  padding: 4px;
+}
+
+.cm-selection-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-text);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.cm-selection-toolbar-btn:hover {
+  background: var(--highlight);
+}
+
+.cm-selection-toolbar-btn:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 1px;
+}
+
+/* "Is this format currently on" affordance — same signal for keyboard and
+   mouse users, since it's a real `aria-pressed` attribute, not just a
+   hover-only visual cue. */
+.cm-selection-toolbar-btn[aria-pressed='true'] {
+  background: var(--highlight);
+  color: var(--color-link);
+}
+
+.cm-selection-toolbar-btn-bold {
+  font-weight: 700;
+}
+
+.cm-selection-toolbar-btn-italic {
+  font-style: italic;
+}
+
+.cm-selection-toolbar-btn-strike {
+  text-decoration: line-through;
+}
+
+.cm-selection-toolbar-btn-code {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+}
+
+.cm-selection-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}

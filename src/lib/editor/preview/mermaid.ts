@@ -3,7 +3,8 @@ import type { EditorView } from '@codemirror/view';
 import { StateEffect } from '@codemirror/state';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 import {
   createViewport,
   estimateFrameHeight,
@@ -253,9 +254,9 @@ class MermaidWidget extends WidgetType {
 export function decorateMermaidBlock(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'mermaid', node.from, node.to, true)) return;
 
   const doc = view.state.doc;
   const startLine = doc.lineAt(node.from);

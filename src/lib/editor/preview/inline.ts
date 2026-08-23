@@ -2,7 +2,8 @@ import { Decoration } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 
 /**
  * CRITICAL: Decoration ordering rules for RangeSetBuilder.
@@ -20,9 +21,9 @@ import { cursorInRange } from './utils';
 export function decorateEmphasis(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'emphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
   // Replace at node.from first (startSide=-1 < mark's startSide=0)
   for (const mark of marks) {
@@ -42,9 +43,9 @@ export function decorateEmphasis(
 export function decorateStrongEmphasis(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'strongEmphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -62,9 +63,9 @@ export function decorateStrongEmphasis(
 export function decorateStrikethrough(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'strikethrough', node.from, node.to)) return;
   const marks = node.getChildren('StrikethroughMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -82,9 +83,9 @@ export function decorateStrikethrough(
 export function decorateInlineCode(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'inlineCode', node.from, node.to)) return;
   const marks = node.getChildren('CodeMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -102,9 +103,9 @@ export function decorateInlineCode(
 export function decorateLink(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'link', node.from, node.to)) return;
 
   const url = node.getChild('URL');
   const linkMarks = node.getChildren('LinkMark');

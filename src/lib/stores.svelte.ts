@@ -7,7 +7,18 @@ import {
   type ConcreteTheme,
 } from './theme-resolve';
 
-type EditorMode = 'live-preview' | 'raw';
+/**
+ * Third mode added alongside the original binary `live-preview | raw`:
+ * `live-render` hides markdown syntax permanently (Notion-like), gated
+ * behind `betaInCycle` so it never surfaces to a user who hasn't opted in.
+ */
+export type EditorEngine = 'raw' | 'live-preview' | 'live-render';
+
+const EDITOR_ENGINES: readonly EditorEngine[] = ['raw', 'live-preview', 'live-render'];
+
+function isEditorEngine(value: unknown): value is EditorEngine {
+  return typeof value === 'string' && (EDITOR_ENGINES as readonly string[]).includes(value);
+}
 
 function loadSetting<T>(key: string, fallback: T): T {
   try {
@@ -55,16 +66,71 @@ export function createThemeStore() {
   };
 }
 
-export function createModeStore() {
-  let mode = $state<EditorMode>(loadSetting('mode', 'live-preview'));
+/**
+ * Reads the persisted engine, migrating the old binary key (`md-mini:mode`,
+ * which only ever held `'live-preview'` or `'raw'`) when the new key
+ * (`md-mini:engine`) hasn't been written yet — so an existing user's choice
+ * survives the three-way split instead of silently resetting to the default.
+ */
+function loadEngineSetting(): EditorEngine {
+  const stored = loadSetting<EditorEngine | null>('engine', null);
+  if (isEditorEngine(stored)) return stored;
+  const legacy = loadSetting<EditorEngine | null>('mode', null);
+  return isEditorEngine(legacy) ? legacy : 'live-preview';
+}
+
+export function createEngineStore() {
+  const initial = loadEngineSetting();
+  let engine = $state<EditorEngine>(initial);
+  // Default false: the beta must never turn itself on for anyone who hasn't
+  // explicitly opted in via the View menu.
+  let betaInCycle = $state<boolean>(loadSetting('betaInCycle', false));
+  // Which rendering engine Cmd+E returns to when leaving `raw`. Persisted so
+  // the round trip survives a restart.
+  let lastNonRaw = $state<Exclude<EditorEngine, 'raw'>>(
+    initial === 'raw'
+      ? loadSetting<Exclude<EditorEngine, 'raw'>>('lastNonRawEngine', 'live-preview')
+      : initial
+  );
+
+  function apply(next: EditorEngine): void {
+    engine = next;
+    saveSetting('engine', engine);
+    if (next !== 'raw') {
+      lastNonRaw = next;
+      saveSetting('lastNonRawEngine', lastNonRaw);
+    }
+  }
 
   return {
     get value() {
-      return mode;
+      return engine;
     },
-    toggle() {
-      mode = mode === 'live-preview' ? 'raw' : 'live-preview';
-      saveSetting('mode', mode);
+    get betaInCycle() {
+      return betaInCycle;
+    },
+    /** Direct selection — used by the Editor Engine submenu. */
+    set(next: EditorEngine) {
+      apply(next);
+    },
+    /** Cmd+E. With the beta excluded from the cycle (the default) this is
+     * `raw <-> the last rendering engine used` — for anyone on live-preview
+     * that is exactly the binary toggle they have today, and for someone
+     * working in live-render it returns them to live-render rather than
+     * silently dropping them into live-preview. Opting the beta into the
+     * cycle via `toggleBetaInCycle()` makes it a three-way rotation. */
+    cycle() {
+      if (betaInCycle) {
+        apply(
+          engine === 'live-preview' ? 'live-render' : engine === 'live-render' ? 'raw' : 'live-preview'
+        );
+      } else {
+        apply(engine === 'raw' ? lastNonRaw : 'raw');
+      }
+    },
+    toggleBetaInCycle() {
+      betaInCycle = !betaInCycle;
+      saveSetting('betaInCycle', betaInCycle);
     },
   };
 }

@@ -74,6 +74,8 @@ pub fn run() {
             ai_socket::ai_respond,
             ai_socket::ai_pull_pending,
             commands::sync_theme_menu,
+            commands::sync_engine_menu,
+            commands::sync_beta_in_cycle_menu,
         ])
         .setup(|app| {
             // FIRST, before anything touches disk: decide which data directory this
@@ -95,9 +97,10 @@ pub fn run() {
                 }
             };
 
-            let (menu, theme_items) = menu::build_menu(app.handle(), pending_count)?;
+            let (menu, theme_items, engine_items) = menu::build_menu(app.handle(), pending_count)?;
             app.set_menu(menu)?;
             app.manage(theme_items);
+            app.manage(engine_items);
 
             let app_handle = app.handle().clone();
             app.on_menu_event(move |_app, event| {

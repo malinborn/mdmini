@@ -2,7 +2,8 @@ import { Decoration, WidgetType } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 
 class CodeBlockHeaderWidget extends WidgetType {
   constructor(
@@ -58,9 +59,9 @@ class CodeBlockHeaderWidget extends WidgetType {
 export function decorateHorizontalRule(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'horizontalRule', node.from, node.to, true)) return;
 
   const line = view.state.doc.lineAt(node.from);
   builder.add(line.from, line.from, Decoration.line({ class: 'cm-md-hr' }));
@@ -70,9 +71,9 @@ export function decorateHorizontalRule(
 export function decorateFencedCode(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'fencedCode', node.from, node.to, true)) return;
 
   const doc = view.state.doc;
   const startLine = doc.lineAt(node.from);

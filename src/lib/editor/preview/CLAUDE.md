@@ -283,6 +283,51 @@ the whole document unless contained. The fence line therefore carries
 `cm-md-mermaid-host-line` with `contain: inline-size` (and `display: flex`, to
 drop the `cm-widgetBuffer` height). This is the same fix tables use.
 
+## Reveal Policy (`flavour.ts`)
+
+Whether raw markdown reappears under the caret is **not** a property of the
+mode — it is a per-element policy carried by a facet.
+
+```ts
+type RevealPolicy = 'on-cursor' | 'never';
+LIVE_PREVIEW = { default: 'on-cursor' }
+LIVE_RENDER  = { default: 'never', reveal: { mermaid: 'on-cursor' } }
+```
+
+Rules for this directory:
+
+- Decorators call `shouldReveal(view, kind, from, to, blockLevel?)`. They must
+  **not** call `cursorInRange` directly — that function stays pure and
+  separately tested, and `shouldReveal` calls it when the policy says
+  `'on-cursor'`.
+- Adding an element kind means extending `ElementKind`, not adding a branch.
+- `live-preview` behaviour is the facet default, so it is preserved by
+  construction. If a change to a decorator alters live-preview, that is a bug
+  in the change, not in the test that caught it.
+- Tables are pinned to `'never'` under every flavour and have no
+  `shouldReveal` call by design — see "Always Rendered" above.
+- Mermaid is `'on-cursor'` even in live-render: reverting to the fenced source
+  is the only way to edit a diagram, so hiding it permanently would need a
+  full nested editor in the inspector. Out of scope for the beta.
+
+## What live-render adds
+
+`src/lib/editor/live-render/` holds everything specific to that flavour, and it
+is only in the editor state while the flavour is active. Two things there are
+easy to get wrong:
+
+- **Atomicity is two mechanisms.** `EditorView.atomicRanges` covers user caret
+  motion, mouse selection and `deleteBy` — nothing else. Programmatic
+  `dispatch({selection})` bypasses it, and this app has five such callers
+  (search, session restore, history, `table-selection.ts`, slash commands), so
+  `atomic.ts` also installs an `EditorState.transactionFilter`. That filter
+  consults the same `RangeSet` rather than resolving the node at a point,
+  because `decorateLink` hides `](url)` as one span wider than any `LinkMark`.
+- **`hiddenMarkRanges` mirrors `plugin.ts`'s traversal**, including its
+  `return false` cases. The decoration pass does not descend into inline nodes,
+  so the inner `_x_` of `**_x_**` is never hidden — marking it atomic would
+  trap the caret in text the user can see.
+
 ## Dependencies
 
 - `markdown-table` — serializes 2D array → GFM markdown table string
