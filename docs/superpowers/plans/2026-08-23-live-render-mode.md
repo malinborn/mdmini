@@ -1,0 +1,206 @@
+# live-render — Notion-подобный режим редактирования (beta)
+
+Дата: 2026-08-23. Ветка: `worktree-live-render-wysiwyg`.
+Архитектура утверждена владельцем после независимого ревью (вариант **B′**).
+План согласования не требует — реализуется сразу.
+
+## Цель
+
+Третий переключаемый режим редактора, в котором markdown-разметка скрыта
+**постоянно** и не проявляется под кареткой. Существующий `live-preview`
+остаётся дефолтом и не меняет поведения.
+
+## Принцип
+
+Политика раскрытия — **на элемент**, а не на режим. Флейвор это набор политик:
+
+```ts
+type RevealPolicy = 'on-cursor' | 'never';
+interface Flavour { default: RevealPolicy; reveal?: Partial<Record<ElementKind, RevealPolicy>> }
+
+LIVE_PREVIEW = { default: 'on-cursor' }                          // = сегодняшнее поведение
+LIVE_RENDER  = { default: 'never', reveal: { mermaid: 'on-cursor' } }
+```
+
+Отсюда требование «live-preview работает ровно как сегодня» выполняется
+**по построению**: тот же код, дефолтная политика. Не дисциплиной ревью.
+
+## Фазы
+
+Фазы 1 и 2 блокируют всё остальное. Фаза 3 независима от 2.
+
+---
+
+### Фаза 1 — фундамент флейворов
+
+**NEW** `src/lib/editor/preview/flavour.ts`
+- `ElementKind` = heading | emphasis | strongEmphasis | strikethrough | inlineCode
+  | link | listBullet | blockquote | horizontalRule | fencedCode | mermaid | table
+- `RevealPolicy`, `Flavour`, `flavourFacet: Facet<Flavour, Flavour>`
+- `shouldReveal(view, kind, from, to, blockLevel?): boolean` — при политике
+  `'on-cursor'` делегирует в существующий `cursorInRange`, при `'never'` → `false`
+- Экспорт `LIVE_PREVIEW`, `LIVE_RENDER`
+
+**MOD** 11 сайтов: `headings.ts:23`, `inline.ts:25,47,67,87,107`,
+`lists.ts:77,94`, `blocks.ts:63,75`, `mermaid.ts:258`
+→ `if (shouldReveal(view, '<kind>', node.from, node.to[, true])) return;`
+
+**MOD** `tables.ts` — явная политика `'never'` вместо неявного отсутствия проверки.
+
+**НЕ ТРОГАТЬ** `utils.ts` — `cursorInRange` остаётся чистой функцией с тестами.
+
+Приёмка: все 370 существующих тестов проходят **без правок**. Новые тесты на
+`shouldReveal` для обеих политик.
+
+---
+
+### Фаза 2 — атомарность (два механизма, не один)
+
+`EditorView.atomicRanges` покрывает ТОЛЬКО пользовательское движение каретки,
+мышь и удаление. Программный `dispatch({selection})` проходит мимо — в
+@codemirror/view нет ни одного transactionFilter. В md-mini уже пять таких
+путей: поиск/замена, restore сессии, undo/redo, `tableSelectionSnapOut`,
+слэш-команды. Без фильтра каретка садится внутрь скрытого `**` и набор
+порождает `*x*bold**`.
+
+**NEW** `src/lib/editor/live-render/atomic.ts`
+- `HIDDEN_MARK_NODES` — HeaderMark, EmphasisMark, StrikethroughMark, CodeMark,
+  QuoteMark, ListMark, LinkMark
+- `hiddenMarkRanges(state)` — обход всего дерева (как `plugin.ts:27` сегодня,
+  не viewport-ограниченно: viewport-ограниченный набор молча ломает атомарность)
+- `liveRenderAtomicRanges` — `EditorView.atomicRanges.of(...)`
+- `caretNormalizeFilter` — `EditorState.transactionFilter`, выталкивает
+  `selection.head/anchor` наружу маркера через `syntaxTree(state).resolveInner()`.
+  **Это же место реализует «одну каноническую позицию»** из требования 6:
+  нормализация всегда наружу (внешняя позиция).
+
+**Ловушка, найденная в ревью:** `- [x] done` парсится так, что `[x]` — это
+**Link** (LinkMark×2). Сегодня безобидно (чекбокс-виджет сверху + откат по
+каретке), но под перманентным скрытием даёт **пересекающиеся** атомарные
+диапазоны с чекбокс-виджетом. `hiddenMarkRanges` обязана исключать Link,
+начинающийся сразу после ListMark и матчащий `[x]`/`[ ]`.
+
+Тесты: маркеры каждого типа; вложенные форматы; `[x]`-исключение;
+нормализация selection из каждой позиции внутри маркера.
+
+---
+
+### Фаза 3 — переключение режима (независима от фазы 2)
+
+**MOD** `src/lib/stores.svelte.ts` — `EditorMode` из union-двойки в
+`EditorEngine = 'raw' | 'live-preview' | 'live-render'`; `toggle()` (жёстко
+бинарный, `:50-53`) → `cycle()`. Плюс флаг `betaInCycle`.
+
+Поведение Cmd+E: по умолчанию `raw ↔ live-preview`. При включённом
+`betaInCycle` — цикл по всем трём.
+
+**MOD** `src-tauri/src/menu.rs` — View → **Editor Engine** подменю с
+`CheckMenuItemBuilder` (образец — существующее Theme-подменю, `menu.rs:115+`):
+`raw` / `live preview` / `(beta) live-render`. Отдельный пункт-тумблер
+«Include live-render in Cmd+E».
+
+**MOD** `App.svelte` (`:191-194`, `:313-315`), `lib/tauri/events.ts`.
+
+Внимание: переключение идёт по **двум независимым осям** — `activePreview`
+(тип файла: markdown / .env / shell / code) и engine. live-render применим
+только к markdown; для остальных типов файла выбор engine игнорируется.
+
+---
+
+### Фаза 4 — Backspace, снимающий блочный формат
+
+Заголовки — **бесплатно**: `deleteBy` в @codemirror/commands сам расширяет
+удаление до границы атома (`skipAtomic`). Кастомная команда не нужна.
+
+Списки и цитаты — **не бесплатно**. Проверено прогоном @lezer/markdown:
+`"- a\nb\n"` → `ListItem[0,5]` с `Paragraph[2,5]`, покрывающим `a\nb`.
+CommonMark lazy continuation оставляет осиротевшую строку внутри блока —
+простое удаление `- ` не даёт параграфа, визуально исчезает только буллет.
+
+**NEW** `src/lib/editor/live-render/block-format.ts` — структурно-осведомлённая
+команда, по случаям: последний пункт списка / средний / вложенный /
+цитата / вложенная цитата. Снимая маркер, обязана привести исходник в
+состояние, где текст действительно вне блока (пустая строка / разрез списка).
+
+**Обязательно `Prec.high()`** на bundle: основной keymap подключён в
+`setup.ts:50-56`, то есть **раньше** `previewCompartment` (`:62`), а при равном
+Prec обработчики пробуются в порядке добавления. Без Prec.high Backspace
+никогда не дойдёт до нашего обработчика.
+
+---
+
+### Фаза 5 — продолжение инлайн-формата
+
+**NEW** `src/lib/editor/live-render/inline-continuation.ts`
+`inputHandler`: ввод во внешней канонической позиции сразу за закрывающим
+маркером → вставка идёт **внутрь** узла (формат продолжается, как в Notion).
+Выход из формата: Cmd+B / Escape / кнопка тулбара. **Не стрелкой** — стрелка
+даёт «мёртвое нажатие» (сдвиг на 2 offset'а без движения на экране).
+
+Плюс визуальный аффорданс: каретка подсвечивается начертанием/цветом
+активного формата. Без него пользователь не может узнать, каким будет
+следующий символ.
+
+---
+
+### Фаза 6 — панель по выделению
+
+**NEW** `src/lib/editor/live-render/selection-toolbar.ts`
+`@floating-ui/dom` уже в зависимостях (см. `hover-menu.ts:1`) — переиспользовать
+его паттерн на голом DOM, не тащить Svelte-компонент в CM6-слой.
+Кнопки: bold, italic, strikethrough, inline code, link.
+
+**Важно:** `toggleWrap` (`keybindings.ts:5-42`) — текстовая эвристика по
+startsWith/endsWith, ничего не знает о дереве. Тулбару нужна node-aware версия.
+Существующую функцию менять осторожно — она используется в live-preview
+(требование 7).
+
+---
+
+### Фаза 7 — инспектор элемента
+
+**NEW** `src/lib/editor/live-render/inspector.ts`
+Каретка внутри ссылки → панель с URL, «Открыть», «Убрать ссылку».
+Каретка в fenced code → выбор языка.
+Mermaid **не нужен** — его политика `'on-cursor'`, исходник достижим как сегодня.
+Панель обязана быть фокусируемой с клавиатуры: под перманентным скрытием
+URL невидим и для скринридера.
+
+---
+
+### Фаза 8 — производительность, документация, ограничения
+
+- `plugin.ts:107` перестраивает декорации на `update.selectionSet` с полным
+  обходом дерева. В live-render зависимость от выделения исчезает — убрать
+  `selectionSet` из условия для этого флейвора. Для больших файлов — выигрыш.
+- `preview/CLAUDE.md` — раздел про флейворы, Prec.high, ловушку `[x]`.
+- Известные ограничения беты (задокументировать в UI и в доках):
+  поиск идёт по исходнику. `boldtext` в `**bold**text` не найдётся;
+  поиск `**` даёт хиты, которые не отрисованы. Полное решение требует
+  поискового индекса по «визуальному» тексту — вне v1.
+
+---
+
+## Вне v1
+
+- Рендер картинок (сегодня не рендерятся вообще) + asset-протокол Tauri
+- Скрытие и автонумерация ordered-list маркеров
+- Поисковый индекс по визуальному тексту
+- Флейвор typora-like (форма `Flavour` под него заложена)
+
+## Проверить руками до релиза беты
+
+**IME (китайский/японский ввод)** на реальной сборке `npm run build:dev`.
+Единственный риск, способный обрушить режим целиком: известный баг CM6 на
+конфигурации «`Decoration.mark`, содержащий несколько `Decoration.replace`» —
+это буквально `inline.ts:28-39`. Safari-специфичен, а Tauri на macOS =
+WKWebView. Патч Marijn закрывает не все случаи; наш — остаточный.
+
+## Регламент работ
+
+- Регрессионная база: **370 тестов, 19 файлов** (`npx vitest run --dir src`).
+  Не `npm run test` — он подхватывает стейл-копии из `.claude/worktrees/`.
+- Визуальная проверка: `npm run dev` + Playwright (`channel: 'chrome'`).
+- **Не запускать** `npm run tauri dev` и `npm run tauri build` — конфликтуют
+  с установленным у владельца production-приложением.
+- Коммит после каждой фазы, conventional commits.
