@@ -203,6 +203,25 @@ describe('continuationFormatExitSpec (Cmd+B-family exit contract)', () => {
     const state = makeState('plain text', 5);
     expect(continuationFormatExitSpec(state, 'strong')).toBeNull();
   });
+
+  it('does nothing when the field is absent, so live-preview keeps Cmd+B', () => {
+    // keybindings.ts is shared with live-preview, where the live-render bundle
+    // — and therefore this field — is not installed. Returning a spec here
+    // would swallow Cmd+B at the end of a bold span in the existing mode.
+    const withoutField = EditorState.create({
+      doc: '**bold**',
+      selection: EditorSelection.cursor(8),
+      extensions: [
+        markdown({
+          base: markdownLanguage,
+          codeLanguages: languages,
+          extensions: [Strikethrough, Table],
+        }),
+      ],
+    });
+    expect(findContinuationBoundary(withoutField, 8)?.kind).toBe('strong');
+    expect(continuationFormatExitSpec(withoutField, 'strong')).toBeNull();
+  });
 });
 
 describe('isContinuationActive (caret affordance)', () => {

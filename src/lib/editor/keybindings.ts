@@ -1,6 +1,10 @@
 import { keymap } from '@codemirror/view';
 import { EditorSelection, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
+import {
+  exitContinuationOnFormatToggle,
+  type ExitableFormatKind,
+} from './live-render/inline-continuation';
 
 function toggleWrap(view: EditorView, marker: string): boolean {
   const { state } = view;
@@ -41,10 +45,24 @@ function toggleWrap(view: EditorView, marker: string): boolean {
   return true;
 }
 
+/**
+ * In live-render, sitting at the boundary of a hidden span means the next
+ * keystroke continues that format. These keys are how the user says "stop" —
+ * the arrow keys deliberately are not, since at that boundary they move the
+ * caret without moving it on screen.
+ *
+ * `exitContinuationOnFormatToggle` returns false whenever live-render is not
+ * the active flavour, so live-preview reaches `toggleWrap` unchanged.
+ */
+function toggleOrExit(view: EditorView, marker: string, kind: ExitableFormatKind): boolean {
+  if (exitContinuationOnFormatToggle(view, kind)) return true;
+  return toggleWrap(view, marker);
+}
+
 export function markdownKeybindings(): Extension {
   return keymap.of([
-    { key: 'Mod-b', run: (view) => toggleWrap(view, '**') },
-    { key: 'Mod-i', run: (view) => toggleWrap(view, '*') },
-    { key: 'Mod-Shift-x', run: (view) => toggleWrap(view, '~~') },
+    { key: 'Mod-b', run: (view) => toggleOrExit(view, '**', 'strong') },
+    { key: 'Mod-i', run: (view) => toggleOrExit(view, '*', 'emphasis') },
+    { key: 'Mod-Shift-x', run: (view) => toggleOrExit(view, '~~', 'strikethrough') },
   ]);
 }

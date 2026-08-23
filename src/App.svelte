@@ -26,6 +26,7 @@
   import { ChangeSet } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { LIVE_PREVIEW, LIVE_RENDER, flavourFacet } from './lib/editor/preview/flavour';
+  import { liveRenderExtensions } from './lib/editor/live-render';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
   import { isShellConfig } from './lib/editor/file-language';
@@ -815,11 +816,18 @@
       return;
     }
 
-    // `live-preview` and `live-render` both run `livePreviewPlugin`; they
-    // differ only in which flavour the facet supplies.
-    const flavour = e === 'live-render' ? LIVE_RENDER : LIVE_PREVIEW;
+    // Both rendering engines run `livePreviewPlugin` and differ in the flavour
+    // the facet supplies. live-render additionally installs its own bundle —
+    // atomic markers, the block-format Backspace, inline continuation, the
+    // selection toolbar and the inspector. None of that is present in the
+    // live-preview state, so that mode cannot be affected by it.
+    const liveRender = e === 'live-render';
     v.dispatch({
-      effects: previewCompartment.reconfigure([livePreviewPlugin, flavourFacet.of(flavour)]),
+      effects: previewCompartment.reconfigure([
+        livePreviewPlugin,
+        flavourFacet.of(liveRender ? LIVE_RENDER : LIVE_PREVIEW),
+        ...(liveRender ? liveRenderExtensions() : []),
+      ]),
     });
   });
 </script>
