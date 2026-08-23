@@ -107,7 +107,10 @@ pub fn open_file_window(app: &AppHandle, path: Option<String>) {
             unsafe {
                 use cocoa::appkit::{NSApplication, NSApplicationActivationPolicy};
                 let ns_app = cocoa::appkit::NSApp();
-                ns_app.activateIgnoringOtherApps_(true);
+                // `cocoa::base::YES`, never a `true` literal: Objective-C's BOOL
+                // is `bool` on aarch64 but `i8` everywhere else, so a literal
+                // type-checks on Apple Silicon and fails to compile for x86_64.
+                ns_app.activateIgnoringOtherApps_(cocoa::base::YES);
             }
             // Track the file path in OpenFiles and store it in PendingFiles
             // so the frontend can pull it on mount via get_pending_file command.
@@ -282,7 +285,8 @@ pub fn open_restored_window(app: &AppHandle, snapshot: &crate::session::WindowSn
             unsafe {
                 use cocoa::appkit::NSApplication;
                 let ns_app = cocoa::appkit::NSApp();
-                ns_app.activateIgnoringOtherApps_(true);
+                // See the note on the other call site: BOOL is arch-dependent.
+                ns_app.activateIgnoringOtherApps_(cocoa::base::YES);
             }
 
             let pending = app.state::<PendingFiles>();

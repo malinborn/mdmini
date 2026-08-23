@@ -12,7 +12,9 @@
     "test": "vitest",
     "tauri": "tauri",
     "dev:app": "tauri dev --config src-tauri/tauri.dev.conf.json",
-    "build:dev": "tauri build --config src-tauri/tauri.dev.conf.json"
+    "build:dev": "tauri build --config src-tauri/tauri.dev.conf.json",
+    "build:universal": "tauri build --target universal-apple-darwin",
+    "check:x86": "cargo build --manifest-path src-tauri/Cargo.toml --target x86_64-apple-darwin"
   },
   "license": "GPL-3.0-only",
   "dependencies": {
