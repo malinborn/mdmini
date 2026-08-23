@@ -205,15 +205,22 @@ export function continuationEscapeSpec(state: EditorState): TransactionSpec | nu
  * `inlineCode` in `keybindings.ts` today, so exiting an inline-code
  * continuation is only reachable via `Escape`.
  */
+/**
+ * Whether the live-render bundle is installed in this state. The field below
+ * is added only by that bundle, so its absence means the flavour is not
+ * active. `keybindings.ts` is shared with live-preview and must be able to ask
+ * — swallowing a key or picking a different command there would change the
+ * existing mode's behaviour.
+ */
+export function isLiveRenderActive(state: EditorState): boolean {
+  return state.field(suppressedBoundaryField, false) !== undefined;
+}
+
 export function continuationFormatExitSpec(
   state: EditorState,
   kind: ExitableFormatKind
 ): TransactionSpec | null {
-  // Called from keybindings.ts, which is shared with live-preview. The field
-  // is only installed by the live-render bundle, so its absence means this
-  // mode is not active and Cmd+B must fall straight through to toggleWrap —
-  // swallowing it here would change live-preview's behaviour.
-  if (state.field(suppressedBoundaryField, false) === undefined) return null;
+  if (!isLiveRenderActive(state)) return null;
   const sel = state.selection.main;
   if (!sel.empty) return null;
   const boundary = findContinuationBoundary(state, sel.head);

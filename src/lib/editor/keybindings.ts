@@ -3,8 +3,10 @@ import { EditorSelection, type Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import {
   exitContinuationOnFormatToggle,
+  isLiveRenderActive,
   type ExitableFormatKind,
 } from './live-render/inline-continuation';
+import { toggleInlineFormat } from './live-render/format-commands';
 
 function toggleWrap(view: EditorView, marker: string): boolean {
   const { state } = view;
@@ -46,16 +48,26 @@ function toggleWrap(view: EditorView, marker: string): boolean {
 }
 
 /**
- * In live-render, sitting at the boundary of a hidden span means the next
- * keystroke continues that format. These keys are how the user says "stop" —
- * the arrow keys deliberately are not, since at that boundary they move the
- * caret without moving it on screen.
+ * Three behaviours share these keys.
  *
- * `exitContinuationOnFormatToggle` returns false whenever live-render is not
- * the active flavour, so live-preview reaches `toggleWrap` unchanged.
+ * First, in live-render, sitting at the boundary of a hidden span means the
+ * next keystroke continues that format, and these keys are how the user says
+ * "stop" — the arrow keys deliberately are not, since at that boundary they
+ * move the caret without moving it on screen.
+ *
+ * Second, in live-render the keys apply formatting through the same
+ * tree-aware command the selection toolbar uses, so the two cannot disagree.
+ * `toggleWrap` below is a text heuristic: with `hello` selected inside
+ * `**hello**` it sees one asterisk on each side, reads that as "already
+ * wrapped", and strips one from each — turning bold into italic instead of
+ * adding italic to it. The reverse order does not trigger the same test, which
+ * is why bold-then-italic and italic-then-bold disagreed.
+ *
+ * Third, in every other flavour `toggleWrap` runs exactly as before.
  */
 function toggleOrExit(view: EditorView, marker: string, kind: ExitableFormatKind): boolean {
   if (exitContinuationOnFormatToggle(view, kind)) return true;
+  if (isLiveRenderActive(view.state)) return toggleInlineFormat(view, kind);
   return toggleWrap(view, marker);
 }
 

@@ -9,6 +9,7 @@ import {
   toggleLink,
   isInlineFormatActive,
   isLinkActive,
+  type InlineFormatKind,
 } from './format-commands';
 import { openInspectorFor } from './effects';
 
@@ -61,6 +62,28 @@ describe('toggleInlineFormat — wrapping unformatted text', () => {
     toggleInlineFormat(view, 'emphasis');
     const result = applyDispatch(view, dispatch);
     expect(result.doc.toString()).toBe('*hello* world');
+  });
+
+  it('BoldAndItalic_CombineInEitherOrder', () => {
+    // The order used to matter. `toggleWrap` in keybindings.ts is a text
+    // heuristic: with `hello` selected inside `**hello**` it sees one asterisk
+    // on each side, reads that as "already wrapped", and strips one from each —
+    // so bold-then-italic downgraded bold to italic, while italic-then-bold
+    // added correctly. These commands look at the tree instead, and the two
+    // orders have to agree.
+    const combine = (first: InlineFormatKind, second: InlineFormatKind): string => {
+      const a = makeMockView('hello world', 0, 5);
+      toggleInlineFormat(a.view, first);
+      const mid = applyDispatch(a.view, a.dispatch);
+      const sel = mid.selection.main;
+
+      const b = makeMockView(mid.doc.toString(), sel.from, sel.to);
+      toggleInlineFormat(b.view, second);
+      return applyDispatch(b.view, b.dispatch).doc.toString();
+    };
+
+    expect(combine('emphasis', 'strong')).toBe('***hello*** world');
+    expect(combine('strong', 'emphasis')).toBe('***hello*** world');
   });
 
   it('Emphasis_PartialWord_RoundTrips', () => {
