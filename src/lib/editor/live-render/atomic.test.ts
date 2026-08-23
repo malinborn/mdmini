@@ -1,0 +1,214 @@
+import { describe, it, expect } from 'vitest';
+import { EditorSelection, EditorState } from '@codemirror/state';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
+import { ensureSyntaxTree } from '@codemirror/language';
+import { Strikethrough, Table } from '@lezer/markdown';
+import { hiddenMarkRanges, liveRenderAtomic } from './atomic';
+
+const markdownExt = markdown({
+  base: markdownLanguage,
+  codeLanguages: languages,
+  extensions: [Strikethrough, Table],
+});
+
+/** EditorState with the syntax tree fully (synchronously) parsed. */
+function makeState(doc: string): EditorState {
+  const state = EditorState.create({ doc, extensions: [markdownExt] });
+  ensureSyntaxTree(state, doc.length, 5000);
+  return state;
+}
+
+function spans(doc: string): Array<[number, number]> {
+  const state = makeState(doc);
+  const result: Array<[number, number]> = [];
+  hiddenMarkRanges(state).between(0, doc.length, (from, to) => {
+    result.push([from, to]);
+  });
+  return result;
+}
+
+describe('hiddenMarkRanges — one marker type at a time', () => {
+  it('heading: hides HeaderMark plus one trailing space', () => {
+    // "## Heading" — HeaderMark is [0,2); decorator hides through the
+    // space at index 2 as well (headings.ts:32's `mark.to + 1`).
+    expect(spans('## Heading\n')).toEqual([[0, 3]]);
+  });
+
+  it('emphasis: both EmphasisMark children, individually', () => {
+    expect(spans('*a*\n')).toEqual([
+      [0, 1],
+      [2, 3],
+    ]);
+  });
+
+  it('strongEmphasis: both EmphasisMark children, individually', () => {
+    expect(spans('**a**\n')).toEqual([
+      [0, 2],
+      [3, 5],
+    ]);
+  });
+
+  it('strikethrough: both StrikethroughMark children, individually', () => {
+    expect(spans('~~a~~\n')).toEqual([
+      [0, 2],
+      [3, 5],
+    ]);
+  });
+
+  it('inlineCode: both CodeMark children, individually', () => {
+    expect(spans('`a`\n')).toEqual([
+      [0, 1],
+      [2, 3],
+    ]);
+  });
+
+  it('link: opening `[` alone, then one combined span from `]` through the end', () => {
+    // "[text](url)" — open `[` at [0,1); combined closing span covers
+    // `](url)` including the URL text, not just the LinkMark characters.
+    expect(spans('[text](url)\n')).toEqual([
+      [0, 1],
+      [5, 11],
+    ]);
+  });
+
+  it('listBullet: the ListMark alone', () => {
+    expect(spans('- a\n')).toEqual([[0, 1]]);
+  });
+
+  it('blockquote: leading `>` plus one optional trailing space', () => {
+    expect(spans('> a\n')).toEqual([[0, 2]]);
+  });
+
+  it('ordered list markers are never hidden (out of v1 scope)', () => {
+    expect(spans('1. a\n')).toEqual([]);
+  });
+});
+
+describe('hiddenMarkRanges — nested and adjacent formatting', () => {
+  it('adjacent StrongEmphasis + Emphasis are both hidden independently', () => {
+    // "**a**_b_" — siblings, not nested: StrongEmphasis[0,5), Emphasis[5,8).
+    expect(spans('**a**_b_\n')).toEqual([
+      [0, 2],
+      [3, 5],
+      [5, 6],
+      [7, 8],
+    ]);
+  });
+
+  it('nested emphasis inside strong is NOT independently hidden', () => {
+    // "**_both_**" — plugin.ts's decorator for StrongEmphasis returns
+    // false, so the nested Emphasis (`_both_`) is never visited. Only the
+    // outer `**` pair is hidden; the inner `_..._` stays visible.
+    expect(spans('**_both_**\n')).toEqual([
+      [0, 2],
+      [8, 10],
+    ]);
+  });
+
+  it('nested blockquote: only the outermost `>` is hidden', () => {
+    // "> > nested" — plugin.ts does not descend into a nested Blockquote,
+    // so its own QuoteMark is never independently decorated/hidden.
+    expect(spans('> > nested\n')).toEqual([[0, 2]]);
+  });
+
+  it('table cell content is never hidden (Table is always a widget)', () => {
+    const doc = '| a | b |\n| - | - |\n| **x** | c |\n';
+    expect(spans(doc)).toEqual([]);
+  });
+});
+
+describe('hiddenMarkRanges — checkbox exclusion', () => {
+  it('- [x] done: no hidden span overlaps the CheckboxWidget span', () => {
+    // listMark.from=0, checkboxEnd = listMark.to(1)+1+3 = 5 — the widget's
+    // own [0,5) swallow zone (lists.ts:66-72). The parser gives this a
+    // Task/TaskMarker (not Link), and TaskMarker isn't in HIDDEN_MARK_NODES,
+    // so nothing should land here at all — not even the ListMark.
+    const result = spans('- [x] done\n');
+    for (const [from, to] of result) {
+      const overlaps = from < 5 && to > 0;
+      expect(overlaps).toBe(false);
+    }
+    expect(result).toEqual([]);
+  });
+
+  it('- [ ] todo: same exclusion', () => {
+    expect(spans('- [ ] todo\n')).toEqual([]);
+  });
+
+  it('- [x](url) text: the mis-parsed Link is excluded too', () => {
+    // Followed by "(" instead of whitespace, @lezer/markdown's TaskList
+    // block parser does not fire — this instead parses as a real inline
+    // Link `[x](url)` with two LinkMark children. lists.ts's checkbox
+    // regex is purely textual and still renders CheckboxWidget over
+    // [0,5), so the Link's marks must be excluded or they'd fall inside
+    // (and partly outside, for the URL) that widget's span.
+    expect(spans('- [x](url) text\n')).toEqual([]);
+  });
+
+  it('- [X] Done (uppercase) is not a checkbox in lists.ts and is not excluded', () => {
+    // lists.ts:61's regex is case-sensitive (lowercase `x` only). Uppercase
+    // parses as Task/TaskMarker at the AST level (TaskList's own regex
+    // does accept uppercase) but never gets a CheckboxWidget, and
+    // TaskMarker isn't in HIDDEN_MARK_NODES — so the only hidden span here
+    // is the ordinary bullet ListMark.
+    expect(spans('- [X] Done\n')).toEqual([[0, 1]]);
+  });
+});
+
+describe('caretNormalizeFilter', () => {
+  function stateWithCursor(doc: string, pos: number): EditorState {
+    return EditorState.create({
+      doc,
+      selection: EditorSelection.cursor(pos),
+      extensions: [markdownExt, liveRenderAtomic],
+    });
+  }
+
+  // "**a**" — StrongEmphasis[0,5): opening mark [0,2), closing mark [3,5).
+  const doc = '**a**';
+
+  it('every strictly-interior position of the opening marker normalizes to its "from" (outside, before)', () => {
+    // [0,2) has exactly one interior position: 1 (an exact tie).
+    const state = stateWithCursor(doc, 0);
+    const tr = state.update({ selection: EditorSelection.cursor(1) });
+    expect(tr.state.selection.main.head).toBe(0);
+  });
+
+  it('every strictly-interior position of the closing marker normalizes to its "to" (outside, after)', () => {
+    // [3,5) has exactly one interior position: 4 (an exact tie).
+    const state = stateWithCursor(doc, 0);
+    const tr = state.update({ selection: EditorSelection.cursor(4) });
+    expect(tr.state.selection.main.head).toBe(5);
+  });
+
+  it('boundary positions (0, 2, 3, 5) are left untouched', () => {
+    const state = stateWithCursor(doc, 0);
+    for (const pos of [0, 2, 3, 5]) {
+      const tr = state.update({ selection: EditorSelection.cursor(pos) });
+      expect(tr.state.selection.main.head).toBe(pos);
+    }
+  });
+
+  it('normalizes both anchor and head of a non-empty selection', () => {
+    const state = stateWithCursor(doc, 0);
+    const tr = state.update({ selection: EditorSelection.range(1, 4) });
+    expect(tr.state.selection.main.anchor).toBe(0);
+    expect(tr.state.selection.main.head).toBe(5);
+  });
+
+  it('is a no-op for transactions that do not explicitly set a selection', () => {
+    // Construct an initial state whose selection is already "invalid" by
+    // our rule (state creation does not run transactionFilter). A change
+    // far away, with no explicit `selection` field, must leave it exactly
+    // where change-mapping puts it — proving the filter did not touch it.
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.cursor(1),
+      extensions: [markdownExt, liveRenderAtomic],
+    });
+    expect(state.selection.main.head).toBe(1);
+    const tr = state.update({ changes: { from: doc.length, to: doc.length, insert: 'x' } });
+    expect(tr.state.selection.main.head).toBe(1);
+  });
+});
