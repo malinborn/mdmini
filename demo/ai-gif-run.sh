@@ -48,7 +48,8 @@ ai() {
   fi
 }
 
-beat() { sleep "$(awk -v s="$1" -v m="$BEAT" 'BEGIN{print s*m}')"; }
+# LC_ALL=C — a comma-decimal locale (ru_RU) makes awk print "1,2", which sleep rejects.
+beat() { sleep "$(LC_ALL=C awk -v s="$1" -v m="$BEAT" 'BEGIN{printf "%.2f", s*m}')"; }
 say() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
 # ------------------------------------------------------------------ 0. чистая сцена
