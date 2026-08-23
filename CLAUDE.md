@@ -94,7 +94,8 @@ src/                    # Frontend (Svelte + TypeScript)
 - `src-tauri/capabilities/default.json` — Tauri permissions
 - `src/lib/editor/setup.ts` — All CM6 extensions assembled here
 - `src/lib/editor/preview/plugin.ts` — Core live-preview logic (ViewPlugin + DecorationSet)
-- `src/lib/editor/preview/CLAUDE.md` — Table implementation deep dive (decorations, operations, gotchas)
+- `src/lib/editor/preview/CLAUDE.md` — Table implementation deep dive (decorations, operations, gotchas), plus the per-element reveal policy
+- `src/lib/editor/live-render/CLAUDE.md` — **Read before touching the live-render beta.** Why atomicity needs two mechanisms, why Backspace needs `Prec.highest` while Escape does not, the two-offsets-one-pixel caret boundary, and the three traps that make this mode's bugs invisible to unit tests
 - `src/lib/editor/block-templates.ts` — Single source of truth for block insertion templates (hover menu + slash commands)
 - `src/lib/editor/folding.ts` — Heading fold service + click handler
 
