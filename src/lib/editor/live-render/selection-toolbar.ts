@@ -20,6 +20,7 @@ import '../../../styles/live-render.css';
 
 let activePopup: HTMLElement | null = null;
 let activeButtons: HTMLButtonElement[] = [];
+let activeEditorDom: HTMLElement | null = null;
 
 function hidePopup(): void {
   if (activePopup) {
@@ -27,14 +28,24 @@ function hidePopup(): void {
     activePopup = null;
     activeButtons = [];
   }
+  activeEditorDom = null;
   document.removeEventListener('click', onOutsideClick, true);
   document.removeEventListener('keydown', onKeydown, true);
 }
 
 function onOutsideClick(e: MouseEvent): void {
-  if (activePopup && !activePopup.contains(e.target as Node)) {
-    hidePopup();
-  }
+  if (!activePopup) return;
+  const target = e.target as Node;
+  if (activePopup.contains(target)) return;
+  // A click inside the editor is exactly what creates or clears a selection,
+  // and the plugin's update() already hides the toolbar the moment the
+  // selection collapses. Counting it as an outside click closed the toolbar on
+  // the very mouseup that produced the selection: drag-selecting fires
+  // selectionSet on mousemove, so the listener is already armed by the time
+  // the trailing click arrives, and the toolbar flashed and vanished while the
+  // selection was still there.
+  if (activeEditorDom?.contains(target)) return;
+  hidePopup();
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -176,15 +187,12 @@ function positionPopup(view: EditorView, from: number, to: number): void {
 function showToolbar(view: EditorView, from: number, to: number): void {
   if (!activePopup) {
     activePopup = buildPopup(view);
+    activeEditorDom = view.dom;
     document.body.appendChild(activePopup);
-
-    // Defer so the mouseup that produced this selection doesn't
-    // immediately trigger the outside-click handler — same pattern as
-    // hover-menu.ts.
-    setTimeout(() => {
-      document.addEventListener('click', onOutsideClick, true);
-      document.addEventListener('keydown', onKeydown, true);
-    }, 0);
+    // Registered synchronously: onOutsideClick now ignores clicks inside the
+    // editor, so there is no self-inflicted close to defer around.
+    document.addEventListener('click', onOutsideClick, true);
+    document.addEventListener('keydown', onKeydown, true);
   }
   updateButtonStates(view, from, to);
   positionPopup(view, from, to);
