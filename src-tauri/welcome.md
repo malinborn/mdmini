@@ -2,6 +2,19 @@
 
 md-mini can now be driven by AI agents (Claude Code and others): they can point at places in your open documents, edit them with visible highlights, and ask you questions with buttons right in the document.
 
+## Where this lives
+
+Close this window whenever you like — all of it is permanently in the **AI** menu, in the menu bar:
+
+```
+AI
+├── Getting Started        ← the short version of this document
+├── Connect AI via CLI     ← snippet to paste into CLAUDE.md / AGENTS.md
+├── Connect AI via MCP     ← one command for Claude Code
+├── Teach your AI md-mini  ← how your agent should use it well
+└── AI Playbook            ← what to actually do with it
+```
+
 ## Hook it up — option 1: CLI (zero config)
 
 Run `mdmini agent` and paste the printed block into your agent's instruction file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules`, `copilot-instructions.md`). Agents with shell access can then use `mdmini show` / `edit` / `ask` directly.

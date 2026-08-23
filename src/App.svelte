@@ -352,6 +352,13 @@
    * whichever dispatches second would clobber the first's change instead of
    * building on top of it. */
   async function handleAiCommand(payload: AiCommandPayload): Promise<void> {
+    // Before any of the command's own outcomes: an agent has reached this
+    // install for the first time, and this is the one moment the user is
+    // certain to be looking. Raised even if the command below then fails —
+    // something visibly happened either way, and the point is to explain what.
+    if (payload.firstUse) {
+      toasts.push({ kind: 'ai-first-use' });
+    }
     if (payload.path !== fileState.filePath) {
       await respondToAi(payload.id, { ok: false, error: 'window does not own this file' });
       return;
@@ -719,6 +726,14 @@
       if (count > 0) {
         toasts.push({ kind: 'session', count });
       }
+
+      // Same "launch window only" rule, same reason. Rust owns the whole
+      // decision — whether an agent has ever connected, how often this has
+      // already been shown, and whether the welcome window beat us to it.
+      const nudge = await invoke<boolean>('ai_nudge_pending').catch(() => false);
+      if (nudge) {
+        toasts.push({ kind: 'ai-nudge' });
+      }
     });
 
     const unlistenSessionRestored = onSessionRestored(() => {
@@ -856,6 +871,10 @@
     // Closing the update notice closes it everywhere, not just here.
     if (entry.payload.kind === 'update') {
       invoke('dismiss_update').catch(() => {});
+    }
+    // Closing the AI nudge retires it permanently — it has had its say.
+    if (entry.payload.kind === 'ai-nudge') {
+      invoke('ai_nudge_dismiss').catch(() => {});
     }
   }}
 />

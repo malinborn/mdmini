@@ -8,7 +8,11 @@
 
 export type ToastPayload =
   | { kind: 'update'; latest: string; current: string }
-  | { kind: 'session'; count: number };
+  | { kind: 'session'; count: number }
+  /** Startup nudge for someone who has never connected an agent. */
+  | { kind: 'ai-nudge' }
+  /** Raised the first time an agent actually drives this install. */
+  | { kind: 'ai-first-use' };
 
 export type ToastKind = ToastPayload['kind'];
 
@@ -21,6 +25,11 @@ export interface ToastEntry {
 const ORDER: Record<ToastKind, number> = {
   update: 0,
   session: 1,
+  // Both AI notices sort last: neither is time-sensitive the way an update or a
+  // restorable session is. They never coexist — one requires having never
+  // connected, the other requires having just connected.
+  'ai-nudge': 2,
+  'ai-first-use': 2,
 };
 
 export function createToastStore() {

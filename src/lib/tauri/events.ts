@@ -92,6 +92,12 @@ export interface AiCommandPayload {
   /** Adds a free-text input below the option row, in either mode. */
   freeText: boolean;
   timeoutSecs: number;
+  /**
+   * Set on exactly one command per install — the first an agent ever delivers.
+   * Cues the "that was your AI" toast, which is the only surface that reaches
+   * someone whose agent config arrived pre-made from a colleague.
+   */
+  firstUse: boolean;
 }
 
 /**
