@@ -2,7 +2,7 @@ import { Decoration } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
 
 const headingClasses: Record<string, string> = {
   ATXHeading1: 'cm-md-h1',
@@ -20,7 +20,7 @@ export function decorateHeading(
 ): void {
   const cls = headingClasses[node.name];
   if (!cls) return;
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'heading', node.from, node.to)) return;
 
   const line = view.state.doc.lineAt(node.from);
   // Line decoration FIRST (lower startSide)

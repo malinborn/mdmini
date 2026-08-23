@@ -820,6 +820,10 @@ export function decorateTable(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
+  // FLAVOUR: tables are pinned to 'never' under every shipped flavour — always
+  // rendered as a widget, never reverting to raw markdown on cursor. The widget
+  // absorbs its own events, so there is no `shouldReveal` call here by design,
+  // not by omission. See preview/CLAUDE.md, "Always Rendered".
   const doc = view.state.doc;
   const startLine = doc.lineAt(node.from);
   const endLine = doc.lineAt(node.to);

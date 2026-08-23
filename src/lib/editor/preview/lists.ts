@@ -2,7 +2,7 @@ import { Decoration, WidgetType } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
 
 class CheckboxWidget extends WidgetType {
   constructor(private checked: boolean, private pos: number) {
@@ -74,7 +74,7 @@ export function decorateListItem(
   }
 
   // Bullet markers: only replace when cursor is NOT in range
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'listBullet', node.from, node.to)) return;
 
   const markText = doc.sliceString(listMark.from, listMark.to);
   if (markText === '-' || markText === '*' || markText === '+') {
@@ -91,7 +91,7 @@ export function decorateBlockquote(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'blockquote', node.from, node.to, true)) return;
 
   const doc = view.state.doc;
   const startLine = doc.lineAt(node.from);

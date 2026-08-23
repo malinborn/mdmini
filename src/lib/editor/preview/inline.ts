@@ -2,7 +2,7 @@ import { Decoration } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
 
 /**
  * CRITICAL: Decoration ordering rules for RangeSetBuilder.
@@ -22,7 +22,7 @@ export function decorateEmphasis(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'emphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
   // Replace at node.from first (startSide=-1 < mark's startSide=0)
   for (const mark of marks) {
@@ -44,7 +44,7 @@ export function decorateStrongEmphasis(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'strongEmphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -64,7 +64,7 @@ export function decorateStrikethrough(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'strikethrough', node.from, node.to)) return;
   const marks = node.getChildren('StrikethroughMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -84,7 +84,7 @@ export function decorateInlineCode(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'inlineCode', node.from, node.to)) return;
   const marks = node.getChildren('CodeMark');
   for (const mark of marks) {
     if (mark.from === node.from) {
@@ -104,7 +104,7 @@ export function decorateLink(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to)) return;
+  if (shouldReveal(view, 'link', node.from, node.to)) return;
 
   const url = node.getChild('URL');
   const linkMarks = node.getChildren('LinkMark');

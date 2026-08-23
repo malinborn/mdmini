@@ -2,7 +2,7 @@ import { Decoration, WidgetType } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
-import { cursorInRange } from './utils';
+import { shouldReveal } from './flavour';
 
 class CodeBlockHeaderWidget extends WidgetType {
   constructor(
@@ -60,7 +60,7 @@ export function decorateHorizontalRule(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'horizontalRule', node.from, node.to, true)) return;
 
   const line = view.state.doc.lineAt(node.from);
   builder.add(line.from, line.from, Decoration.line({ class: 'cm-md-hr' }));
@@ -72,7 +72,7 @@ export function decorateFencedCode(
   node: SyntaxNode,
   builder: RangeSetBuilder<Decoration>
 ): void {
-  if (cursorInRange(view, node.from, node.to, true)) return;
+  if (shouldReveal(view, 'fencedCode', node.from, node.to, true)) return;
 
   const doc = view.state.doc;
   const startLine = doc.lineAt(node.from);
