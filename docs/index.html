@@ -40,7 +40,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://md-mini.com/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "0.5.1",
+    "softwareVersion": "1.0.0",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -665,7 +665,8 @@
 
       <p class="hero-tagline">
         A minimalist live-preview markdown editor for macOS.
-        Lightweight, fast, and distraction-free.
+        Lightweight, fast, distraction-free &mdash; and driveable by the AI agent
+        already sitting in your terminal.
       </p>
 
       <div class="install-blocks">
@@ -737,6 +738,18 @@
         </div>
 
         <div class="feature-card">
+          <div class="feature-icon">✳</div>
+          <div class="feature-title">AI Interface</div>
+          <div class="feature-desc">Let an agent drive an open window: <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">mdmini show</code> to point at a line, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">edit</code> to push content into the live buffer, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">ask</code> to put a real question in front of you and wait for the answer. Also speaks MCP.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">◨</div>
+          <div class="feature-title">Live Render <span style="font-size:11px;color:var(--muted);font-weight:400">beta</span></div>
+          <div class="feature-desc">An optional mode where the markdown markers stay hidden even under the caret, Notion-style. The default live-preview mode is untouched.</div>
+        </div>
+
+        <div class="feature-card">
           <div class="feature-icon">▤</div>
           <div class="feature-title">GFM Tables</div>
           <div class="feature-desc">Create, edit, reorder, and delete table rows and columns. Drag to reorder.</div>
@@ -792,14 +805,20 @@
 
         <div class="feature-card">
           <div class="feature-icon">◑</div>
-          <div class="feature-title">Dark &amp; Light Themes</div>
-          <div class="feature-desc">Rosé Pine dark and Rosé Pine Dawn. Switch with a single keypress.</div>
+          <div class="feature-title">Four Themes</div>
+          <div class="feature-desc">Rosé Pine dark and dawn, plus Aurora light and dark. Or follow the system and let it switch itself.</div>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">⏺</div>
           <div class="feature-title">Auto-Save &amp; Recovery</div>
           <div class="feature-desc">Changes are saved continuously. Crash recovery restores your last session.</div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">✚</div>
+          <div class="feature-title">Block Menu</div>
+          <div class="feature-desc">Type <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">/</code> for headings, lists, checkboxes, tables, code blocks, quotes, and rules &mdash; or hover the gutter beside any line and click the <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">+</code>.</div>
         </div>
 
       </div>
@@ -867,6 +886,29 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v1.0.0</div>
+            <div class="changelog-date">2026-08-23</div>
+            <span class="changelog-tag feature">feature</span>
+          </div>
+          <div class="changelog-body">
+            <h3>One point oh &mdash; now your agent can type too</h3>
+            <ul>
+              <li><strong>An interface for AI agents</strong> &mdash; <code>mdmini show file.md --line 42</code> scrolls a window to a spot and pulses it; <code>cat new.md | mdmini edit file.md</code> pushes content straight into the live buffer and highlights exactly what changed. No writing to disk and praying the watcher notices</li>
+              <li><strong>Your agent can ask you things</strong> &mdash; <code>mdmini ask</code> plants a real question with option buttons inside the document and <em>blocks</em> until you click. Checkboxes for multi-select, a free-text field when none of the options fit</li>
+              <li><strong>Speaks MCP too</strong> &mdash; <code>mdmini mcp</code> runs a stdio MCP server exposing the same three verbs as tools, so agents that prefer MCP need no shell glue. <code>mdmini agent</code> prints a ready-to-paste block for your CLAUDE.md</li>
+              <li><strong>Live Render, in beta</strong> &mdash; an opt-in mode where markdown markers stay hidden even when the caret sits on them, Notion-style. It installs only while selected, so the live-preview mode you already trust is untouched by construction. <code>View → Editor Engine → (beta) Live Render</code></li>
+              <li><strong>Aurora themes</strong> &mdash; two new palettes, light and dark, alongside Rosé Pine. Five entries in the theme menu now, System included, and the caret picked up a gradient</li>
+              <li><strong>A new app icon</strong> &mdash; and, at the last minute, a properly antialiased one: the first cut carried a baked drop shadow that ate a fifth of the canvas at 32px</li>
+              <li><strong>A welcome window, once</strong> &mdash; on first launch after the upgrade md-mini opens a short document showing how to connect your agent, by CLI or by MCP. Close it and it stays closed</li>
+              <li><strong>Fixed: external edits no longer jump you around</strong> &mdash; when a watched file is reloaded from disk, your scroll position and caret stay where you left them</li>
+              <li><strong>Fixed: selecting across a diagram</strong> &mdash; dragging a selection over a mermaid block or a table no longer paints over the widget</li>
+              <li><strong>New home</strong> &mdash; the site lives at <code>md-mini.com</code>; the old GitHub Pages address redirects</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
