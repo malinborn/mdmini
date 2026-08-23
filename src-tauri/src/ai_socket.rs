@@ -441,6 +441,12 @@ pub struct AiCommandPayload {
     /// `ask` only — offers a free-text field alongside the options. `false`
     /// for `show`/`edit`. Wire name `freeText` via the struct's camelCase rename.
     pub free_text: bool,
+    /// True on exactly one command over the lifetime of an install: the first
+    /// one an agent ever delivers. The frontend uses it to say, at the one
+    /// moment the user is definitely paying attention, where this feature
+    /// lives. Rides the payload rather than being a separate event so a command
+    /// pulled from `AiQueue` by a window that did not exist yet carries it too.
+    pub first_use: bool,
 }
 
 /// How long to wait for `open_file_window` (run on the main thread) to register
@@ -498,8 +504,15 @@ fn dispatch(app: &AppHandle, req: AiRequest, tx: mpsc::Sender<AiResponse>) -> u6
     // window's label) happens later, at each point below where the label
     // becomes known.
     let id = app.state::<AiPending>().alloc_id();
+    // Check-and-set, here rather than earlier: the request has passed validation
+    // and is about to be dispatched, so "an agent successfully reached us" is
+    // true. A rejected request must not burn the one first-use notification.
+    let first_use = crate::onboarding::mark_connected(
+        app.config().version.as_deref().unwrap_or("0.0.0"),
+    );
     let payload = AiCommandPayload {
         id,
+        first_use,
         cmd: match &req {
             AiRequest::Show { .. } => "show".to_string(),
             AiRequest::Edit { .. } => "edit".to_string(),
@@ -1463,6 +1476,7 @@ mod tests {
             timeout_secs: 0,
             multi: false,
             free_text: false,
+            first_use: false,
         }
     }
 

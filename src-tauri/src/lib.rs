@@ -73,6 +73,9 @@ pub fn run() {
             watcher::start_watching,
             ai_socket::ai_respond,
             ai_socket::ai_pull_pending,
+            onboarding::ai_nudge_pending,
+            onboarding::ai_nudge_dismiss,
+            onboarding::ai_open_getting_started,
             commands::sync_theme_menu,
             commands::sync_engine_menu,
             commands::sync_beta_in_cycle_menu,
@@ -121,6 +124,16 @@ pub fn run() {
                 // AI menu — each item (re)writes its doc into app_data_dir() with
                 // fresh content and opens it in a new window, so it always reflects
                 // the current snippets rather than a stale cached copy.
+                if id == "ai_getting_started" {
+                    if let Err(e) = onboarding::open_bundled_doc(
+                        &app_handle,
+                        "ai-getting-started.md",
+                        onboarding::getting_started_doc(),
+                    ) {
+                        eprintln!("AI menu: {}", e);
+                    }
+                    return;
+                }
                 if id == "ai_connect_cli" {
                     let content = onboarding::connect_cli_doc();
                     if let Err(e) = onboarding::open_bundled_doc(&app_handle, "ai-connect-cli.md", &content) {

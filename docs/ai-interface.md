@@ -223,6 +223,26 @@ All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_
 
 Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed; run `mdmini agent --mcp` for a short usage-culture snippet worth pasting alongside it.
 
+## Discoverability
+
+None of the above helps a user who doesn't know the interface exists — the reported failure
+mode after 1.0. Three surfaces address it, and all three name the same place, the **AI** menu's
+**Getting Started**, so someone who sets this up once and forgets has a way back. Design:
+`docs/superpowers/specs/2026-08-23-ai-discoverability-design.md`.
+
+| Surface | Raised when |
+|---------|-------------|
+| Startup toast (`ai-nudge`) | `main` window, at launch, while `ai-connected` is absent: at most 3 times, at most once a day, never on a launch that also opened the welcome window. Following or closing it retires it permanently (`ai-nudge.json` → `dismissed`). |
+| `Getting Started` doc | The toast's CTA and the first item of the AI menu — the same document either way (`getting-started-ai.md`, bundled). Its lead block is a map of the AI menu, not setup instructions. |
+| First-use toast (`ai-first-use`) | The first AI command this install ever handles. |
+
+Both the marker and the toast come out of one check-and-set: `dispatch` calls
+`onboarding::mark_connected` after validation but before routing, and the single call that
+observes the transition sets `first_use: true` on that command's `AiCommandPayload`. Riding the
+payload rather than a separate event means a command drained from `AiQueue` by a window that
+didn't exist yet carries it too. Exactly one command per install can ever carry the flag; a
+rejected request never burns it.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

@@ -188,6 +188,14 @@ body {
   opacity: 0.8;
 }
 
+/* A short call to action, not a copyable command: the stack is a flex column,
+   so without this the button stretches the full width of the toast and reads
+   as a mis-sized text field rather than something to click. */
+.md-toast-cmd.md-toast-action {
+  align-self: flex-start;
+  padding: 5px 12px;
+}
+
 .md-toast-close {
   position: absolute;
   top: 8px;

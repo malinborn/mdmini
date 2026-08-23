@@ -54,6 +54,37 @@ describe('createToastStore', () => {
     expect(store.toasts.map((t) => t.payload.kind)).toEqual(['update', 'session']);
   });
 
+  it('AiNoticesSortBelowUpdateAndSession', () => {
+    // Neither AI notice is time-sensitive the way a pending update or a
+    // restorable session is, so they take the bottom of the stack.
+    const store = createToastStore();
+    store.push({ kind: 'ai-nudge' });
+    store.push({ kind: 'session', count: 2 });
+    store.push({ kind: 'update', latest: 'v1.0.0', current: '0.9.0' });
+    expect(store.toasts.map((t) => t.payload.kind)).toEqual([
+      'update',
+      'session',
+      'ai-nudge',
+    ]);
+  });
+
+  it('AiNudge_DismissedById', () => {
+    const store = createToastStore();
+    const id = store.push({ kind: 'ai-nudge' });
+    store.dismiss(id);
+    expect(store.toasts).toEqual([]);
+  });
+
+  it('AiFirstUse_IsItsOwnKind_AndDoesNotReplaceTheNudge', () => {
+    // They never legitimately coexist — one needs a never-connected install,
+    // the other needs a just-connected one — but they are distinct kinds, so
+    // per-kind replacement must not silently swallow one for the other.
+    const store = createToastStore();
+    store.push({ kind: 'ai-nudge' });
+    store.push({ kind: 'ai-first-use' });
+    expect(store.toasts).toHaveLength(2);
+  });
+
   it('OnlyOneToastPerKind', () => {
     // The update checker runs hourly and must not stack duplicates.
     const store = createToastStore();

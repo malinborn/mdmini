@@ -198,7 +198,14 @@ pub fn build_menu(
         .quit()
         .build()?;
 
+    // "Getting Started" is deliberately first and deliberately named the same
+    // thing the startup nudge says out loud — a user who half-remembers the
+    // toast a month later scans this menu for that exact phrase.
     let ai_menu = SubmenuBuilder::new(app, "AI")
+        .item(
+            &MenuItemBuilder::with_id("ai_getting_started", "Getting Started").build(app)?,
+        )
+        .separator()
         .item(
             &MenuItemBuilder::with_id("ai_connect_cli", "Connect AI via CLI").build(app)?,
         )

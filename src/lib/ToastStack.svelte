@@ -24,6 +24,18 @@
     copied = true;
     setTimeout(() => { copied = false; }, 1500);
   }
+
+  /**
+   * The nudge's call to action opens the same document the AI menu's first item
+   * opens, then retires itself — following it counts as having been seen.
+   */
+  async function openGettingStarted(entry: ToastEntry): Promise<void> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('ai_open_getting_started').catch(() => {
+      // Opening a help document is best-effort; never surface a failure here.
+    });
+    dismiss(entry);
+  }
 </script>
 
 {#if store.toasts.length > 0}
@@ -38,12 +50,31 @@
           <button class="md-toast-cmd" title="Click to copy" onclick={copyBrewCommand}>
             {copied ? 'Copied!' : BREW_CMD}
           </button>
-        {:else}
+        {:else if toast.payload.kind === 'session'}
           <span class="md-toast-text">
             <strong>{toast.payload.count}</strong>
             {toast.payload.count === 1 ? 'window' : 'windows'} from your last session
           </span>
           <span class="md-toast-dim">Press <kbd>⇧⌘T</kbd> to reopen</span>
+        {:else if toast.payload.kind === 'ai-nudge'}
+          <!-- The menu is named in the body text, not only on the button: a
+               dismissed toast still delivers the one fact worth keeping. -->
+          <span class="md-toast-text">
+            <strong>Your AI can drive md-mini</strong>
+            <span class="md-toast-dim">— see the <strong>AI</strong> menu</span>
+          </span>
+          <button
+            class="md-toast-cmd md-toast-action"
+            onclick={() => openGettingStarted(toast)}
+          >
+            Getting Started
+          </button>
+        {:else}
+          <span class="md-toast-text">
+            <strong>That was your AI</strong>
+            <span class="md-toast-dim">— md-mini is connected</span>
+          </span>
+          <span class="md-toast-dim">More in the <strong>AI</strong> menu → Getting Started</span>
         {/if}
         <button
           class="md-toast-close"
