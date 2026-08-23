@@ -52,3 +52,28 @@ pub async fn sync_theme_menu(
     state.sync(&preference);
     Ok(())
 }
+
+/// Sets the Editor Engine submenu checkmarks ("raw" | "live-preview" |
+/// "live-render") to match the frontend's persisted engine. Same pattern as
+/// `sync_theme_menu`: called on startup and on every engine change, since
+/// macOS toggles the clicked item natively and this call corrects it.
+#[command]
+pub async fn sync_engine_menu(
+    state: tauri::State<'_, crate::menu::EngineMenuItems>,
+    engine: String,
+) -> Result<(), String> {
+    state.sync(&engine);
+    Ok(())
+}
+
+/// Sets the "Include Live Render in Cmd+E" checkbox to match the frontend's
+/// persisted `betaInCycle` flag. Independent of `sync_engine_menu` because
+/// it isn't one of the three mutually exclusive engine choices.
+#[command]
+pub async fn sync_beta_in_cycle_menu(
+    state: tauri::State<'_, crate::menu::EngineMenuItems>,
+    enabled: bool,
+) -> Result<(), String> {
+    state.sync_beta_in_cycle(enabled);
+    Ok(())
+}

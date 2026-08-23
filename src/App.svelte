@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
-  import { createThemeStore, createModeStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
-  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, type PendingOpen } from './lib/tauri/commands';
+  import { createThemeStore, createEngineStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, syncEngineMenu, syncBetaInCycleMenu, type PendingOpen } from './lib/tauri/commands';
   import {
     onMenuEvent,
     onOpenFile,
@@ -25,6 +25,7 @@
   import { EditorView, highlightActiveLine } from '@codemirror/view';
   import { ChangeSet } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
+  import { LIVE_PREVIEW, LIVE_RENDER, flavourFacet } from './lib/editor/preview/flavour';
   import { envPreviewPlugin } from './lib/editor/preview/env';
   import { shellSecretsPlugin } from './lib/editor/preview/shell-secrets';
   import { isShellConfig } from './lib/editor/file-language';
@@ -46,7 +47,7 @@
   import './styles/editor.css';
 
   const theme = createThemeStore();
-  const mode = createModeStore();
+  const engine = createEngineStore();
   const zoom = createZoomStore();
   const lineGlow = createLineGlowStore();
   const fileState = createFileState();
@@ -580,7 +581,19 @@
           handleFind();
           break;
         case 'toggle_mode':
-          mode.toggle();
+          engine.cycle();
+          break;
+        case 'engine_raw':
+          engine.set('raw');
+          break;
+        case 'engine_live_preview':
+          engine.set('live-preview');
+          break;
+        case 'engine_live_render':
+          engine.set('live-render');
+          break;
+        case 'toggle_beta_in_cycle':
+          engine.toggleBetaInCycle();
           break;
         case 'zoom_in':
           zoom.zoomIn();
@@ -621,6 +634,15 @@
       // sync on every theme_* event, independent of whether the value changed.
       if (action.startsWith('theme_')) {
         syncThemeMenu(theme.preference);
+      }
+      // Same correction, for the Editor Engine submenu — re-clicking the
+      // already-active engine (or toggling Cmd+E onto an unchanged value)
+      // would otherwise leave native's toggle uncorrected.
+      if (action === 'toggle_mode' || action.startsWith('engine_')) {
+        syncEngineMenu(engine.value);
+      }
+      if (action === 'toggle_beta_in_cycle') {
+        syncBetaInCycleMenu(engine.betaInCycle);
       }
     });
 
@@ -733,6 +755,15 @@
     syncThemeMenu(theme.preference);
   });
 
+  // Startup sync for the Editor Engine submenu + beta-cycle checkbox,
+  // mirroring the theme effect above.
+  $effect(() => {
+    syncEngineMenu(engine.value);
+  });
+  $effect(() => {
+    syncBetaInCycleMenu(engine.betaInCycle);
+  });
+
   $effect(() => {
     const title = fileState.title;
     document.title = title;
@@ -753,22 +784,43 @@
     });
   });
 
-  // Reconfigure live-preview compartment when mode toggles
-  // Reconfigure preview when mode toggles (Cmd+E)
+  // Reconfigure the preview compartment on engine change (Cmd+E, or a direct
+  // Editor Engine menu pick) and on file-type change.
+  //
+  // Two independent axes, and the precedence between them must be explicit:
+  //
+  // 1. `raw` wins over everything. It switched off decorations for EVERY file
+  //    type before this axis existed (.env and shell configs included), and it
+  //    still does — that is the user's escape hatch out of any rendering, and
+  //    narrowing it to markdown would be a regression.
+  // 2. Otherwise the file type owns the plugin choice: .env, shell and code
+  //    files keep their own preview plugin and ignore the flavour, which only
+  //    means anything for markdown.
+  // 3. Markdown picks its plugin plus the flavour facet.
   $effect(() => {
-    const m = mode.value;
+    const e = engine.value;
     const v = editorHandle?.view;
     if (!v) return;
-    if (m === 'live-preview') {
-      // Restore the correct preview plugin for the current file type
+
+    if (e === 'raw') {
+      v.dispatch({ effects: previewCompartment.reconfigure([]) });
+      return;
+    }
+
+    if (activePreview !== 'markdown') {
       const plugin = activePreview === 'shell' ? shellSecretsPlugin
         : activePreview === 'env' ? envPreviewPlugin
-        : activePreview === 'code' ? []
-        : livePreviewPlugin;
+        : []; // 'code'
       v.dispatch({ effects: previewCompartment.reconfigure(plugin) });
-    } else {
-      v.dispatch({ effects: previewCompartment.reconfigure([]) });
+      return;
     }
+
+    // `live-preview` and `live-render` both run `livePreviewPlugin`; they
+    // differ only in which flavour the facet supplies.
+    const flavour = e === 'live-render' ? LIVE_RENDER : LIVE_PREVIEW;
+    v.dispatch({
+      effects: previewCompartment.reconfigure([livePreviewPlugin, flavourFacet.of(flavour)]),
+    });
   });
 </script>
 

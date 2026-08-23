@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type { ThemeSetting } from '../theme-resolve';
+import type { EditorEngine } from '../stores.svelte';
 
 export async function readFile(path: string): Promise<string> {
   return invoke<string>('read_file', { path });
@@ -17,6 +18,16 @@ export async function fileExists(path: string): Promise<boolean> {
 /** Sets the Theme menu checkmarks; harmless no-op outside Tauri (browser dev). */
 export function syncThemeMenu(preference: ThemeSetting): void {
   invoke('sync_theme_menu', { preference }).catch(() => {});
+}
+
+/** Sets the Editor Engine submenu checkmarks; harmless no-op outside Tauri. */
+export function syncEngineMenu(engine: EditorEngine): void {
+  invoke('sync_engine_menu', { engine }).catch(() => {});
+}
+
+/** Sets the "Include Live Render in Cmd+E" checkbox; harmless no-op outside Tauri. */
+export function syncBetaInCycleMenu(enabled: boolean): void {
+  invoke('sync_beta_in_cycle_menu', { enabled }).catch(() => {});
 }
 
 const FILE_FILTERS = [

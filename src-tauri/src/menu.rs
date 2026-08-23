@@ -24,10 +24,33 @@ impl ThemeMenuItems {
     }
 }
 
+pub struct EngineMenuItems {
+    pub raw: CheckMenuItem<Wry>,
+    pub live_preview: CheckMenuItem<Wry>,
+    pub live_render: CheckMenuItem<Wry>,
+    pub beta_in_cycle: CheckMenuItem<Wry>,
+}
+
+impl EngineMenuItems {
+    /// Single writer for the Editor Engine checkmarks: checks exactly the
+    /// item matching `engine` ("raw" | "live-preview" | "live-render"),
+    /// unchecks the rest. `beta_in_cycle` is synced separately since it's
+    /// an independent toggle, not one of the three mutually exclusive choices.
+    pub fn sync(&self, engine: &str) {
+        let _ = self.raw.set_checked(engine == "raw");
+        let _ = self.live_preview.set_checked(engine == "live-preview");
+        let _ = self.live_render.set_checked(engine == "live-render");
+    }
+
+    pub fn sync_beta_in_cycle(&self, enabled: bool) {
+        let _ = self.beta_in_cycle.set_checked(enabled);
+    }
+}
+
 pub fn build_menu(
     app: &AppHandle,
     pending_session_count: usize,
-) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems)> {
+) -> tauri::Result<(tauri::menu::Menu<Wry>, ThemeMenuItems, EngineMenuItems)> {
     let file_menu = SubmenuBuilder::new(app, "File")
         .item(
             &MenuItemBuilder::with_id("new", "New")
@@ -97,12 +120,32 @@ pub fn build_menu(
         )
         .build()?;
 
+    let engine_raw = CheckMenuItemBuilder::with_id("engine_raw", "Raw").build(app)?;
+    let engine_live_preview =
+        CheckMenuItemBuilder::with_id("engine_live_preview", "Live Preview").build(app)?;
+    let engine_live_render =
+        CheckMenuItemBuilder::with_id("engine_live_render", "(beta) Live Render").build(app)?;
+    let engine_submenu = SubmenuBuilder::new(app, "Editor Engine")
+        .item(&engine_raw)
+        .item(&engine_live_preview)
+        .separator()
+        .item(&engine_live_render)
+        .build()?;
+
+    let toggle_beta_in_cycle = CheckMenuItemBuilder::with_id(
+        "toggle_beta_in_cycle",
+        "Include Live Render in Cmd+E",
+    )
+    .build(app)?;
+
     let view_menu = SubmenuBuilder::new(app, "View")
         .item(
             &MenuItemBuilder::with_id("toggle_mode", "Toggle Raw Markdown")
                 .accelerator("CmdOrCtrl+E")
                 .build(app)?,
         )
+        .item(&engine_submenu)
+        .item(&toggle_beta_in_cycle)
         .separator()
         .item(
             &MenuItemBuilder::with_id("zoom_in", "Zoom In")
@@ -186,5 +229,12 @@ pub fn build_menu(
         system: theme_system,
     };
 
-    Ok((menu, theme_items))
+    let engine_items = EngineMenuItems {
+        raw: engine_raw,
+        live_preview: engine_live_preview,
+        live_render: engine_live_render,
+        beta_in_cycle: toggle_beta_in_cycle,
+    };
+
+    Ok((menu, theme_items, engine_items))
 }
