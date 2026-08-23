@@ -40,7 +40,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://md-mini.com/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "1.0.0",
+    "softwareVersion": "1.0.1",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -886,6 +886,22 @@
           </div>
         </div>
         ──────────────────────────────────────────────────────────────────── -->
+
+        <div class="changelog-entry">
+          <div class="changelog-meta">
+            <div class="changelog-version">v1.0.1</div>
+            <div class="changelog-date">2026-08-23</div>
+            <span class="changelog-tag fix">fix</span>
+          </div>
+          <div class="changelog-body">
+            <h3>Now it installs on your Intel Mac, and tells you it speaks AI</h3>
+            <ul>
+              <li><strong>Intel Macs are supported</strong> &mdash; the build is universal now, one download for both architectures. Previously <code>brew install --cask mdmini</code> simply refused on an Intel machine, and never said why. The culprit was a single arch-dependent type: Objective-C's <code>BOOL</code> is a <code>bool</code> on Apple Silicon and an <code>i8</code> everywhere else, so one <code>true</code> literal compiled on one machine and broke the other</li>
+              <li><strong>The AI interface is findable</strong> &mdash; 1.0 shipped it and then hid it. A toast on launch now says the editor can be driven by your agent, and a new <strong>Getting Started</strong> entry sits at the top of the AI menu. It leads with a map of that menu rather than a wall of setup, because the thing worth remembering is where this lives, not which command to type</li>
+              <li><strong>It knows when to stop</strong> &mdash; the toast appears at most three times, once a day, never on the launch that already opened the welcome window, and never again once an agent has actually connected. The first time one does, md-mini says so &mdash; useful if someone handed you a config and you were wondering what just moved on screen</li>
+            </ul>
+          </div>
+        </div>
 
         <div class="changelog-entry">
           <div class="changelog-meta">
