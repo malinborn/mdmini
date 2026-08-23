@@ -20,6 +20,7 @@ import { decorateHorizontalRule, decorateFencedCode } from './blocks';
 import { decorateTable } from './tables';
 import { decorateMermaidBlock, mermaidRendered } from './mermaid';
 import { toggleTableMode } from './table-state';
+import { flavourFacet } from './flavour';
 
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -104,7 +105,14 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       const tableModeUpdate = update.transactions.some((tr) =>
         tr.effects.some((e) => e.is(toggleTableMode))
       );
-      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged || mermaidUpdate || tableModeUpdate) {
+      // Switching flavour must rebuild. A compartment reconfigure hands CM6 the
+      // same `livePreviewPlugin` value, so it reuses this instance along with
+      // its cached DecorationSet, and the reconfigure transaction changes
+      // neither the document nor the selection — without this check the mode
+      // switch appears to do nothing until the next keystroke.
+      const flavourChanged =
+        update.state.facet(flavourFacet) !== update.startState.facet(flavourFacet);
+      if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged || mermaidUpdate || tableModeUpdate || flavourChanged) {
         try {
           this.decorations = buildDecorations(update.view);
         } catch (e) {
