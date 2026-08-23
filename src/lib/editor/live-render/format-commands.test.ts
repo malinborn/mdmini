@@ -56,11 +56,27 @@ describe('toggleInlineFormat — wrapping unformatted text', () => {
     expect(result.sliceDoc(result.selection.main.from, result.selection.main.to)).toBe('hello');
   });
 
-  it('Emphasis_PlainSelection_WrapsWithUnderscore', () => {
+  it('Emphasis_PlainSelection_WrapsWithAsterisk', () => {
     const { view, dispatch } = makeMockView('hello world', 0, 5);
     toggleInlineFormat(view, 'emphasis');
     const result = applyDispatch(view, dispatch);
-    expect(result.doc.toString()).toBe('_hello_ world');
+    expect(result.doc.toString()).toBe('*hello* world');
+  });
+
+  it('Emphasis_PartialWord_RoundTrips', () => {
+    // The reason emphasis uses `*`: CommonMark's flanking rules stop `_` from
+    // opening emphasis inside a word, so a `_`-wrapped partial word produced no
+    // Emphasis node, the unwrap path found nothing, and every further click
+    // wrapped again.
+    const { view, dispatch } = makeMockView('supercalifragilistic', 5, 10);
+    toggleInlineFormat(view, 'emphasis');
+    const wrapped = applyDispatch(view, dispatch);
+    expect(wrapped.doc.toString()).toBe('super*calif*ragilistic');
+
+    const second = makeMockView(wrapped.doc.toString(), 6, 11);
+    toggleInlineFormat(second.view, 'emphasis');
+    const unwrapped = applyDispatch(second.view, second.dispatch);
+    expect(unwrapped.doc.toString()).toBe('supercalifragilistic');
   });
 
   it('Strikethrough_PlainSelection_WrapsWithDoubleTilde', () => {

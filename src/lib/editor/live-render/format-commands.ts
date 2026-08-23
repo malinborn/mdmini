@@ -38,9 +38,17 @@ const MARK_NAME: Record<InlineFormatKind, string> = {
   inlineCode: 'CodeMark',
 };
 
+/**
+ * Emphasis is `*`, not `_`, for two reasons. CommonMark's flanking rules stop
+ * `_` from opening or closing emphasis inside a word, so wrapping a partial
+ * word produced no `Emphasis` node at all — the unwrap path then found nothing
+ * to remove and every further click wrapped again, piling up underscores
+ * (`_x_`, then `__x__`, which is strong, not emphasis). It also keeps the
+ * toolbar and the Cmd+I binding in `keybindings.ts` emitting the same markup.
+ */
 const MARKER_TEXT: Record<InlineFormatKind, string> = {
   strong: '**',
-  emphasis: '_',
+  emphasis: '*',
   strikethrough: '~~',
   inlineCode: '`',
 };
