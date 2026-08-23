@@ -103,13 +103,25 @@ export const removeBlockFormatBackward: Command = (view) => {
 };
 
 /**
- * The main keymap is registered in setup.ts:50-56, ahead of previewCompartment
- * (setup.ts:62). CM6 tries same-precedence keymap handlers in registration
- * order, so defaultKeymap's own Backspace binding would win before this one
- * ever runs. Wrapping in Prec.high() here means the caller can't get this
- * wrong by forgetting to wrap it at the call site.
+ * Must be Prec.highest, not Prec.high. Verified in a browser against a real
+ * Backspace keypress: at Prec.high this command is never even entered, while
+ * an otherwise identical binding at Prec.highest runs and returns true.
+ *
+ * Backspace is special in CM6. It appears in the view's PendingKeys table
+ * paired with inputType "deleteContentBackward", so on a contenteditable it is
+ * not resolved purely from keydown — the native edit is allowed to happen and
+ * reconciled afterwards, with the key re-dispatched so bindings still get a
+ * turn. Losing that turn is not a silent no-op: the DOM-derived change is
+ * applied instead, and because the bullet is a widget the reconciliation
+ * rewrote "- b" as "  b" — an outdent nobody asked for, with the text still
+ * inside the list item.
+ *
+ * Wrapped here rather than at the call site so a caller cannot get it wrong.
+ * The command returns false everywhere except the first content position of a
+ * list item or blockquote, so nothing else that binds Backspace — including
+ * closeBrackets' deleteBracketPair — loses a case it would otherwise handle.
  */
-export const blockFormatKeymap: Extension = Prec.high(
+export const blockFormatKeymap: Extension = Prec.highest(
   keymap.of([{ key: 'Backspace', run: removeBlockFormatBackward }])
 );
 

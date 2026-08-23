@@ -15,11 +15,12 @@ import { elementInspector } from './inspector';
  * keymaps and the input handler below all assume the caret has already been
  * normalised out of hidden marker ranges.
  *
- * `blockFormatKeymap` and the keymap inside `inlineContinuation()` are already
- * wrapped in `Prec.high()` at their source. That is not decoration: the main
- * keymap is registered in `setup.ts` *before* `previewCompartment`, and CM6
- * tries equal-precedence handlers in registration order, so without it
- * Backspace and Escape would never reach these handlers.
+ * Both keymaps here carry their own precedence at the source, and the two are
+ * deliberately different: `inlineContinuation()`'s Escape is `Prec.high`,
+ * while `blockFormatKeymap`'s Backspace needs `Prec.highest` — verified
+ * against a real keypress, `Prec.high` never reaches it, because Backspace is
+ * resolved through the view's PendingKeys / beforeinput path rather than from
+ * keydown alone. See the comment on `blockFormatKeymap`.
  */
 export function liveRenderExtensions(): Extension[] {
   return [
