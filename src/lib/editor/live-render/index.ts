@@ -1,6 +1,7 @@
 import type { Extension } from '@codemirror/state';
 import { liveRenderAtomic } from './atomic';
 import { blockFormatKeymap } from './block-format';
+import { headingSpaceInput } from './heading-input';
 import { inlineContinuation } from './inline-continuation';
 import { selectionToolbar } from './selection-toolbar';
 import { elementInspector } from './inspector';
@@ -26,6 +27,7 @@ export function liveRenderExtensions(): Extension[] {
   return [
     ...liveRenderAtomic,
     blockFormatKeymap,
+    headingSpaceInput(),
     inlineContinuation(),
     selectionToolbar(),
     elementInspector(),
