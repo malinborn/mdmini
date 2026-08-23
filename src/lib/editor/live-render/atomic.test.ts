@@ -96,13 +96,36 @@ describe('hiddenMarkRanges — nested and adjacent formatting', () => {
     ]);
   });
 
-  it('nested emphasis inside strong is NOT independently hidden', () => {
-    // "**_both_**" — plugin.ts's decorator for StrongEmphasis returns
-    // false, so the nested Emphasis (`_both_`) is never visited. Only the
-    // outer `**` pair is hidden; the inner `_..._` stays visible.
+  it('nested emphasis inside strong is hidden too', () => {
+    // "**_both_**" — plugin.ts descends into inline nodes, so the inner
+    // Emphasis is decorated as well and its markers must be atomic to match.
+    // Leaving them out would let the caret walk into text that is not drawn.
     expect(spans('**_both_**\n')).toEqual([
       [0, 2],
+      [2, 3],
+      [7, 8],
       [8, 10],
+    ]);
+  });
+
+  it('bold-italic written with three asterisks hides every marker', () => {
+    // "***both***" is the combination users actually type. Lezer nests
+    // StrongEmphasis inside Emphasis here; before the pass descended, the
+    // inner `**` pair rendered as literal text next to italic content.
+    expect(spans('***both***\n')).toEqual([
+      [0, 1],
+      [1, 3],
+      [7, 9],
+      [9, 10],
+    ]);
+  });
+
+  it('bold inside strikethrough hides every marker', () => {
+    expect(spans('~~**x**~~\n')).toEqual([
+      [0, 2],
+      [2, 4],
+      [5, 7],
+      [7, 9],
     ]);
   });
 

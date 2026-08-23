@@ -153,15 +153,16 @@ function collectHiddenSpans(state: EditorState): RawSpan[] {
           for (const mark of node.node.getChildren('EmphasisMark')) {
             push(spans, mark.from, mark.to, mark.from === node.from ? 'from' : 'to');
           }
-          return false; // plugin.ts does not descend — nested emphasis
-          // (e.g. `**_both_**`'s inner `_both_`) is therefore never
-          // independently hidden today; mirrored here, not "fixed".
+          break; // descend — plugin.ts does too, so the inner markers of a
+          // nested span like ***both*** are hidden and must be atomic as well.
+          // Getting this wrong in either direction is the bug to avoid: the
+          // atomic set and the rendered text have to agree.
         }
         case 'Strikethrough': {
           for (const mark of node.node.getChildren('StrikethroughMark')) {
             push(spans, mark.from, mark.to, mark.from === node.from ? 'from' : 'to');
           }
-          return false;
+          break; // descend, same reason
         }
         case 'InlineCode': {
           for (const mark of node.node.getChildren('CodeMark')) {

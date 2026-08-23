@@ -1,7 +1,7 @@
 import { Decoration, WidgetType } from '@codemirror/view';
 import type { EditorView } from '@codemirror/view';
-import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
+import type { DecoSink } from './utils';
 import { markdownTable } from 'markdown-table';
 import { toggleTableMode, getTableMode } from './table-state';
 import { encodeForCommit, decodeForEdit } from './table-encoding';
@@ -818,7 +818,7 @@ function buildDataRow(
 export function decorateTable(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   // FLAVOUR: tables are pinned to 'never' under every shipped flavour — always
   // rendered as a widget, never reverting to raw markdown on cursor. The widget

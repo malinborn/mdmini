@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 
 const headingClasses: Record<string, string> = {
   ATXHeading1: 'cm-md-h1',
@@ -16,7 +17,7 @@ const headingClasses: Record<string, string> = {
 export function decorateHeading(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   const cls = headingClasses[node.name];
   if (!cls) return;

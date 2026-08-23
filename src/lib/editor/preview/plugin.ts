@@ -21,9 +21,37 @@ import { decorateTable } from './tables';
 import { decorateMermaidBlock, mermaidRendered } from './mermaid';
 import { toggleTableMode } from './table-state';
 import { flavourFacet } from './flavour';
+import type { DecoSink } from './utils';
+
+/**
+ * Collects decorations and sorts them before handing them to a real
+ * `RangeSetBuilder`, which requires ascending `(from, startSide)` and throws
+ * otherwise. Needed because the pass descends into nested inline nodes: an
+ * outer span emits its closing marker after the inner span's decorations, so
+ * emission order is no longer document order.
+ *
+ * The sort is stable, so decorators that rely on their own emission order at
+ * one position — a `replace` before a `mark`, per the rule in inline.ts — keep
+ * it. `startSide` handles the rest: line (-2e8) before replace (-1) before
+ * mark (0).
+ */
+class SortingSink implements DecoSink {
+  private readonly items: { from: number; to: number; value: Decoration }[] = [];
+
+  add(from: number, to: number, value: Decoration): void {
+    this.items.push({ from, to, value });
+  }
+
+  finish(): DecorationSet {
+    this.items.sort((a, b) => a.from - b.from || a.value.startSide - b.value.startSide);
+    const builder = new RangeSetBuilder<Decoration>();
+    for (const item of this.items) builder.add(item.from, item.to, item.value);
+    return builder.finish();
+  }
+}
 
 function buildDecorations(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
+  const builder = new SortingSink();
 
   syntaxTree(view.state).iterate({
     enter(node) {
@@ -38,15 +66,19 @@ function buildDecorations(view: EditorView): DecorationSet {
           // Descend into inline children (InlineCode, Emphasis, etc.)
           // so they get decorated inside headings too.
           break;
+        // These three descend. `***bold italic***` nests StrongEmphasis inside
+        // Emphasis (or the reverse), and returning false here left the inner
+        // markers on screen as literal text — the outer span rendered, the
+        // inner one showed its asterisks. Same for bold inside strikethrough.
         case 'Emphasis':
           decorateEmphasis(view, node.node, builder);
-          return false;
+          break;
         case 'StrongEmphasis':
           decorateStrongEmphasis(view, node.node, builder);
-          return false;
+          break;
         case 'Strikethrough':
           decorateStrikethrough(view, node.node, builder);
-          return false;
+          break;
         case 'InlineCode':
           decorateInlineCode(view, node.node, builder);
           return false;

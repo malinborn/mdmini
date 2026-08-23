@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 
 class CodeBlockHeaderWidget extends WidgetType {
   constructor(
@@ -58,7 +59,7 @@ class CodeBlockHeaderWidget extends WidgetType {
 export function decorateHorizontalRule(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'horizontalRule', node.from, node.to, true)) return;
 
@@ -70,7 +71,7 @@ export function decorateHorizontalRule(
 export function decorateFencedCode(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'fencedCode', node.from, node.to, true)) return;
 

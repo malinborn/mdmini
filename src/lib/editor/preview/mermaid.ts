@@ -4,6 +4,7 @@ import { StateEffect } from '@codemirror/state';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 import {
   createViewport,
   estimateFrameHeight,
@@ -253,7 +254,7 @@ class MermaidWidget extends WidgetType {
 export function decorateMermaidBlock(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'mermaid', node.from, node.to, true)) return;
 

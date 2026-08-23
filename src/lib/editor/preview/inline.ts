@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view';
 import type { RangeSetBuilder } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
 import { shouldReveal } from './flavour';
+import type { DecoSink } from './utils';
 
 /**
  * CRITICAL: Decoration ordering rules for RangeSetBuilder.
@@ -20,7 +21,7 @@ import { shouldReveal } from './flavour';
 export function decorateEmphasis(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'emphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
@@ -42,7 +43,7 @@ export function decorateEmphasis(
 export function decorateStrongEmphasis(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'strongEmphasis', node.from, node.to)) return;
   const marks = node.getChildren('EmphasisMark');
@@ -62,7 +63,7 @@ export function decorateStrongEmphasis(
 export function decorateStrikethrough(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'strikethrough', node.from, node.to)) return;
   const marks = node.getChildren('StrikethroughMark');
@@ -82,7 +83,7 @@ export function decorateStrikethrough(
 export function decorateInlineCode(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'inlineCode', node.from, node.to)) return;
   const marks = node.getChildren('CodeMark');
@@ -102,7 +103,7 @@ export function decorateInlineCode(
 export function decorateLink(
   view: EditorView,
   node: SyntaxNode,
-  builder: RangeSetBuilder<Decoration>
+  builder: DecoSink
 ): void {
   if (shouldReveal(view, 'link', node.from, node.to)) return;
 
