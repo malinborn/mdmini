@@ -16,6 +16,8 @@ Minimalist live-preview markdown editor for macOS. Tauri 2 + Svelte 5 + CodeMirr
 | `cd src-tauri && cargo test` | Run Rust tests |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml` | Rust linter |
 | `npm run build:dev` | **Renamed dev .dmg** (`md-mini-dev`). Safe to install alongside production. |
+| `npm run check:x86` | Compile for `x86_64-apple-darwin`. Fast guard that an Intel build still works — no bundle, no install. |
+| `npm run build:universal` | **Production universal .dmg** (Apple Silicon + Intel). Same owner-triggered rule as `tauri build`. |
 | `npm run tauri build` | **Production build (creates .dmg).** Replaces the user's installed md-mini if installed. **Explicit, owner-triggered only — do NOT run as part of routine dev/QA.** |
 | `npm run tauri dev` | Tauri dev with **production identifier**. Conflicts with running production md-mini (shares single-instance socket, app data, recovery files). **Avoid while the user is actively using md-mini — use `npm run dev` or `npm run dev:app` instead.** |
 | `npm run build` | Frontend build only (no Tauri bundle) |
@@ -138,6 +140,7 @@ src/                    # Frontend (Svelte + TypeScript)
 
 ## Gotchas
 
+- **Never pass a `bool` literal to an Objective-C API.** `objc`'s `BOOL` is `bool` on aarch64 but `c_schar` (`i8`) on every other target, so `ns_app.activateIgnoringOtherApps_(true)` compiles on Apple Silicon and fails the x86_64 build with `expected i8, found bool`. Use `cocoa::base::YES`/`NO`, which are defined per arch. This kept Intel builds broken until 2026-08-23 and is invisible unless you actually cross-compile — `npm run check:x86` is the guard.
 - **Svelte 5 runes require `.svelte.ts` extension:** Files using `$state`, `$derived`, `$effect` outside `.svelte` components MUST be named `*.svelte.ts`, not `*.ts`. Plain `.ts` files won't compile runes — the app loads a white screen with no errors. `npm run check` does NOT catch this.
 - **Kill port 1420 before `npm run tauri dev`:** Previous dev sessions leave Vite running. Use `lsof -ti:1420 | xargs kill -9` to free the port.
 - **GFM required:** `@lezer/markdown` needs explicit `extensions: [Strikethrough, Table]` in the markdown() call — without this, `~~strikethrough~~` and tables don't produce AST nodes

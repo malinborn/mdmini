@@ -1,5 +1,31 @@
 # md-mini Distribution Guide
 
+> **Статус документа.** Разделы 1 и 4 описывают то, как релиз работает сейчас.
+> Разделы 2 и 3 (Tauri Updater, GitHub Actions matrix) — нереализованный план
+> времён 0.2.0: релизного CI в репозитории нет, `.github/workflows/` содержит
+> только `deploy-site.yml`, а сборка идёт локально на машине владельца через
+> скилл `/brew-release`. Не читать их как описание текущего процесса.
+
+## Архитектуры
+
+Один **universal** `.dmg` на обе архитектуры — Apple Silicon и Intel. Собирается
+`npm run build:universal` (`tauri build --target universal-apple-darwin`); нужны
+оба rustup-таргета:
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+```
+
+Universal выбран вместо двух отдельных `.dmg` потому, что он *упрощает* cask:
+один URL и один `sha256` вместо ветки по `Hardware::CPU.arm?` с двумя хэшами.
+Расплата за это меньше, чем кажется — `lipo` склеивает только исполняемый файл,
+а ресурсы и шрифты не дублируются, так что universal-сборка примерно в полтора
+раза больше arm64-only, а не вдвое.
+
+Проверить, что x86_64 вообще собирается, не гоняя весь бандл:
+`npm run check:x86`. Тесты под Intel-архитектурой (идут через Rosetta):
+`cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-apple-darwin`.
+
 ## 1. Homebrew Tap (установка для юзеров)
 
 Users install with:
@@ -17,13 +43,10 @@ brew tap USERNAME/md-mini && brew install --cask md-mini
 cask "md-mini" do
   version "0.1.0"
 
-  if Hardware::CPU.arm?
-    url "https://github.com/USERNAME/md-mini/releases/download/v#{version}/md-mini_#{version}_aarch64.dmg"
-    sha256 "REPLACE_WITH_AARCH64_SHA256"
-  else
-    url "https://github.com/USERNAME/md-mini/releases/download/v#{version}/md-mini_#{version}_x64.dmg"
-    sha256 "REPLACE_WITH_X64_SHA256"
-  end
+  # Universal build — no `Hardware::CPU.arm?` branch and no
+  # `depends_on arch:`, both architectures take this same file.
+  url "https://github.com/USERNAME/md-mini/releases/download/v#{version}/md-mini_#{version}_universal.dmg"
+  sha256 "REPLACE_WITH_UNIVERSAL_SHA256"
 
   name "md-mini"
   desc "Minimalist live-preview markdown editor for macOS"
@@ -203,6 +226,9 @@ jobs:
 
 ## 4. Release Checklist
 
+Реальный процесс — локальная сборка, не CI. Обычно его прогоняет скилл
+`/brew-release`; ниже то, что он делает, для случая «руками».
+
 ```bash
 # 1. Bump version
 vim src-tauri/tauri.conf.json package.json  # change "version"
@@ -211,16 +237,26 @@ vim src-tauri/tauri.conf.json package.json  # change "version"
 git add -A && git commit -m "chore: bump to 0.2.0"
 git tag v0.2.0 && git push origin main --tags
 
-# 3. Wait ~15 min for GitHub Action
+# 3. Build the universal .dmg locally (owner-triggered — replaces the
+#    installed md-mini if you then install it)
+npm run build:universal
+# → src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
-# 4. Update Homebrew cask (get SHA256 from release DMGs)
-curl -L -o /tmp/arm.dmg "https://github.com/USER/md-mini/releases/download/v0.2.0/md-mini_0.2.0_aarch64.dmg"
-shasum -a 256 /tmp/arm.dmg
-# Update homebrew-md-mini/Casks/md-mini.rb → version + sha256
+# 4. Publish, naming the asset so the cask URL matches
+gh release create v0.2.0 --title v0.2.0 --notes "..." \
+  "src-tauri/target/universal-apple-darwin/release/bundle/dmg/md-mini_0.2.0_universal.dmg"
 
-# 5. Verify
-brew upgrade --cask md-mini && mdmini
+# 5. Update the Homebrew cask — one sha256, no per-arch branch
+shasum -a 256 src-tauri/target/universal-apple-darwin/release/bundle/dmg/md-mini_0.2.0_universal.dmg
+# malinborn/homebrew-mdmini → Casks/mdmini.rb: version + sha256 + url
+
+# 6. Verify
+brew update && brew upgrade --cask mdmini && mdmini
 ```
+
+Проверить на Intel без Intel-мака нельзя целиком, но `arch -x86_64` запустит
+собранный universal `.app` под Rosetta на Apple Silicon — этого достаточно,
+чтобы поймать «не тот слайс» и падение на старте.
 
 ---
 
