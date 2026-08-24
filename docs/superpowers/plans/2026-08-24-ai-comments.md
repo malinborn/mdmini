@@ -2245,7 +2245,66 @@ pub async fn comment_resolve(path: String, id: String) -> Result<(), String> {
 - Ветка «файл грязный» открывает блокирующее модальное окно `ask()` из `@tauri-apps/plugin-dialog`. Для сайдкара это неприемлемо: агент пишет ответ, а пользователю прилетает модалка.
 - Подавление собственной записи — один глобальный флаг `isSaving` с трейлинг-таймером на 600 мс (`src/App.svelte:139,163,172`), а не per-path.
 
-Поэтому нужен **отдельный, адресный** событие-канал. Watcher уже перезапускается как побочный эффект команды `register_open_file` (см. комментарий в `src/App.svelte:243-245` — отдельного `start_watching` больше нет), так что добавлять сайдкар в набор наблюдаемых надо там же.
+Поэтому нужен **отдельный, адресный** событие-канал.
+
+**Где именно править — проверено по коду.** `watcher::watch_file(app, window_label, file_path)` (`src-tauri/src/watcher.rs:12-68`) наблюдает ровно один файл `NonRecursive` и уже эмитит адресно, через `window.emit(...)`. Вызывается он из четырёх мест (`lib.rs:282`, `window.rs:127`, `window.rs:216` в `register_open_file`, `window.rs:312`), и каждое кладёт watcher в `FileWatchers` — карту `label окна → RecommendedWatcher` (`window.rs:49`).
+
+Отсюда два вывода:
+
+1. **Расширять надо сам `watch_file`,** а не звать его второй раз. Все четыре точки вызова тогда получают наблюдение за сайдкаром без единой правки. Один экземпляр watcher'а умеет наблюдать несколько путей — достаточно второго `watcher.watch(...)`.
+2. **Второй watcher под тем же ключом — это баг.** `FileWatchers` хранит один watcher на label, а сброс watcher'а останавливает наблюдение (так и задокументировано в `watch_file`). Вставка второго под тем же label молча убьёт наблюдение за самим документом.
+
+Правки в `watch_file`:
+
+```rust
+    // Сайдкар комментариев наблюдаем тем же watcher'ом. Отдельный watcher под
+    // тем же label окна не подходит: FileWatchers хранит один watcher на label,
+    // и вставка второго уронила бы наблюдение за самим документом.
+    // Сайдкара может ещё не быть — это нормально, он появится при первом
+    // комментарии, и watcher тогда перевзводится (см. comment_create ниже).
+    let sidecar = crate::comments::sidecar_path(path);
+    if let Some(sidecar) = sidecar.as_ref() {
+        if sidecar.exists() {
+            let _ = watcher.watch(sidecar, RecursiveMode::NonRecursive);
+        }
+    }
+```
+
+В потоке-обработчике различать путь события и выбирать имя события:
+
+```rust
+                        let is_sidecar = event.paths.iter().any(|p| crate::comments::is_sidecar(p));
+                        // Дебаунс держим ОТДЕЛЬНО для документа и для сайдкара.
+                        // Один общий счётчик проглотил бы запись агента в
+                        // сайдкар, случившуюся в пределах 500мс после нашего
+                        // собственного сохранения документа — а это ровно
+                        // типичный сценарий: правка через `edit`, сразу ответ
+                        // в тред.
+                        let last = if is_sidecar { &mut last_emit_sidecar } else { &mut last_emit };
+                        let now = Instant::now();
+                        if now.duration_since(*last) < Duration::from_millis(500) {
+                            continue;
+                        }
+                        *last = now;
+
+                        if let Some(window) = app_handle.get_webview_window(&window_label) {
+                            let event_name = if is_sidecar { "comments-changed" } else { "file-changed-externally" };
+                            let payload = event.paths.first()
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_else(|| watched_path.clone());
+                            let _ = window.emit(event_name, &payload);
+                        } else {
+                            break;
+                        }
+```
+
+и объявить рядом с существующим `last_emit`:
+
+```rust
+        let mut last_emit_sidecar = Instant::now() - Duration::from_secs(10);
+```
+
+**Перевзвод при создании первого комментария.** Сайдкара при открытии документа обычно нет, значит `watcher.watch` его не подхватит. После успешного `comment_create` (шаг 1) фронтенд должен ещё раз позвать `register_open_file` для текущего документа — та же команда, что уже используется при открытии, она пересоздаёт watcher целиком. Одна строка в обработчике создания комментария, никакого нового механизма.
 
 Событие эмитить **в конкретное окно**, а не глобально, и слушать через `getCurrentWebviewWindow().listen`, а не через глобальный `listen`. Причина задокументирована в `src/lib/tauri/events.ts:103-115`: у глобального слушателя target равен `Any`, что матчит и адресные emit'ы — тогда событие получат все окна, и не-владельцы начнут наперегонки его обрабатывать.
 
