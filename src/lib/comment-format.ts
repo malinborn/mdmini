@@ -139,6 +139,23 @@ export function sidecarPath(docPath: string): string {
   return `${dir}.mdmini_comments_${name}`;
 }
 
+/**
+ * Short label for the fragment a thread is about, for the card header.
+ *
+ * Up to 30 characters is shown whole — eliding a short quote costs more than
+ * it saves. Longer ones keep their first and last 15 characters, because both
+ * ends carry information: the start says where the fragment begins, the end
+ * disambiguates it from a neighbour that starts the same way.
+ *
+ * Newlines collapse to spaces: a header is one line, and a multi-line quote
+ * would otherwise break the card layout.
+ */
+export function quotePreview(quote: string): string {
+  const flat = quote.replace(/\s+/g, ' ').trim();
+  if (flat.length <= 30) return flat;
+  return `${flat.slice(0, 15)}…${flat.slice(-15)}`;
+}
+
 /** Directory a document lives in, for scoping the watch command. */
 export function documentDir(docPath: string): string {
   const slash = docPath.lastIndexOf('/');

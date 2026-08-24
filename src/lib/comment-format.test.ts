@@ -5,6 +5,7 @@ import {
   buildWatchPrompt,
   documentDir,
   parseComments,
+  quotePreview,
 } from './comment-format';
 
 const SAMPLE = `<!-- mdmini:comments v=1 doc=spec.md -->
@@ -110,6 +111,48 @@ describe('anchorPosition', () => {
     const result = anchorPosition(doc, 'absent', 999);
     expect(result.orphaned).toBe(true);
     expect(result.pos).toBeLessThanOrEqual(doc.length);
+  });
+});
+
+describe('quotePreview', () => {
+  it('shows a short quote whole', () => {
+    expect(quotePreview('Почему не nginx?')).toBe('Почему не nginx?');
+  });
+
+  it('shows exactly 30 characters whole', () => {
+    const thirty = 'x'.repeat(30);
+    expect(quotePreview(thirty)).toBe(thirty);
+  });
+
+  it('keeps both ends of a longer quote', () => {
+    const quote = 'Сайт обслуживается Caddy на хосте 147.45.146.94 и это важно';
+    const preview = quotePreview(quote);
+    // Asserted against slices of the input rather than hand-counted literals:
+    // both ends have to survive, and which exact characters those are is the
+    // function's business, not the test's.
+    expect(preview.startsWith(quote.slice(0, 15))).toBe(true);
+    expect(preview.endsWith(quote.slice(-15))).toBe(true);
+    expect(preview).toContain('…');
+  });
+
+  it('distinguishes two fragments that begin identically', () => {
+    const a = 'Конфиг ставится фрагментом в /etc/caddy/Caddyfile.d/';
+    const b = 'Конфиг ставится фрагментом в /etc/nginx/conf.d/';
+    // The reason both ends are kept: with only the head, these two would
+    // produce the same header and the cards would be indistinguishable.
+    expect(quotePreview(a)).not.toBe(quotePreview(b));
+  });
+
+  it('never exceeds 31 characters — 15 plus 15 plus the ellipsis', () => {
+    expect(quotePreview('y'.repeat(500))).toHaveLength(31);
+  });
+
+  it('collapses newlines so the header stays one line', () => {
+    expect(quotePreview('первая\nвторая')).toBe('первая вторая');
+  });
+
+  it('collapses runs of whitespace', () => {
+    expect(quotePreview('a    b')).toBe('a b');
   });
 });
 

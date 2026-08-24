@@ -23,7 +23,7 @@ import { markdownFoldService, headingFoldClick, headingFoldStatePlugin } from '.
 import { headingSlugsField, navigateToHeading } from './heading-slugs';
 import { aiHighlightField, aiHighlightKeymap } from './ai-highlight';
 import { aiAskField } from './ai-ask';
-import { aiCommentField } from './ai-comment';
+import { aiCommentAttention, aiCommentField } from './ai-comment';
 
 export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
@@ -39,6 +39,7 @@ export function createExtensions(): Extension[] {
     aiHighlightKeymap,
     aiAskField,
     aiCommentField,
+    aiCommentAttention,
     lineGlowCompartment.of([]),
     drawSelection(),
     listContinuation(),

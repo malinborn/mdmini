@@ -1,6 +1,13 @@
 import { StateEffect, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
-import type { CommentThread } from '../comment-format';
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+  WidgetType,
+} from '@codemirror/view';
+import { quotePreview, type CommentThread } from '../comment-format';
 
 /**
  * What a comment widget can ask the app to do. Carried on the `addAiComment`
@@ -45,7 +52,13 @@ export const addAiComment = StateEffect.define<{
  * leave its highlight behind on the text forever.
  */
 function anchorMark(threadId: string): Decoration {
-  return Decoration.mark({ class: 'cm-ai-comment-anchor', threadId });
+  return Decoration.mark({
+    class: 'cm-ai-comment-anchor',
+    // Also on the DOM, so the attention plugin can find the spans belonging to
+    // one thread without walking the decoration set.
+    attributes: { 'data-comment-anchor': threadId },
+    threadId,
+  });
 }
 
 /** True for an anchor highlight belonging to `threadId`. */
@@ -101,12 +114,27 @@ export class CommentWidget extends WidgetType {
 
     const card = document.createElement('div');
     card.className = orphaned ? 'cm-ai-comment cm-ai-comment-orphaned' : 'cm-ai-comment';
+    // Lets the attention plugin find this card by thread without holding a
+    // reference to the DOM it built.
+    card.setAttribute('data-comment-thread', thread.id);
 
     const head = document.createElement('div');
     head.className = 'cm-ai-comment-head';
     head.textContent = orphaned
       ? `${thread.id} · якорь потерян`
       : `${thread.id} · ${STATUS_LABEL[thread.status]}`;
+
+    // The quoted fragment, right-aligned in the header. With several cards
+    // stacked under one paragraph, the id and status alone do not say which
+    // one is about what — and the highlight in the text only helps once you
+    // have already found the right card.
+    if (thread.quote) {
+      const excerpt = document.createElement('span');
+      excerpt.className = 'cm-ai-comment-excerpt';
+      excerpt.textContent = quotePreview(thread.quote);
+      excerpt.title = thread.quote;
+      head.appendChild(excerpt);
+    }
     card.appendChild(head);
 
     for (const reply of thread.replies) {
@@ -259,3 +287,101 @@ export const aiCommentField = StateField.define<DecorationSet>({
   },
   provide: (field) => EditorView.decorations.from(field),
 });
+
+const CARD_ATTENTION = 'cm-ai-comment-attention';
+const ANCHOR_ATTENTION = 'cm-ai-comment-anchor-attention';
+
+/** Thread ids whose anchored fragment contains one of the caret positions. */
+function threadsUnderCaret(view: EditorView): Set<string> {
+  const out = new Set<string>();
+  const set = view.state.field(aiCommentField, false);
+  if (!set) return out;
+  const heads = view.state.selection.ranges.map((r) => r.head);
+  set.between(0, view.state.doc.length, (from, to, value) => {
+    const id = (value.spec as { threadId?: string }).threadId;
+    // Widgets carry no threadId and are zero-length anyway; only the anchor
+    // marks answer here.
+    if (!id || to <= from) return;
+    if (heads.some((head) => head >= from && head <= to)) out.add(id);
+  });
+  return out;
+}
+
+/**
+ * Links a comment card and the text it is about, in both directions.
+ *
+ * Put the caret in a commented fragment and its cards shimmer; work inside a
+ * card and its fragment shimmers back. Several cards stacked under one
+ * paragraph are otherwise indistinguishable — the header excerpt says what
+ * each is about, and this says which one you are touching.
+ *
+ * Implemented by toggling classes on existing DOM, never by rebuilding the
+ * widget. A rebuild per caret move would be wasteful, and worse, it would
+ * discard whatever the user had typed into the reply input.
+ */
+class CommentAttentionPlugin {
+  private highlighted = new Set<string>();
+  private cardFocused: string | null = null;
+
+  private readonly onFocusIn = (event: FocusEvent): void => this.claim(event.target);
+  private readonly onPointerDown = (event: MouseEvent): void => this.claim(event.target);
+
+  constructor(private readonly view: EditorView) {
+    view.dom.addEventListener('focusin', this.onFocusIn);
+    // Capture phase: the widget's own handlers call preventDefault/
+    // stopPropagation, so a bubbling listener would never see the click.
+    view.dom.addEventListener('mousedown', this.onPointerDown, true);
+    this.syncCards();
+  }
+
+  /** Mark the fragment of whichever card the interaction landed in. */
+  private claim(target: EventTarget | null): void {
+    const el = target as Element | null;
+    const card = el && 'closest' in el ? el.closest('[data-comment-thread]') : null;
+    const id = card?.getAttribute('data-comment-thread') ?? null;
+    if (id === this.cardFocused) return;
+    this.cardFocused = id;
+    this.syncAnchors();
+  }
+
+  update(update: ViewUpdate): void {
+    // A decoration rebuild replaces the DOM, so the classes must be reapplied
+    // even when the selection itself did not move.
+    if (!update.selectionSet && !update.docChanged && !update.viewportChanged) return;
+    this.syncCards();
+    this.syncAnchors();
+  }
+
+  /** Caret → cards. */
+  private syncCards(): void {
+    const active = threadsUnderCaret(this.view);
+    for (const id of this.highlighted) {
+      if (!active.has(id)) this.setCardAttention(id, false);
+    }
+    for (const id of active) this.setCardAttention(id, true);
+    this.highlighted = active;
+  }
+
+  /** Card → fragment. */
+  private syncAnchors(): void {
+    for (const el of this.view.dom.querySelectorAll('[data-comment-anchor]')) {
+      el.classList.toggle(
+        ANCHOR_ATTENTION,
+        el.getAttribute('data-comment-anchor') === this.cardFocused
+      );
+    }
+  }
+
+  private setCardAttention(id: string, on: boolean): void {
+    const card = this.view.dom.querySelector(`[data-comment-thread="${CSS.escape(id)}"]`);
+    card?.classList.toggle(CARD_ATTENTION, on);
+  }
+
+  destroy(): void {
+    this.view.dom.removeEventListener('focusin', this.onFocusIn);
+    this.view.dom.removeEventListener('mousedown', this.onPointerDown, true);
+  }
+}
+
+/** Bidirectional attention link between a card and its fragment. */
+export const aiCommentAttention = ViewPlugin.fromClass(CommentAttentionPlugin);

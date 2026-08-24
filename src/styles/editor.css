@@ -1509,3 +1509,63 @@
   background: var(--ai-ask-bg);
   border-bottom: 2px solid var(--ai-ask-border);
 }
+
+/* Excerpt of the quoted fragment in the card header. Pushed to the right so
+ * the id and status keep their place, and truncated by the builder rather than
+ * by CSS — a hard character budget reads better than an ellipsis that lands
+ * wherever the card happens to end. */
+.cm-ai-comment-excerpt {
+  float: right;
+  max-width: 60%;
+  margin-left: 0.6rem;
+  opacity: 0.75;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Attention link between a card and its fragment ---
+ *
+ * Both directions use the same shimmer already defined for AI edits
+ * (`cm-ai-shimmer`), on the accent token — which in the aurora themes IS the
+ * aurora, so this needs no palette of its own. Slow and low-contrast on
+ * purpose: it says "these two belong together", it is not an alert. */
+.cm-ai-comment.cm-ai-comment-attention {
+  border-color: var(--ai-ask-accent);
+  background-image: linear-gradient(
+    90deg,
+    var(--ai-ask-bg) 0%,
+    var(--ai-ask-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-ask-bg) 65%,
+    var(--ai-ask-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 3.2s ease-in-out infinite;
+}
+
+.cm-ai-comment-anchor.cm-ai-comment-anchor-attention {
+  border-bottom-color: var(--ai-ask-accent);
+  background-image: linear-gradient(
+    90deg,
+    var(--ai-ask-bg) 0%,
+    var(--ai-ask-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-ask-bg) 65%,
+    var(--ai-ask-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 3.2s ease-in-out infinite;
+}
+
+/* Motion is the whole mechanism here, so with it suppressed the link has to be
+ * carried by colour alone — otherwise the feature silently disappears for
+ * anyone who asked the OS for less animation. */
+@media (prefers-reduced-motion: reduce) {
+  .cm-ai-comment.cm-ai-comment-attention,
+  .cm-ai-comment-anchor.cm-ai-comment-anchor-attention {
+    animation: none;
+    background-image: linear-gradient(var(--ai-edit-shimmer), var(--ai-edit-shimmer));
+  }
+}
