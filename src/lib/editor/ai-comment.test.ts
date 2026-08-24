@@ -52,7 +52,7 @@ describe('aiCommentField', () => {
   it('adds one widget per thread', () => {
     const state = makeState('первая\nвторая\n');
     const tr = state.update({
-      effects: addAiComment.of({ thread: thread(), pos: 0, orphaned: false, actions: makeActions() }),
+      effects: addAiComment.of({ thread: thread(), pos: 0, to: 0, orphaned: false, actions: makeActions() }),
     });
     expect(collectWidgets(tr.state)).toHaveLength(1);
   });
@@ -61,7 +61,7 @@ describe('aiCommentField', () => {
     const state = makeState('line1\nline2\n');
     const pos = state.doc.line(1).from + 2; // mid line1
     const tr = state.update({
-      effects: addAiComment.of({ thread: thread(), pos, orphaned: false, actions: makeActions() }),
+      effects: addAiComment.of({ thread: thread(), pos, to: pos, orphaned: false, actions: makeActions() }),
     });
     expect(collectWidgets(tr.state)[0].pos).toBe(state.doc.line(1).to);
   });
@@ -72,6 +72,7 @@ describe('aiCommentField', () => {
       effects: addAiComment.of({
         thread: thread({ id: 'c-aaaaaa' }),
         pos: state.doc.line(1).from,
+        to: state.doc.line(1).from,
         orphaned: false,
         actions: makeActions(),
       }),
@@ -80,6 +81,7 @@ describe('aiCommentField', () => {
       effects: addAiComment.of({
         thread: thread({ id: 'c-bbbbbb' }),
         pos: state.doc.line(3).from,
+        to: state.doc.line(3).from,
         orphaned: false,
         actions: makeActions(),
       }),
@@ -91,7 +93,7 @@ describe('aiCommentField', () => {
   it('removes a widget by id', () => {
     let state = makeState('первая\nвторая\n');
     state = state.update({
-      effects: addAiComment.of({ thread: thread(), pos: 0, orphaned: false, actions: makeActions() }),
+      effects: addAiComment.of({ thread: thread(), pos: 0, to: 0, orphaned: false, actions: makeActions() }),
     }).state;
     state = state.update({ effects: removeAiComment.of('c-7f3a2c') }).state;
     expect(collectWidgets(state)).toHaveLength(0);
@@ -100,7 +102,7 @@ describe('aiCommentField', () => {
   it('removing an absent id is a no-op', () => {
     let state = makeState('первая\n');
     state = state.update({
-      effects: addAiComment.of({ thread: thread(), pos: 0, orphaned: false, actions: makeActions() }),
+      effects: addAiComment.of({ thread: thread(), pos: 0, to: 0, orphaned: false, actions: makeActions() }),
     }).state;
     state = state.update({ effects: removeAiComment.of('c-nope00') }).state;
     expect(collectWidgets(state)).toHaveLength(1);
@@ -113,12 +115,14 @@ describe('aiCommentField', () => {
         addAiComment.of({
           thread: thread({ id: 'c-aaaaaa' }),
           pos: state.doc.line(1).from,
+          to: state.doc.line(1).from,
           orphaned: false,
           actions: makeActions(),
         }),
         addAiComment.of({
           thread: thread({ id: 'c-bbbbbb' }),
           pos: state.doc.line(2).from,
+          to: state.doc.line(2).from,
           orphaned: false,
           actions: makeActions(),
         }),
@@ -132,7 +136,7 @@ describe('aiCommentField', () => {
     let state = makeState('line1\nline2\nline3\n');
     const targetLineStart = state.doc.line(3).from;
     state = state.update({
-      effects: addAiComment.of({ thread: thread(), pos: targetLineStart, orphaned: false, actions: makeActions() }),
+      effects: addAiComment.of({ thread: thread(), pos: targetLineStart, to: targetLineStart, orphaned: false, actions: makeActions() }),
     }).state;
     const before = collectWidgets(state)[0].pos;
 

@@ -27,9 +27,31 @@ export interface CommentSpec {
 export const addAiComment = StateEffect.define<{
   thread: CommentThread;
   pos: number;
+  /** End of the quoted fragment, for the in-document highlight. Equal to
+   * `pos` when the anchor could not be found, i.e. nothing to mark. */
+  to: number;
   orphaned: boolean;
   actions: CommentActions;
 }>();
+
+/**
+ * Marks the fragment a thread is about. Without it the card states its quote
+ * but the reader has to find those words themselves — the whole point of
+ * anchoring is lost. Deliberately a `mark`, not a `replace`: the document text
+ * must stay exactly as authored.
+ *
+ * Carries the thread id in its spec, because removal filters on identity and a
+ * mark has no widget to recognise — without the id, closing a thread would
+ * leave its highlight behind on the text forever.
+ */
+function anchorMark(threadId: string): Decoration {
+  return Decoration.mark({ class: 'cm-ai-comment-anchor', threadId });
+}
+
+/** True for an anchor highlight belonging to `threadId`. */
+function isAnchorOf(spec: unknown, threadId: string): boolean {
+  return (spec as { threadId?: string })?.threadId === threadId;
+}
 
 /** Removes the comment widget with the given thread id. A no-op if that id
  * isn't present (e.g. a reload racing an already-resolved thread). */
@@ -130,18 +152,40 @@ export class CommentWidget extends WidgetType {
     const row = document.createElement('div');
     row.className = 'cm-ai-comment-actions';
 
-    const button = (label: string, onClick: () => void) => {
+    const button = (label: string, onClick: () => void, confirmLabel?: string) => {
       const element = document.createElement('button');
       element.type = 'button';
       element.className = 'cm-ai-comment-button';
       element.textContent = label;
       // Keep the editor selection from moving to a click in the widget.
       element.addEventListener('mousedown', (event) => event.preventDefault());
-      element.addEventListener('click', onClick);
+      element.addEventListener('click', () => {
+        onClick();
+        // Copying to the clipboard is invisible — without a reply the button
+        // looks like it did nothing at all. Say what happened, and say what to
+        // do next, since the clipboard is only half the action.
+        if (!confirmLabel) return;
+        element.textContent = confirmLabel;
+        // `className` rather than `classList`, matching `ai-ask.ts` — and the
+        // DOM-less test harness in this repo models className only.
+        element.className = 'cm-ai-comment-button cm-ai-comment-button-done';
+        // Bare `setTimeout`, not `window.setTimeout`: the DOM-less test
+        // harness stubs `document` but there is no `window` in that
+        // environment at all. If the widget is rebuilt before this fires it
+        // just relabels a detached element, which is harmless.
+        setTimeout(() => {
+          element.textContent = label;
+          element.className = 'cm-ai-comment-button';
+        }, 5000);
+      });
       row.appendChild(element);
     };
 
-    button('отправить в агента', () => actions.handoff(thread.id));
+    button(
+      'отправить в агента',
+      () => actions.handoff(thread.id),
+      'отправьте промпт в сессию'
+    );
     const last = thread.replies[thread.replies.length - 1];
     if (thread.status === 'answered' && last) {
       button('вставить в текст', () => actions.insertIntoText(thread.id, last.text));
@@ -177,7 +221,7 @@ export const aiCommentField = StateField.define<DecorationSet>({
     deco = deco.map(tr.changes);
     for (const effect of tr.effects) {
       if (effect.is(addAiComment)) {
-        const { thread, pos, orphaned, actions } = effect.value;
+        const { thread, pos, to, orphaned, actions } = effect.value;
         const clamped = Math.max(0, Math.min(pos, tr.state.doc.length));
         const anchor = tr.state.doc.lineAt(clamped).to;
         const widget = Decoration.widget({
@@ -185,12 +229,27 @@ export const aiCommentField = StateField.define<DecorationSet>({
           block: true,
           side: 1,
         });
-        deco = deco.update({ add: [widget.range(anchor)] });
+        // Ranges handed to `update` must be sorted by `from`, and the mark
+        // always starts at or before the widget's line-end anchor, so it goes
+        // first. An empty range is skipped rather than added: CM6 rejects a
+        // zero-length mark, and a detached thread has nothing to highlight.
+        const markEnd = Math.max(clamped, Math.min(to, tr.state.doc.length));
+        const add =
+          markEnd > clamped
+            ? [anchorMark(thread.id).range(clamped, markEnd), widget.range(anchor)]
+            : [widget.range(anchor)];
+        deco = deco.update({ add });
       } else if (effect.is(removeAiComment)) {
         const id = effect.value;
         deco = deco.update({
-          filter: (_from, _to, value) =>
-            !(isCommentWidget(value.spec.widget) && value.spec.widget.spec.thread.id === id),
+          filter: (_from, _to, value) => {
+            if (isCommentWidget(value.spec.widget) && value.spec.widget.spec.thread.id === id) {
+              return false;
+            }
+            // Drop the thread's anchor highlight too, or the text stays marked
+            // after its card is gone.
+            return !isAnchorOf(value.spec, id);
+          },
         });
       } else if (effect.is(clearAiComments)) {
         deco = Decoration.none;

@@ -48,7 +48,7 @@
     CommentWidget,
     type CommentActions,
   } from './lib/editor/ai-comment';
-  import { anchorPosition, buildHandoffPrompt } from './lib/comment-format';
+  import { anchorPosition, buildHandoffPrompt, buildWatchPrompt } from './lib/comment-format';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './lib/theme/aurora-dark.css';
@@ -365,17 +365,18 @@
     const effects: StateEffect<unknown>[] = [clearAiComments.of(null)];
     for (const thread of threads) {
       if (thread.status === 'resolved') continue;
-      const { pos, orphaned } = anchorPosition(doc, thread.quote, thread.line);
-      effects.push(addAiComment.of({ thread, pos, orphaned, actions: commentActions }));
+      const { pos, to, orphaned } = anchorPosition(doc, thread.quote, thread.line);
+      effects.push(addAiComment.of({ thread, pos, to, orphaned, actions: commentActions }));
     }
     // Drafts are not in the file, so a reload would otherwise silently discard
     // half-typed comments — re-add them on top.
     for (const [id, draft] of commentDrafts) {
-      const { pos, orphaned } = anchorPosition(doc, draft.quote, draft.line);
+      const { pos, to, orphaned } = anchorPosition(doc, draft.quote, draft.line);
       effects.push(
         addAiComment.of({
           thread: { id, status: 'open', line: draft.line, quote: draft.quote, replies: [] },
           pos,
+          to,
           orphaned,
           actions: commentActions,
         })
@@ -444,6 +445,26 @@
   };
 
   /**
+   * Put the "start watching this document's comments" prompt on the clipboard.
+   *
+   * Same focus guard as comment creation, and for the same reason: a menu event
+   * reaches every window, and only the focused one should answer for its own
+   * document. The toast is the whole point — a clipboard write is invisible.
+   */
+  function copyWatchCommand(): void {
+    if (!document.hasFocus()) return;
+    const path = fileState.filePath;
+    if (!path) {
+      toasts.push({ kind: 'ai-watch-copied', saved: false });
+      return;
+    }
+    void navigator.clipboard
+      .writeText(buildWatchPrompt(path))
+      .then(() => toasts.push({ kind: 'ai-watch-copied', saved: true }))
+      .catch(() => toasts.push({ kind: 'ai-watch-copied', saved: false }));
+  }
+
+  /**
    * Start a comment on the selection, or on the caret's line if nothing is
    * selected — an empty quote would give the thread no anchor to survive on.
    */
@@ -471,6 +492,9 @@
       effects: addAiComment.of({
         thread: { id, status: 'open', line: line.number, quote, replies: [] },
         pos: range.from,
+        // A draft already knows its exact range — no quote search needed, and
+        // the fragment gets highlighted from the moment the card appears.
+        to: range.empty ? line.to : range.to,
         orphaned: false,
         actions: commentActions,
       }),
@@ -796,6 +820,9 @@
           break;
         case 'ai_comment':
           createCommentFromSelection();
+          break;
+        case 'ai_watch_command':
+          copyWatchCommand();
           break;
       }
 

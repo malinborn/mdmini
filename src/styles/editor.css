@@ -1487,3 +1487,25 @@
 .cm-ai-comment-button:hover {
   background: var(--ai-ask-chip-hover-bg);
 }
+
+/* Confirmation state after a click whose effect is invisible — copying to the
+ * clipboard. Reuses the ask accent so it reads as "this happened", not as a
+ * second action to press. */
+.cm-ai-comment-button.cm-ai-comment-button-done {
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border-color: var(--ai-ask-accent);
+}
+
+.cm-ai-comment-button.cm-ai-comment-button-done:hover {
+  background: var(--ai-ask-accent);
+}
+
+/* The fragment a thread is anchored to. The card alone states its quote but
+ * leaves the reader hunting for the words in the text — this is what makes a
+ * comment feel attached to something. An underline plus a faint wash rather
+ * than a strong fill, so a document with several threads stays readable. */
+.cm-ai-comment-anchor {
+  background: var(--ai-ask-bg);
+  border-bottom: 2px solid var(--ai-ask-border);
+}

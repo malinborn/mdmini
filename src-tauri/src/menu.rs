@@ -229,6 +229,14 @@ pub fn build_menu(
                 .accelerator("CmdOrCtrl+Shift+M")
                 .build(app)?,
         )
+        // Nothing in the app can make an agent watch for comments — that has
+        // to happen in the agent's own session, which the editor cannot reach
+        // into. So the discoverable surface is a command the user hands over,
+        // and it belongs next to the other "Connect AI via …" items.
+        .item(
+            &MenuItemBuilder::with_id("ai_watch_command", "Copy Watch Command for Agent")
+                .build(app)?,
+        )
         .separator()
         .item(&MenuItemBuilder::with_id("ai_playbook", "AI Playbook").build(app)?)
         .build()?;

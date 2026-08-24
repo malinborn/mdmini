@@ -24,7 +24,8 @@ export type MenuAction =
   | 'theme_aurora_dark'
   | 'theme_system'
   | 'recent_files'
-  | 'ai_comment';
+  | 'ai_comment'
+  | 'ai_watch_command';
 
 export function onMenuEvent(handler: (action: MenuAction) => void): Promise<() => void> {
   return listen<string>('menu-event', (event) => {

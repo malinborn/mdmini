@@ -12,7 +12,14 @@ export type ToastPayload =
   /** Startup nudge for someone who has never connected an agent. */
   | { kind: 'ai-nudge' }
   /** Raised the first time an agent actually drives this install. */
-  | { kind: 'ai-first-use' };
+  | { kind: 'ai-first-use' }
+  /**
+   * The watch prompt was put on the clipboard — or could not be, when the
+   * document has never been saved and so has no path to watch. Persistent like
+   * every other toast here, which suits this one: the instruction stays on
+   * screen while the user switches to their agent.
+   */
+  | { kind: 'ai-watch-copied'; saved: boolean };
 
 export type ToastKind = ToastPayload['kind'];
 
@@ -30,6 +37,10 @@ const ORDER: Record<ToastKind, number> = {
   // connected, the other requires having just connected.
   'ai-nudge': 2,
   'ai-first-use': 2,
+  // Sorts last of all: it is a direct response to something the user just
+  // clicked, so it belongs nearest their attention rather than above notices
+  // they have not acted on.
+  'ai-watch-copied': 3,
 };
 
 export function createToastStore() {

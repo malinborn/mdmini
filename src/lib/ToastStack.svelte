@@ -69,6 +69,21 @@
           >
             Getting Started
           </button>
+        {:else if toast.payload.kind === 'ai-watch-copied'}
+          <!-- Says what to do next, not just that a copy happened: the
+               clipboard is only half the action — the prompt still has to be
+               pasted into an agent session. -->
+          {#if toast.payload.saved}
+            <span class="md-toast-text">
+              <strong>Watch command copied</strong>
+              <span class="md-toast-dim">— paste it into your agent's session</span>
+            </span>
+          {:else}
+            <span class="md-toast-text">
+              <strong>Save the file first</strong>
+              <span class="md-toast-dim">— an unsaved document has no path to watch</span>
+            </span>
+          {/if}
         {:else}
           <span class="md-toast-text">
             <strong>That was your AI</strong>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { anchorPosition, buildHandoffPrompt, parseComments } from './comment-format';
+import {
+  anchorPosition,
+  buildHandoffPrompt,
+  buildWatchPrompt,
+  documentDir,
+  parseComments,
+} from './comment-format';
 
 const SAMPLE = `<!-- mdmini:comments v=1 doc=spec.md -->
 
@@ -70,7 +76,28 @@ describe('anchorPosition', () => {
   const doc = 'first\nWe ship via Caddy\nthird\n';
 
   it('finds the quote and returns its offset', () => {
-    expect(anchorPosition(doc, 'We ship via Caddy', 2)).toEqual({ pos: 6, orphaned: false });
+    expect(anchorPosition(doc, 'We ship via Caddy', 2)).toEqual({
+      pos: 6,
+      to: 23,
+      orphaned: false,
+    });
+  });
+
+  it('bounds the range to the quoted fragment so it can be highlighted', () => {
+    const { pos, to } = anchorPosition(doc, 'We ship via Caddy', 2);
+    expect(doc.slice(pos, to)).toBe('We ship via Caddy');
+  });
+
+  it('returns an empty range for a detached thread — nothing to highlight', () => {
+    const { pos, to } = anchorPosition(doc, 'absent text', 3);
+    expect(to).toBe(pos);
+  });
+
+  it('bounds the range to the first quote line only, never across a newline', () => {
+    const multi = 'first\nWe ship via Caddy\nthird\n';
+    const { pos, to } = anchorPosition(multi, 'We ship via Caddy\nthird', 2);
+    expect(multi.slice(pos, to)).toBe('We ship via Caddy');
+    expect(multi.slice(pos, to)).not.toContain('\n');
   });
 
   it('falls back to the stored line when the quote is gone', () => {
@@ -83,6 +110,35 @@ describe('anchorPosition', () => {
     const result = anchorPosition(doc, 'absent', 999);
     expect(result.orphaned).toBe(true);
     expect(result.pos).toBeLessThanOrEqual(doc.length);
+  });
+});
+
+describe('documentDir', () => {
+  it('returns the containing directory', () => {
+    expect(documentDir('/repo/docs/spec.md')).toBe('/repo/docs');
+  });
+
+  it('returns the root for a file directly in it', () => {
+    expect(documentDir('/spec.md')).toBe('/');
+  });
+});
+
+describe('buildWatchPrompt', () => {
+  it('names the directory, not the file — watch is tree-scoped', () => {
+    const prompt = buildWatchPrompt('/repo/docs/spec.md');
+    expect(prompt).toContain('mdmini watch /repo/docs');
+  });
+
+  it('spells out persistent: true, the flag whose absence fails silently', () => {
+    expect(buildWatchPrompt('/repo/spec.md')).toContain('persistent: true');
+  });
+
+  it('offers a fallback for agents with no event stream', () => {
+    expect(buildWatchPrompt('/repo/spec.md')).toContain('mdmini question');
+  });
+
+  it('says how to answer, not only how to listen', () => {
+    expect(buildWatchPrompt('/repo/spec.md')).toContain('mdmini answer');
   });
 });
 

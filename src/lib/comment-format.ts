@@ -111,17 +111,24 @@ export function anchorPosition(
   doc: string,
   quote: string,
   line: number
-): { pos: number; orphaned: boolean } {
+): { pos: number; to: number; orphaned: boolean } {
   const firstQuoteLine = quote.split('\n')[0];
   if (firstQuoteLine) {
     const found = doc.indexOf(firstQuoteLine);
-    if (found >= 0) return { pos: found, orphaned: false };
+    // `to` bounds the quoted fragment so the document can mark it — a card
+    // that only shows the quote leaves the reader hunting for which words it
+    // is about. Only the first quote line is matched, so the range never
+    // crosses a newline, which a mark decoration would render badly.
+    if (found >= 0) return { pos: found, to: found + firstQuoteLine.length, orphaned: false };
   }
   const lines = doc.split('\n');
   const index = Math.max(0, Math.min(line - 1, lines.length - 1));
   let pos = 0;
   for (let i = 0; i < index; i += 1) pos += lines[i].length + 1;
-  return { pos: Math.min(pos, doc.length), orphaned: true };
+  const clamped = Math.min(pos, doc.length);
+  // Detached: there is no fragment to mark, so the range is empty and the
+  // card carries the "anchor lost" label instead.
+  return { pos: clamped, to: clamped, orphaned: true };
 }
 
 /** Путь файла комментариев для документа — то же правило, что в Rust. */
@@ -130,6 +137,38 @@ export function sidecarPath(docPath: string): string {
   const dir = slash < 0 ? '' : docPath.slice(0, slash + 1);
   const name = slash < 0 ? docPath : docPath.slice(slash + 1);
   return `${dir}.mdmini_comments_${name}`;
+}
+
+/** Directory a document lives in, for scoping the watch command. */
+export function documentDir(docPath: string): string {
+  const slash = docPath.lastIndexOf('/');
+  return slash <= 0 ? '/' : docPath.slice(0, slash);
+}
+
+/**
+ * Ready-to-paste text that gets an agent watching this document's comments.
+ *
+ * Nothing in the app can arm a watch by itself — the agent has to run it, in
+ * its own session, and there is no way for the editor to reach into that. So
+ * the discoverable surface is a command the user hands over, and it has to
+ * explain the one flag that silently breaks everything if omitted.
+ */
+export function buildWatchPrompt(docPath: string): string {
+  const dir = documentDir(docPath);
+  return [
+    `Следи за моими комментариями в ${dir} и отвечай на них.`,
+    ``,
+    `Если умеешь реагировать на поток событий (Claude Code — инструмент Monitor):`,
+    `Monitor({command: "mdmini watch ${dir}", description: "новые комменты в mdmini", persistent: true})`,
+    `Без persistent: true монитор умрёт через пять минут, и его тишина будет`,
+    `выглядеть как «комментариев нет».`,
+    ``,
+    `Если не умеешь — проверяй \`mdmini question ${dir}\` перед тем, как спросить`,
+    `меня в чате, и перед тем, как отчитаться о завершении.`,
+    ``,
+    `Отвечать: \`mdmini answer <файл> --id <id>\`, текст на stdin. Если коммент`,
+    `просит правку — примени её через \`mdmini edit\`, потом закрой тред ответом.`,
+  ].join('\n');
 }
 
 /**
