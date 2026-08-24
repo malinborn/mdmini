@@ -407,7 +407,11 @@ pub fn set_status(doc: &Path, id: &str, status: Status) -> Result<(), String> {
 }
 
 /// Тред вместе с документом, к которому он относится.
-#[derive(Debug, Clone, serde::Serialize)]
+///
+/// `Deserialize` тоже нужен: `AiResponse` производит оба трейта (её
+/// подписывает CLI-клиент, который десериализует ответ обратно), и
+/// `threads: Option<Vec<Located>>` наследует это требование.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Located {
     pub doc: PathBuf,
     pub thread: Thread,

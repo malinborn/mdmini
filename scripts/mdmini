@@ -6,10 +6,12 @@ SOCK="/tmp/com_md_mini_app_si.sock"
 PENDING="/tmp/md-mini-pending-files"
 CMD_SOCK="/tmp/md_mini_cmd.sock"
 
-# `mdmini help` / `mdmini agent` are local and offline (no socket, no running
-# app required) — hand off straight to the binary's `ai` client without the
-# launch-wait logic below.
-if [ "$1" = "help" ] || [ "$1" = "agent" ]; then
+# `mdmini help` / `agent` / `question` / `answer` / `watch` are local and
+# offline (no socket, no running app required) — hand off straight to the
+# binary's `ai` client without the launch-wait logic below. Comments live in
+# files beside the document, so question/answer/watch don't depend on
+# whether md-mini is open.
+if [ "$1" = "help" ] || [ "$1" = "agent" ] || [ "$1" = "question" ] || [ "$1" = "answer" ] || [ "$1" = "watch" ]; then
   exec "$BIN" ai "$@"
 fi
 

@@ -132,6 +132,12 @@ pub struct AiResponse {
     /// (multi mode: both may be present together).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom: Option<String>,
+    /// Открытые треды комментариев, для `question` только. `None` для любого
+    /// другого ответа. Живёт в общем `AiResponse`, а не в отдельном типе, чтобы
+    /// CLI и MCP печатали одну и ту же форму и MCP переиспользовал
+    /// `tool_result_response`, как это уже сделано для `answer`/`answers`/`custom`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<Vec<crate::comments::Located>>,
 }
 
 impl AiResponse {
@@ -148,6 +154,7 @@ impl AiResponse {
             answer: None,
             answers: None,
             custom: None,
+            threads: None,
         }
     }
 
@@ -159,6 +166,7 @@ impl AiResponse {
             answer: None,
             answers: None,
             custom: None,
+            threads: None,
         }
     }
 }
@@ -680,9 +688,17 @@ enum CliVerb {
     /// arg. `mcp: true` (`--mcp`) prints the MCP-flavored behavioral snippet
     /// instead of the CLI-syntax one.
     Agent { mcp: bool },
+    /// Local, offline: prints open comment threads. Path optional — without
+    /// it, threads are collected from every document under cwd.
+    Question,
+    /// Local, offline: appends a reply to a comment thread. Text from stdin.
+    Answer { id: String },
+    /// Local, offline: streams one line per newly-open comment thread, for
+    /// Claude Code Monitor.
+    Watch,
 }
 
-const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent [--mcp]";
+const USAGE: &str = "usage: mdmini ai show <file> [--line N | --find TEXT] [--socket PATH]\n       mdmini ai edit <file> [--show] [--allow-empty] [--socket PATH]\n       mdmini ai ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]\n       mdmini ai help\n       mdmini ai agent [--mcp]\n       mdmini ai question [<file>]\n       mdmini ai answer <file> --id ID\n       mdmini ai watch [<dir>]";
 
 /// Parse the CLI args that follow the `ai` verb dispatch in `main.rs`, i.e.
 /// `["show", "<file>", "--line", "42"]` or `["edit", "<file>", "--show"]`.
@@ -718,6 +734,38 @@ fn parse_cli_args(args: &[String]) -> Result<CliArgs, String> {
         return Ok(CliArgs {
             path: String::new(),
             verb: CliVerb::Agent { mcp },
+            socket: None,
+        });
+    }
+    if verb == "question" || verb == "watch" {
+        // Путь (или каталог для `watch`) необязателен: пусто = cwd.
+        let path = iter.next().cloned().unwrap_or_default();
+        if let Some(extra) = iter.next() {
+            return Err(format!("{verb} takes at most one path: unexpected {extra}"));
+        }
+        return Ok(CliArgs {
+            path,
+            verb: if verb == "question" {
+                CliVerb::Question
+            } else {
+                CliVerb::Watch
+            },
+            socket: None,
+        });
+    }
+    if verb == "answer" {
+        let path = iter.next().ok_or_else(|| USAGE.to_string())?.clone();
+        let mut id: Option<String> = None;
+        while let Some(arg) = iter.next() {
+            match arg.as_str() {
+                "--id" => id = iter.next().cloned(),
+                other => return Err(format!("unknown flag for answer: {other}")),
+            }
+        }
+        let id = id.ok_or_else(|| "answer requires --id".to_string())?;
+        return Ok(CliArgs {
+            path,
+            verb: CliVerb::Answer { id },
             socket: None,
         });
     }
@@ -1123,6 +1171,54 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             println!("{}", if mcp { mcp_agent_text() } else { agent_text() });
             return 0;
         }
+        CliVerb::Question => {
+            let root = if parsed.path.is_empty() {
+                std::env::current_dir().unwrap_or_default()
+            } else {
+                PathBuf::from(crate::resolve_path(&parsed.path, None))
+            };
+            let mut resp = AiResponse::ok();
+            resp.threads = Some(crate::comments::collect_open(&root));
+            println!("{}", serde_json::to_string(&resp).unwrap());
+            return 0;
+        }
+        CliVerb::Watch => {
+            let root = if parsed.path.is_empty() {
+                std::env::current_dir().unwrap_or_default()
+            } else {
+                PathBuf::from(crate::resolve_path(&parsed.path, None))
+            };
+            return crate::watch::run(&root);
+        }
+        CliVerb::Answer { ref id } => {
+            let doc = PathBuf::from(crate::resolve_path(&parsed.path, None));
+            let mut text = String::new();
+            if std::io::stdin().read_to_string(&mut text).is_err() {
+                println!(
+                    "{}",
+                    serde_json::to_string(&AiResponse::error("failed to read stdin")).unwrap()
+                );
+                return 2;
+            }
+            if text.trim().is_empty() {
+                println!(
+                    "{}",
+                    serde_json::to_string(&AiResponse::error("refusing to post an empty answer"))
+                        .unwrap()
+                );
+                return 2;
+            }
+            return match crate::comments::append_reply(&doc, id, "agent", text.trim()) {
+                Ok(()) => {
+                    println!("{}", serde_json::to_string(&AiResponse::ok()).unwrap());
+                    0
+                }
+                Err(e) => {
+                    println!("{}", serde_json::to_string(&AiResponse::error(&e)).unwrap());
+                    1
+                }
+            };
+        }
         _ => {}
     }
 
@@ -1178,8 +1274,12 @@ pub fn run_ai_cli(args: Vec<String>) -> i32 {
             multi,
             free_text,
         },
-        CliVerb::Help | CliVerb::Agent { .. } => {
-            unreachable!("Help/Agent return early above, before this match")
+        CliVerb::Help
+        | CliVerb::Agent { .. }
+        | CliVerb::Question
+        | CliVerb::Answer { .. }
+        | CliVerb::Watch => {
+            unreachable!("local verbs return early above, before this match")
         }
     };
 
@@ -1418,6 +1518,7 @@ mod tests {
             answer: None,
             answers: None,
             custom: Some("Something else".to_string()),
+            threads: None,
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert_eq!(json, r#"{"ok":true,"custom":"Something else"}"#);
@@ -1439,6 +1540,7 @@ mod tests {
             answer: None,
             answers: Some(vec!["A".to_string()]),
             custom: Some("and also this".to_string()),
+            threads: None,
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert_eq!(json, r#"{"ok":true,"answers":["A"],"custom":"and also this"}"#);
@@ -1920,5 +2022,62 @@ mod tests {
         // Cancelling twice, or an id that was never registered, must not panic.
         pending.cancel(id);
         pending.cancel(9999);
+    }
+
+    #[test]
+    fn parses_question_with_optional_path() {
+        let args = vec!["question".to_string(), "/repo/spec.md".to_string()];
+        let parsed = parse_cli_args(&args).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Question);
+        assert_eq!(parsed.path, "/repo/spec.md");
+    }
+
+    #[test]
+    fn parses_question_without_path() {
+        let args = vec!["question".to_string()];
+        let parsed = parse_cli_args(&args).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Question);
+        assert_eq!(parsed.path, "");
+    }
+
+    #[test]
+    fn parses_watch_with_optional_dir() {
+        let args = vec!["watch".to_string(), "/repo".to_string()];
+        let parsed = parse_cli_args(&args).unwrap();
+        assert_eq!(parsed.verb, CliVerb::Watch);
+        assert_eq!(parsed.path, "/repo");
+    }
+
+    #[test]
+    fn question_rejects_a_second_positional_argument() {
+        let args = vec![
+            "question".to_string(),
+            "/repo/spec.md".to_string(),
+            "extra".to_string(),
+        ];
+        assert!(parse_cli_args(&args).is_err());
+    }
+
+    #[test]
+    fn parses_answer_with_id() {
+        let args = vec![
+            "answer".to_string(),
+            "/repo/spec.md".to_string(),
+            "--id".to_string(),
+            "c-7f3a2c".to_string(),
+        ];
+        let parsed = parse_cli_args(&args).unwrap();
+        assert_eq!(
+            parsed.verb,
+            CliVerb::Answer {
+                id: "c-7f3a2c".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn answer_without_id_is_a_usage_error() {
+        let args = vec!["answer".to_string(), "/repo/spec.md".to_string()];
+        assert!(parse_cli_args(&args).is_err());
     }
 }

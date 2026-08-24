@@ -683,6 +683,7 @@ mod tests {
             answer: Some("Yes".to_string()),
             answers: None,
             custom: None,
+            threads: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -717,6 +718,7 @@ mod tests {
             answer: None,
             answers: Some(vec!["A".to_string(), "C".to_string()]),
             custom: None,
+            threads: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -747,6 +749,7 @@ mod tests {
             answer: None,
             answers: None,
             custom: Some("Something else".to_string()),
+            threads: None,
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
