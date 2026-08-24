@@ -31,6 +31,7 @@ const SLIDE_HEADINGS = [
   'Your agent can point.',
   'Your agent can edit.',
   'Your agent can ask.',
+  'You can ask your agent.',
   'It can be used any way.',
   // Matched against raw served HTML (no entity decoding) — the source markup
   // spells the apostrophe as the numeric/named entity, not U+2019 directly.
@@ -151,9 +152,76 @@ async function checkAskDemo(page: Page): Promise<void> {
   report('the answer edits the document', docAfter !== docBefore, 'document text unchanged');
 }
 
+/**
+ * Slide 4 tells a round trip: a question is asked in a comment card and the
+ * agent's answer comes back into the same thread. Asserting on the *end* of
+ * that sequence is what makes this check meaningful — a card that appears but
+ * never gains an answer would still satisfy a check for "a card exists".
+ *
+ * The wait is generous because the sequence is long by design (arm the watch,
+ * select, type the question, get woken, answer) and three other demos are
+ * animating concurrently by the time this runs.
+ */
+async function checkCommentRoundTrip(page: Page): Promise<void> {
+  console.log('\nCheck 9 — slide 4 (comment) completes a question → answer round trip');
+  await gotoSlide(page, 3);
+
+  const demo = '.demo[data-demo="comment"]';
+  try {
+    await page.waitForSelector(`${demo} .cm-editor`, { timeout: 5000 });
+  } catch {
+    report('.cm-editor mounted in comment demo', false, 'not found within 5s');
+    return;
+  }
+  report('.cm-editor mounted in comment demo', true);
+
+  // The terminal is the delivery half of the story: without the Monitor line
+  // the card would look like it answered itself.
+  try {
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('.cmt-term-row--tool .cmt-term-text')).some((el) =>
+          (el.textContent ?? '').includes('Monitor(')
+        ),
+      undefined,
+      { timeout: 20000 }
+    );
+    report('terminal shows the Monitor call that arms the watch', true);
+  } catch {
+    report('terminal shows the Monitor call that arms the watch', false, 'not found within 20s');
+  }
+
+  try {
+    await page.waitForSelector(`${demo} .cm-ai-comment`, { timeout: 25000 });
+    report('a real comment card appears', true);
+  } catch {
+    report('a real comment card appears', false, 'no .cm-ai-comment within 25s');
+    return;
+  }
+
+  // The anchor mark is what ties a card to the words it is about — the whole
+  // point of anchoring, and easy to lose silently.
+  const anchors = await page.locator(`${demo} .cm-ai-comment-anchor`).count();
+  report('the commented fragment is marked in the text', anchors > 0, `count ${anchors}`);
+
+  try {
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('.demo[data-demo="comment"] .cm-ai-comment-head')).some(
+          (el) => (el.textContent ?? '').includes('answered')
+        ),
+      undefined,
+      { timeout: 30000 }
+    );
+    report("the agent's answer lands in the thread", true);
+  } catch {
+    report("the agent's answer lands in the thread", false, 'no answered thread within 30s');
+  }
+}
+
 async function checkShowcaseRibbon(page: Page): Promise<void> {
-  console.log('\nCheck 2 & 5 — slide 5 (showcase) ribbon: real decorations, scroll, mermaid');
-  await gotoSlide(page, 4);
+  console.log('\nCheck 2 & 5 — slide 6 (showcase) ribbon: real decorations, scroll, mermaid');
+  await gotoSlide(page, 5);
 
   const editorSelector = '.demo[data-demo="showcase"] .cm-editor';
   try {
@@ -240,6 +308,7 @@ async function main(): Promise<void> {
     await checkConsoleAndPageErrors(page);
     await checkEditDemo(page);
     await checkAskDemo(page);
+    await checkCommentRoundTrip(page);
     await checkShowcaseRibbon(page);
 
     console.log('\nCheck 6 — no horizontal page scroll');

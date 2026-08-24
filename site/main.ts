@@ -22,6 +22,7 @@ import './styles/demo-themes.css';
 import './styles/demo-point.css';
 import './styles/demo-edit.css';
 import './styles/demo-ask.css';
+import './styles/demo-comment.css';
 import './styles/demo-anyway.css';
 import './styles/demo-showcase.css';
 
@@ -170,7 +171,7 @@ interface DemoModule {
   mount: (container: HTMLElement) => void;
 }
 
-type DemoName = 'point' | 'edit' | 'ask' | 'anyway' | 'showcase';
+type DemoName = 'point' | 'edit' | 'ask' | 'comment' | 'anyway' | 'showcase';
 
 async function loadDemo(name: DemoName): Promise<DemoModule> {
   switch (name) {
@@ -180,6 +181,8 @@ async function loadDemo(name: DemoName): Promise<DemoModule> {
       return import('./demos/edit');
     case 'ask':
       return import('./demos/ask');
+    case 'comment':
+      return import('./demos/comment');
     case 'anyway':
       return import('./demos/anyway');
     case 'showcase':
@@ -192,6 +195,7 @@ function isDemoName(value: string | undefined): value is DemoName {
     value === 'point' ||
     value === 'edit' ||
     value === 'ask' ||
+    value === 'comment' ||
     value === 'anyway' ||
     value === 'showcase'
   );
