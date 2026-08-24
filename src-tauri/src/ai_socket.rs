@@ -1172,25 +1172,28 @@ pub(crate) const INSTRUCTION_FILE_LOCATIONS: &str = "\
 /// every turn, so an agent that supports skills should be asked to fold the
 /// block into one and keep only a pointer in the always-loaded file. Reused
 /// verbatim by `docs/ai-interface.md` — keep both in sync by hand.
-pub(crate) const SKILL_TIP: &str = r#"## Rather not carry this in context on every turn?
+pub(crate) const SKILL_TIP: &str = r#"## Making this a skill instead of a permanent block
 
-An instruction file is loaded on every single turn — this block included. If your agent supports skills, hand it the block and ask for a skill instead:
+An instruction file is loaded on every single turn — this block included. If your agent supports skills, hand it the block and ask for one:
 
 > Turn these md-mini instructions into a skill called `mdmini`, and leave only a one-line pointer to it in my CLAUDE.md.
 
-A skill (`~/.claude/skills/mdmini/SKILL.md` for Claude Code) is read only when it's relevant, so the always-loaded file keeps just the pointer:
+The skill (`~/.claude/skills/mdmini/SKILL.md` for Claude Code) is read only when it's relevant, so the always-loaded file keeps just the pointer:
 
     - **mdmini** — for specs, docs, comment threads, or anything a human has to read and decide on, use the `mdmini` skill.
 
-One part does not belong in the skill: the comment-watching setup (arming `mdmini watch` as a Monitor, and the Stop hook that runs `mdmini question`). That has to happen at the *start* of a session, before anything would remind the agent md-mini exists — keep it in the always-loaded file, or in your harness's hook config.
-
-No skill support? Paste the block itself, as above."#;
+One part does not belong in the skill: the comment-watching setup (arming `mdmini watch` as a Monitor, and the Stop hook that runs `mdmini question`). That has to happen at the *start* of a session, before anything would remind the agent md-mini exists — keep it in the always-loaded file, or in your harness's hook config."#;
 
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
 fn agent_text() -> String {
     format!(
-        "Paste the block below into your AI agent's instruction file. Common locations:\n\n\
+        "Two ways to give your agent these instructions — both work:\n\n\
+        \x20 1. Paste the block below into its instruction file.\n\
+        \x20 2. Hand the block to the agent and ask it to make a skill out of it,\n\
+        \x20    leaving a one-line pointer in the instruction file (see the note\n\
+        \x20    after the block).\n\n\
+        Instruction file locations:\n\n\
         {}\n\n\
         --- copy from here ---\n\
         {}\n\
@@ -1231,7 +1234,13 @@ pub(crate) const MCP_AGENT_SNIPPET: &str = r#"## md-mini via MCP — how to use 
 /// [--mcp]`. Local and offline.
 fn mcp_agent_text() -> String {
     format!(
-        "Paste the block below into your AI agent's instruction file if md-mini is connected via MCP (mdmini mcp). Common locations:\n\n\
+        "For an agent connected via MCP (mdmini mcp). Two ways to give it this\n\
+        guidance — both work:\n\n\
+        \x20 1. Paste the block below into its instruction file.\n\
+        \x20 2. Hand the block to the agent and ask it to make a skill out of it,\n\
+        \x20    leaving a one-line pointer in the instruction file (see the note\n\
+        \x20    after the block).\n\n\
+        Instruction file locations:\n\n\
         {}\n\n\
         --- copy from here ---\n\
         {}\n\
@@ -2037,7 +2046,8 @@ mod tests {
     fn both_agent_texts_offer_the_skill_alternative() {
         for text in [agent_text(), mcp_agent_text()] {
             assert!(text.contains("--- copy to here ---"), "the paste block needs an end marker now that advice follows it");
-            assert!(text.contains("ask for a skill instead"));
+            assert!(text.contains("Two ways to give"), "both paths should be stated up front");
+            assert!(text.contains("Making this a skill"));
             assert!(text.contains("~/.claude/skills/mdmini/SKILL.md"));
         }
     }

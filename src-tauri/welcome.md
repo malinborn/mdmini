@@ -1,77 +1,53 @@
-# Welcome to md-mini 1.0 — your editor now speaks AI
+# Welcome to md-mini — your editor speaks AI
 
-md-mini can now be driven by AI agents (Claude Code and others): they can point at places in your open documents, edit them with visible highlights, and ask you questions with buttons right in the document.
+Your agent can jump you to a spot in the document you already have open, push an edit into the live buffer with the change highlighted, and ask you a question with real buttons in the text. It runs the other way too: select a fragment, press **⇧⌘M**, and your agent answers in the thread.
 
-And it runs both ways: **you can comment on a fragment and your agent answers in the thread** — in the session it is already working in, with all of its context. Select some text, press **⇧⌘M**, ask.
+- [Teach your AI to use md-mini](#teach-your-ai-to-use-md-mini) — do this first, nothing works without it
+- [What your AI can do](#what-your-ai-can-do)
+- [Commenting on the text](#commenting-on-the-text)
+- [Good to know](#good-to-know)
 
-## Where this lives
+Close this window whenever you like — all of it lives permanently in the **AI** menu, starting with **Getting Started**, a fuller version of this page.
 
-Close this window whenever you like — all of it is permanently in the **AI** menu, in the menu bar:
+## Teach your AI to use md-mini
 
-```
-AI
-├── Getting Started               ← the short version of this document
-├── Connect AI via CLI            ← snippet to paste into CLAUDE.md / AGENTS.md
-├── Connect AI via MCP            ← one command for Claude Code
-├── Teach your AI md-mini         ← how your agent should use it well
-├── Comment on Selection          ← ⇧⌘M — ask your agent about a fragment
-├── Connect Agent to Doc Questions ← copies the prompt that starts it watching
-└── AI Playbook                   ← what to actually do with it
-```
+No agent figures md-mini out on its own. Installing it changes nothing until you hand your agent a block of instructions — and there are two ways to do that, both fine:
 
-## Hook it up — option 1: CLI (zero config)
+1. **Paste the block into its instruction file** — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules`, `.github/copilot-instructions.md`. Simplest, and always in effect.
+2. **Make a skill of it, and point at the skill from that file.** Hand the block to your agent and ask for exactly that; the instruction file then carries one line instead of the whole block, and the instructions load only when they're relevant.
 
-Run `mdmini agent` and paste the printed block into your agent's instruction file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules`, `copilot-instructions.md`). Agents with shell access can then use `mdmini show` / `edit` / `ask` directly.
+Where to get the block — the **AI** menu in the menu bar:
 
-## Hook it up — option 2: MCP
+- **Connect AI via CLI** — for any agent with a shell. This is the block itself.
+- **Connect AI via MCP** — one command for Claude Code, if you'd rather it call md-mini as MCP tools than as a shell command.
+- **Teach your AI md-mini** — the companion block for the MCP route: the tools describe themselves, but this is what tells your agent *when* to use them.
 
-```bash
-claude mcp add --scope user mdmini -- mdmini mcp
-```
+Both blocks end with the exact prompt to hand over for the skill route.
 
-For other MCP clients, add this to your `mcpServers` config:
+## What your AI can do
 
-```json
-{
-  "mcpServers": {
-    "mdmini": {
-      "command": "mdmini",
-      "args": ["mcp"]
-    }
-  }
-}
-```
+| | |
+|---|---|
+| **show** | Jumps you to a line or a piece of text, with a brief pulse highlight. |
+| **edit** | Rewrites the live buffer — the changed span stays highlighted until you press **Esc**. |
+| **ask** | Puts buttons in the document: single choice, checkboxes, or a free-text field. Blocks until you answer. |
+| **question** | Reads the comments you left, so it can answer them. |
+| **answer** | Replies in a comment thread and marks it answered. |
 
-The tools are self-describing, so no instruction-file snippet is required — but behavior guidance still helps. Run `mdmini agent --mcp` and paste its output into your agent's instructions for noticeably better AI behavior.
+## Commenting on the text
 
-## Either way: make it a skill, not a permanent tenant
+Select a fragment, press **⇧⌘M**, type your question. The fragment gets marked, and its card tells you which words it's about.
 
-An instruction file is loaded on every turn. If your agent supports skills, hand it the printed block and ask for a skill called `mdmini` plus a one-line pointer in `CLAUDE.md` — "for specs, docs, comment threads, or anything a human has to read and decide on, use the `mdmini` skill". Same behavior, none of the context cost when md-mini isn't involved. Keep the comment-watching setup out of the skill, though: it has to be armed at the start of a session, so it belongs in the always-loaded file.
+Your document is never modified — threads live in a plain-markdown file beside it, `.mdmini_comments_<name>.md`. Commit it if you want review threads to travel with the branch, or ignore it. md-mini doesn't decide for you.
 
-## What your AI can do now
-
-| Command | What it does |
-|---------|--------------|
-| `show` | Jumps you to a line or a piece of text, with a brief pulse highlight. |
-| `edit` | Rewrites the live buffer — the changed span shimmers until you press Esc. |
-| `ask` | Puts buttons in the document: single choice, `--multi` checkboxes, or `--free-text` for your own answer. Blocks until you respond. |
-| `question` | Reads the comments you left, so it can answer them. |
-| `answer` | Replies in a comment thread and marks it answered. |
-
-## Comments: asking your AI about the text
-
-Select a fragment, press **⇧⌘M**, type your question. The fragment gets marked, and the card tells you which words it is about — put the caret in a commented fragment and its card lights up, click into a card and its fragment lights up back.
-
-Your document is never modified. Threads live in a plain-markdown file beside it, `.mdmini_comments_<name>.md` — commit it if you want review threads to travel with the branch, or ignore it. md-mini does not decide for you.
-
-**This works best with Claude Code**, which can be woken the moment you comment: **Connect Agent to Doc Questions** copies the prompt that arms it, once per session. Any other agent can still be handed one comment at a time with **send to agent** on the card — that path needs no setup and no MCP, because the comment file is readable markdown.
+For your agent to notice a comment, it has to be watching: **Connect Agent to Doc Questions** copies the prompt that arms it, once per session. Any other agent can be handed one comment at a time with **send to agent** on the card — no setup, no MCP.
 
 ## Good to know
 
-- **Esc** hides the AI-edit highlight — a hint appears the first time.
-- **Cmd+Z** undoes an AI edit, like any other change.
-- Questions time out after 5 minutes by default, and can be dismissed early with ✕.
-- Everything works per-window — multiple questions can coexist across your open documents.
+- **Esc** hides an AI-edit highlight; **Cmd+Z** undoes an AI edit like any change of your own.
+- Questions time out after five minutes by default, and can be dismissed early with ✕.
+- Everything is per-window, so several documents can each have their own question waiting.
+- **AI Playbook** in the AI menu is the interesting part — what to do with all this, not how to switch it on.
 
 ---
 

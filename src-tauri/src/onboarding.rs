@@ -244,7 +244,10 @@ pub(crate) fn connect_cli_doc() -> String {
     format!(
         "# Connect AI via CLI\n\n\
 Give an AI agent with shell access — Claude Code and similar — direct access to your open documents: it can jump you to a spot, push edits into the live buffer, and ask you questions with buttons in the document itself.\n\n\
-Paste the block below into your agent's instruction file. Common locations:\n\n\
+It won't work that out on its own — it needs the instructions below. Two ways to give them to it, both fine:\n\n\
+1. **Paste the block into its instruction file.** Simplest, and always in effect.\n\
+2. **Make a skill of it and point at the skill from that file.** Hand the block to your agent and ask; see the note after it.\n\n\
+Instruction file locations:\n\n\
 {}\n\n\
 ---\n\n\
 {}\n\n\
@@ -279,7 +282,11 @@ That's the whole connection — the tools are self-describing. For a short note 
 pub(crate) fn teach_doc() -> String {
     format!(
         "# Teach Your AI md-mini\n\n\
-Connecting md-mini over MCP is enough for an agent to call show/edit/ask — but a short usage note in its instructions makes it noticeably better at knowing *when* to reach for them. Paste the block below into your agent's instruction file. Common locations:\n\n\
+Connecting md-mini over MCP is enough for an agent to *call* show/edit/ask — but knowing *when* to reach for them comes from the note below, and without it the tools mostly go unused.\n\n\
+Two ways to give it that note, both fine:\n\n\
+1. **Paste the block into its instruction file.** Simplest, and always in effect.\n\
+2. **Make a skill of it and point at the skill from that file.** Hand the block to your agent and ask; see the note after it.\n\n\
+Instruction file locations:\n\n\
 {}\n\n\
 ---\n\n\
 {}\n\n\
@@ -352,7 +359,8 @@ mod tests {
     #[test]
     fn cli_and_teach_docs_offer_the_skill_alternative() {
         for doc in [connect_cli_doc(), teach_doc()] {
-            assert!(doc.contains("ask for a skill instead"));
+            assert!(doc.contains("Two ways to give"), "both paths should be stated up front");
+            assert!(doc.contains("Making this a skill"));
             assert!(doc.contains("~/.claude/skills/mdmini/SKILL.md"));
         }
     }
@@ -402,9 +410,22 @@ mod tests {
     #[test]
     fn welcome_doc_also_points_at_the_ai_menu() {
         // First-run users only ever see the welcome window, and they are the
-        // ones who set this up once and forget where it was.
-        assert!(WELCOME_MD.contains("## Where this lives"));
+        // ones who set this up once and forget where it was. The welcome doc
+        // stays deliberately short, so it names the menu and the items to click
+        // rather than reproducing the whole menu map.
+        assert!(WELCOME_MD.contains("**AI** menu"));
         assert!(WELCOME_MD.contains("Getting Started"));
+        assert!(WELCOME_MD.contains("Connect AI via CLI"));
+        assert!(WELCOME_MD.contains("Connect AI via MCP"));
+    }
+
+    #[test]
+    fn welcome_doc_leads_with_the_two_ways_to_instruct_an_agent() {
+        // The one thing a first-run user must take away: md-mini does nothing
+        // for an agent that was never given the instructions.
+        assert!(WELCOME_MD.contains("No agent figures md-mini out on its own"));
+        assert!(WELCOME_MD.contains("Paste the block into its instruction file"));
+        assert!(WELCOME_MD.contains("Make a skill of it"));
     }
 
     // --- Startup nudge ------------------------------------------------------
