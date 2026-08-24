@@ -861,7 +861,24 @@ git commit -m "feat(comments): append threads and replies, flip status, atomic w
 Run: `cargo test --manifest-path src-tauri/Cargo.toml ai_socket::`
 Expected: FAIL, `no variant named Question`.
 
-- [ ] **Step 3: Добавить варианты и парсинг**
+- [ ] **Step 3: Добавить поле threads в AiResponse**
+
+В `struct AiResponse` (`ai_socket.rs:109-133`), последним полем, следуя стилю существующих опциональных полей:
+
+```rust
+    /// Открытые треды комментариев, для `question` только. `None` для любого
+    /// другого ответа. Живёт в общем `AiResponse`, а не в отдельном типе, чтобы
+    /// CLI и MCP печатали одну и ту же форму и MCP переиспользовал
+    /// `tool_result_response`, как это уже сделано для `answer`/`answers`/`custom`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<Vec<crate::comments::Located>>,
+```
+
+Все места, где `AiResponse` конструируется литералом (а не через `ok()`/`error()`), придётся дополнить `threads: None`. Найти их: `grep -n "AiResponse {" src-tauri/src/ai_socket.rs src-tauri/src/mcp_server.rs`. Компилятор укажет остальные.
+
+`Located` должен быть `Deserialize` тоже, а не только `Serialize`: `AiResponse` производит оба трейта, и CLI-клиент десериализует ответ. Добавить в `comments.rs`: `#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]` на `Located`.
+
+- [ ] **Step 4: Добавить варианты и парсинг**
 
 В `enum CliVerb` (после `Agent { mcp: bool },`):
 
@@ -934,8 +951,9 @@ Expected: FAIL, non-exhaustive match в `run_ai_cli` (`Question`/`Answer`/`Watch
             } else {
                 PathBuf::from(crate::resolve_path(&parsed.path, None))
             };
-            let threads = crate::comments::collect_open(&root);
-            println!("{}", serde_json::to_string(&threads).unwrap());
+            let mut resp = AiResponse::ok();
+            resp.threads = Some(crate::comments::collect_open(&root));
+            println!("{}", serde_json::to_string(&resp).unwrap());
             return 0;
         }
         CliVerb::Watch => {
@@ -1407,38 +1425,46 @@ Expected: FAIL — тулов нет в списке.
         }),
 ```
 
-В диспетчере `tools/call` добавить ветки, вызывающие `comments` напрямую — **без сокета и без launch-if-not-running**, в отличие от `show`/`edit`/`ask`:
+В `handle_tools_call` (`mcp_server.rs:241`) добавить две ветки **перед** блоком `let request = match name { ... }`, потому что эти два тула не строят `AiRequest` и не ходят в сокет вообще — в отличие от `show`/`edit`/`ask` с их `send_request` и launch-if-not-running:
 
 ```rust
-        "question" => {
-            let root = arguments
-                .get("path")
-                .and_then(|v| v.as_str())
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-            let threads = crate::comments::collect_open(&root);
-            let text = serde_json::to_string(&threads).unwrap_or_else(|_| "[]".to_string());
-            tool_result(&text, false)
-        }
-        "answer" => {
-            let (Some(path), Some(id), Some(text)) = (
-                arguments.get("path").and_then(|v| v.as_str()),
-                arguments.get("id").and_then(|v| v.as_str()),
-                arguments.get("text").and_then(|v| v.as_str()),
-            ) else {
-                return invalid_params(id_value, "answer requires path, id and text");
-            };
-            match crate::comments::append_reply(std::path::Path::new(path), id, "agent", text) {
-                Ok(()) => tool_result("{\"ok\":true}", false),
-                Err(e) => tool_result(
-                    &serde_json::to_string(&crate::ai_socket::AiResponse::error(&e)).unwrap(),
-                    true,
-                ),
-            }
-        }
+    // `question` и `answer` работают с файлами комментариев напрямую: источник
+    // истины — файл рядом с документом, поэтому ни сокет, ни запущенное
+    // приложение им не нужны. Возвращаемся раньше, чем начнётся сборка
+    // AiRequest и round-trip через send_request.
+    if name == "question" {
+        let root = arguments
+            .get("path")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let mut resp = AiResponse::ok();
+        resp.threads = Some(crate::comments::collect_open(&root));
+        return tool_result_response(id, &resp, false);
+    }
+    if name == "answer" {
+        let (Some(path), Some(thread_id), Some(text)) = (
+            arguments.get("path").and_then(Value::as_str),
+            arguments.get("id").and_then(Value::as_str),
+            arguments.get("text").and_then(Value::as_str),
+        ) else {
+            return error_response(id, -32602, "answer requires path, id and text");
+        };
+        return match crate::comments::append_reply(
+            std::path::Path::new(path),
+            thread_id,
+            "agent",
+            text,
+        ) {
+            Ok(()) => tool_result_response(id, &AiResponse::ok(), false),
+            Err(e) => tool_result_response(id, &AiResponse::error(e), true),
+        };
+    }
 ```
 
-Имена хелперов `tool_result` и `invalid_params` заменить на те, что реально существуют в файле — взять из ветки `show`.
+Использованы настоящие хелперы этого файла: `tool_result_response(id, &AiResponse, is_error)` (`:434`) и `error_response(id, -32602, msg)` (`:451`). Обрати внимание на затенение имён: параметр функции называется `id` (JSON-RPC id), поэтому id треда назван `thread_id` — иначе получится тихая подстановка не того значения.
+
+Правило `isError` соблюдено: отказ на уровне тула — это `isError: true` внутри нормального JSON-RPC результата, а протокольной ошибкой (`-32602`) остаётся только неверный сам вызов.
 
 - [ ] **Step 5: Прогнать — проходит**
 
