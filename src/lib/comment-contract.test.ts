@@ -47,7 +47,10 @@ describe('comment file format — cross-language contract', () => {
     expect(first.replies).toHaveLength(2);
     expect(first.replies[0].author).toBe('Вы');
     expect(first.replies[1].author).toBe('agent');
-    expect(first.replies[1].at).toBe('2026-08-24 14:05');
+    // The zone marker is part of the contract: the file is human-read and may
+    // be committed, so a bare local-looking time would be misread by anyone
+    // outside UTC.
+    expect(first.replies[1].at).toBe('2026-08-24 14:05:00 UTC');
   });
 
   it('preserves a multi-line reply body without swallowing the second line', () => {

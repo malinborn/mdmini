@@ -13,7 +13,7 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 | `mdmini answer <file> --id ID` | Append a reply to thread `ID` from stdin and mark it `answered`. Local and offline, same as `question`. Refuses empty stdin. |
 | `mdmini watch [<dir>]` | Long-running: watch a directory tree (default: the current directory) for comment files and print **one line per newly-open thread**. Meant to be handed to a Claude Code Monitor, which turns each line into an interruption in the live session. Local and offline. |
 | `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit`/`ask`/`question`/`answer` as MCP tools instead of CLI verbs — see "MCP server" below. |
-| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
+| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `question`, `answer`, `watch`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
 | `mdmini agent [--mcp]` | Print a ready-to-paste instruction block for an AI agent's instruction file (CLAUDE.md, AGENTS.md, etc.). Without `--mcp`: the CLI-syntax show/edit/ask reference — see below. With `--mcp`: a shorter behavioral snippet for agents already connected via `mdmini mcp`, where the tools are self-describing and what's missing is usage culture — see "MCP server" below. Local and offline either way. |
 
 Examples:
@@ -151,10 +151,10 @@ and humans all write to:
 <!-- mdmini:c id=c-7f3a2c status=open line=42 -->
 > We ship via Caddy on the host
 
-**Вы** · 2026-08-24 14:02
+**Вы** · 2026-08-24 14:02:00 UTC
 Почему не nginx? Разверни абзац.
 
-**agent** · 2026-08-24 14:05
+**agent** · 2026-08-24 14:05:00 UTC
 Nginx on this host was broken, so…
 ```
 
