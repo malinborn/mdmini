@@ -299,6 +299,21 @@ pub fn append_thread(
     author: &str,
     text: &str,
 ) -> Result<(), String> {
+    append_thread_at(doc, id, line, quote, author, text, &fmt_utc(now_epoch()))
+}
+
+/// Как [`append_thread`], но время реплики задаётся явно, а не берётся из
+/// часов. Нужен тесту формата: он сравнивает результат байт-в-байт с
+/// фикстурой, а `now_epoch()` внутри сделал бы это невозможным.
+pub fn append_thread_at(
+    doc: &Path,
+    id: &str,
+    line: usize,
+    quote: &str,
+    author: &str,
+    text: &str,
+    at: &str,
+) -> Result<(), String> {
     guard_not_sidecar(doc)?;
     let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
     let doc_name = doc
@@ -317,15 +332,7 @@ pub fn append_thread(
         e
     };
     out.push('\n');
-    out.push_str(&render_thread(
-        id,
-        Status::Open,
-        line,
-        quote,
-        author,
-        &fmt_utc(now_epoch()),
-        text,
-    ));
+    out.push_str(&render_thread(id, Status::Open, line, quote, author, at, text));
     write_atomic(&path, &out)
 }
 
@@ -341,6 +348,11 @@ fn marker_line_index(lines: &[&str], id: &str) -> Option<usize> {
 /// Вставка идёт перед следующим маркером треда (или в конец файла), поэтому
 /// остальной файл не переписывается — важно, раз его правят руками.
 pub fn append_reply(doc: &Path, id: &str, author: &str, text: &str) -> Result<(), String> {
+    append_reply_at(doc, id, author, text, &fmt_utc(now_epoch()))
+}
+
+/// Как [`append_reply`], но время реплики задаётся явно — см. [`append_thread_at`].
+pub fn append_reply_at(doc: &Path, id: &str, author: &str, text: &str, at: &str) -> Result<(), String> {
     let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
     let existing = std::fs::read_to_string(&path)
         .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
@@ -361,7 +373,7 @@ pub fn append_reply(doc: &Path, id: &str, author: &str, text: &str) -> Result<()
         &format!("status={}", Status::Answered.as_str()),
     );
 
-    let block = format!("\n**{author}** · {}\n{text}", fmt_utc(now_epoch()));
+    let block = format!("\n**{author}** · {at}\n{text}");
     let mut insert_at = end;
     while insert_at > start + 1 && out[insert_at - 1].trim().is_empty() {
         insert_at -= 1;
@@ -687,5 +699,51 @@ Nginx там был сломан.
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].thread.id, "c-open01");
         assert_eq!(found[0].doc, doc);
+    }
+
+    /// Межъязыковой контракт формата: этот тред должен сгенерировать ровно
+    /// `src/lib/__fixtures__/comments-contract.md`, байт в байт. Зеркальный
+    /// тест на стороне TypeScript (`comment-contract.test.ts`) разбирает тот
+    /// же файл. Одна фикстура на оба языка — правка формата в одном ломает
+    /// тест в другом, и это единственный сигнал, который у нас есть: без неё
+    /// расхождение форматов молча гасит рендер комментариев, не роняя ни один
+    /// из двух зелёных наборов тестов по отдельности.
+    #[test]
+    fn generates_the_shared_contract_fixture_byte_for_byte() {
+        const FIXTURE: &str =
+            include_str!("../../src/lib/__fixtures__/comments-contract.md");
+
+        let doc = temp_doc("spec.md");
+        append_thread_at(
+            &doc,
+            "c-aaaaaa",
+            12,
+            "We ship via Caddy on the host",
+            "Вы",
+            "Почему не nginx? Разверни абзац.",
+            "2026-08-24 14:02",
+        )
+        .unwrap();
+        append_thread_at(
+            &doc,
+            "c-bbbbbb",
+            27,
+            "первая строка цитаты\nвторая строка цитаты",
+            "Вы",
+            "Тут точно нужен отдельный раздел?",
+            "2026-08-24 15:10",
+        )
+        .unwrap();
+        append_reply_at(
+            &doc,
+            "c-aaaaaa",
+            "agent",
+            "Nginx на этом хосте был сломан.\nПоэтому переехали на Caddy.",
+            "2026-08-24 14:05",
+        )
+        .unwrap();
+
+        let generated = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
+        assert_eq!(generated, FIXTURE, "generated file must match the shared fixture byte-for-byte");
     }
 }
