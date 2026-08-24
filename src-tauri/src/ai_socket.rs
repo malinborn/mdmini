@@ -1598,12 +1598,9 @@ mod tests {
     fn ai_response_answers_and_custom_round_trip_together() {
         let resp = AiResponse {
             ok: true,
-            error: None,
-            changed_lines: None,
-            answer: None,
             answers: Some(vec!["A".to_string()]),
             custom: Some("and also this".to_string()),
-            threads: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert_eq!(json, r#"{"ok":true,"answers":["A"],"custom":"and also this"}"#);
