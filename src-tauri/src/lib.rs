@@ -1,4 +1,5 @@
 pub mod ai_socket;
+pub mod comments;
 mod commands;
 pub mod mcp_server;
 mod menu;
