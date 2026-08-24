@@ -12,6 +12,10 @@
 
 **Никаких новых зависимостей.** Генерация id — `DefaultHasher` из std. Форматирование времени — собственная функция на std (задача 1). `notify` уже есть.
 
+**Базовая линия clippy — 9 предсуществующих warning'ов**, измерено перед началом работы: 8 в `src/window.rs` (устаревшие cocoa-API и неиспользуемый импорт — родня той истории с `BOOL` на Intel) и один лишний `mut` в `src/lib.rs:414`. Поэтому гейтом **не может** быть `-D warnings`: он падает на коде, к этой фиче не относящемся. Требование такое: `cargo clippy --manifest-path src-tauri/Cargo.toml` не должен давать **ни одного нового** warning'а в файлах фичи. Чинить предсуществующие — вне скоупа, это отдельная задача.
+
+**Базовая линия git-гигиены.** В этом worktree работают несколько агентов над одним индексом, и `git add <путь>` с последующим **обычным** `git commit` коммитит весь индекс, а не только добавленное — так уже дважды чужие файлы уехали в чужой коммит. Коммитить только с явным pathspec: `git commit -- <пути>`. Команды коммита в задачах ниже написаны в короткой форме `git add … && git commit -m …` — читать их с этим правилом: добавить `-- <те же пути>` в `git commit`. Перед коммитом смотреть `git status --short`; незнакомые staged-файлы принадлежат другому агенту, их надо оставить в индексе, а pathspec не даст их забрать.
+
 ---
 
 ## Формат файла — контракт, на который опираются все задачи
@@ -299,7 +303,7 @@ Expected: PASS, шесть тестов.
 - [ ] **Step 11: Clippy и коммит**
 
 ```bash
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/comments.rs src-tauri/src/lib.rs
 git commit -m "feat(comments): sidecar path, thread status, UTC formatting and id generation"
 ```
@@ -551,7 +555,7 @@ Expected: PASS, десять тестов.
 - [ ] **Step 5: Clippy и коммит**
 
 ```bash
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/comments.rs
 git commit -m "feat(comments): parse the comment file into threads and replies"
 ```
@@ -798,7 +802,7 @@ Expected: PASS, пятнадцать тестов.
 - [ ] **Step 5: Clippy и коммит**
 
 ```bash
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/comments.rs
 git commit -m "feat(comments): append threads and replies, flip status, atomic writes"
 ```
@@ -1103,7 +1107,7 @@ fi
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/ai_socket.rs src-tauri/src/comments.rs scripts/mdmini
 git commit -m "feat(ai): question and answer as local offline CLI verbs"
 ```
@@ -1338,7 +1342,7 @@ Expected: одна строка вида `[mdmini] /tmp/watch-smoke/doc.md c-smo
 - [ ] **Step 6: Clippy и коммит**
 
 ```bash
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/watch.rs src-tauri/src/lib.rs
 git commit -m "feat(watch): stream one event per newly-open comment thread"
 ```
@@ -1482,7 +1486,7 @@ Expected: `['show', 'edit', 'ask', 'question', 'answer']`
 - [ ] **Step 7: Clippy и коммит**
 
 ```bash
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 git add src-tauri/src/mcp_server.rs
 git commit -m "feat(mcp): question and answer tools reading the comment files directly"
 ```
@@ -2443,7 +2447,7 @@ export const addAiComment = StateEffect.define<{
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 npm run check
 npx vitest run --dir src
 git add src-tauri/src/commands.rs src-tauri/src/lib.rs src-tauri/src/watcher.rs src/lib/tauri/commands.ts src/App.svelte
@@ -2589,7 +2593,7 @@ git commit -m "docs(ai): document comments, Monitor setup and the Stop hook back
 ```bash
 npx vitest run --dir src
 cargo test --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo clippy --manifest-path src-tauri/Cargo.toml
 npm run check
 npm run check:x86
 ```
