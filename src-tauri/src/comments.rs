@@ -1,14 +1,15 @@
-//! Слой комментариев: чтение и точечная правка `.mdmini_comments_<doc>.md`.
+//! Comment layer: reading and point-edits of `.mdmini_comments_<doc>.md`.
 //!
-//! Источник истины — файл, а не md-mini. Поэтому здесь нет ни стора, ни GC:
-//! модуль умеет только разобрать файл и внести в него минимальное изменение.
-//! Полной перезаписи нет сознательно — файл правят и агенты, и люди руками.
+//! The source of truth is the file, not md-mini. That's why there is no store
+//! and no GC here: this module only knows how to parse the file and make a
+//! minimal change to it. Full rewrite is deliberately absent — both agents
+//! and humans edit the file by hand.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-/// Статус треда.
+/// Status of a thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -36,32 +37,35 @@ impl Status {
     }
 }
 
-/// Путь файла комментариев для документа: тот же каталог, имя с префиксом.
+/// Path of the comment file for a document: same directory, prefixed name.
 pub fn sidecar_path(doc: &Path) -> Option<PathBuf> {
     let name = doc.file_name()?.to_str()?;
     Some(doc.with_file_name(format!(".mdmini_comments_{}", name)))
 }
 
-/// `true`, если путь сам является файлом комментариев. Такие файлы нельзя
-/// комментировать и нельзя считать документами — иначе получится рекурсия.
+/// `true` if the path is itself a comment file. Such files cannot be
+/// commented on and cannot be treated as documents — otherwise it recurses.
 pub fn is_sidecar(path: &Path) -> bool {
     path.file_name()
         .and_then(|n| n.to_str())
         .is_some_and(|n| n.starts_with(".mdmini_comments_"))
 }
 
-/// Отформатировать epoch-секунды как `YYYY-MM-DD HH:MM:SS UTC`.
+/// Format epoch seconds as `YYYY-MM-DD HH:MM:SS UTC`.
 ///
-/// Зона в строке обязательна. Файл комментариев человек читает глазами и может
-/// закоммитить, а без метки пользователь в UTC+3 видит в собственном файле
-/// время на три часа назад и не понимает почему. Локальное время вместо UTC не
-/// подходит: файл переезжает между машинами и часовыми поясами вместе с
-/// репозиторием, и тогда одна и та же переписка читалась бы по-разному.
+/// The zone in the string is mandatory. A human reads the comment file with
+/// their own eyes and may commit it, and without the marker a user in UTC+3
+/// sees a time three hours in the past in their own file and doesn't
+/// understand why. Local time instead of UTC doesn't work either: the file
+/// travels between machines and time zones together with the repository, so
+/// the same conversation would read differently depending on where it's
+/// opened.
 ///
-/// Своя реализация вместо крейта дат: в проекте нет ни `chrono`, ни `time`, а
-/// нужна ровно одна функция. Алгоритм — civil-from-days: сдвигаем эпоху на
-/// 1 марта 0000, чтобы високосный день оказался последним днём года и выпал
-/// из арифметики месяцев.
+/// A hand-rolled implementation instead of a date crate: the project has
+/// neither `chrono` nor `time`, and exactly one function is needed. The
+/// algorithm is civil-from-days: shift the epoch to March 1st, year 0 so the
+/// leap day ends up as the last day of the year and falls out of the month
+/// arithmetic.
 pub fn fmt_utc(epoch_secs: u64) -> String {
     let days = (epoch_secs / 86_400) as i64;
     let secs_of_day = epoch_secs % 86_400;
@@ -88,8 +92,8 @@ pub fn fmt_utc(epoch_secs: u64) -> String {
     )
 }
 
-/// Текущее время как epoch-секунды. Отдельная функция, чтобы тесты формата
-/// работали с фиксированными значениями, а не с часами.
+/// Current time as epoch seconds. A separate function so format tests can
+/// work with fixed values instead of the clock.
 pub fn now_epoch() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -97,9 +101,9 @@ pub fn now_epoch() -> u64 {
         .unwrap_or(0)
 }
 
-/// Короткий id треда: `c-` плюс шесть hex-символов. Не криптографический —
-/// нужен лишь стабильный человекочитаемый ключ внутри одного файла, поэтому
-/// `DefaultHasher` из std вместо новой зависимости.
+/// Short thread id: `c-` plus six hex characters. Not cryptographic —
+/// all that's needed is a stable, human-readable key within a single file,
+/// hence `DefaultHasher` from std instead of a new dependency.
 pub fn new_id(doc: &Path, seed: u64) -> String {
     let mut hasher = DefaultHasher::new();
     doc.hash(&mut hasher);
@@ -107,9 +111,10 @@ pub fn new_id(doc: &Path, seed: u64) -> String {
     format!("c-{:06x}", hasher.finish() & 0xff_ffff)
 }
 
-/// То же, но гарантированно не совпадает ни с одним занятым id: при коллизии
-/// подмешивает счётчик. Коллизия на шести hex-символах маловероятна, но файл
-/// живёт долго и правится руками — дешевле проверить, чем ловить дубль.
+/// Same as above, but guaranteed not to collide with any taken id: on
+/// collision it mixes in a counter. A collision on six hex characters is
+/// unlikely, but the file lives a long time and is edited by hand — checking
+/// is cheaper than chasing a duplicate.
 pub fn new_id_avoiding(doc: &Path, seed: u64, taken: &[String]) -> String {
     for bump in 0..1_000 {
         let candidate = new_id(doc, seed.wrapping_add(bump));
@@ -117,11 +122,11 @@ pub fn new_id_avoiding(doc: &Path, seed: u64, taken: &[String]) -> String {
             return candidate;
         }
     }
-    // Практически недостижимо; лучше вернуть заведомо валидный id, чем паниковать.
+    // Practically unreachable; better to return a definitely-valid id than to panic.
     new_id(doc, seed ^ now_epoch())
 }
 
-/// Одна реплика внутри треда.
+/// A single reply within a thread.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Reply {
     pub author: String,
@@ -129,13 +134,13 @@ pub struct Reply {
     pub text: String,
 }
 
-/// Один тред, привязанный к фрагменту документа.
+/// A single thread anchored to a fragment of the document.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Thread {
     pub id: String,
     pub status: Status,
-    /// Номер строки на момент последней записи — подсказка и fallback.
-    /// Привязка идёт поиском `quote`, а не по этому числу.
+    /// Line number as of the last write — a hint and a fallback.
+    /// Anchoring is done by searching for `quote`, not by this number.
     pub line: usize,
     pub quote: String,
     pub replies: Vec<Reply>,
@@ -143,7 +148,7 @@ pub struct Thread {
 
 const THREAD_MARKER: &str = "<!-- mdmini:c ";
 
-/// Разобрать атрибуты `k=v` из строки-маркера треда.
+/// Parse `k=v` attributes from a thread marker line.
 fn parse_marker(line: &str) -> Option<(String, Status, usize)> {
     let inner = line.trim().strip_prefix(THREAD_MARKER)?.strip_suffix("-->")?;
     let mut id = None;
@@ -155,13 +160,13 @@ fn parse_marker(line: &str) -> Option<(String, Status, usize)> {
             "id" => id = Some(value.to_string()),
             "status" => status = Status::parse(value),
             "line" => num = value.parse::<usize>().ok(),
-            _ => {} // неизвестные атрибуты игнорируются намеренно
+            _ => {} // unknown attributes are ignored intentionally
         }
     }
     Some((id?, status?, num.unwrap_or(1)))
 }
 
-/// Разобрать заголовок реплики `**author** · at`.
+/// Parse a reply header `**author** · at`.
 fn parse_reply_header(line: &str) -> Option<(String, String)> {
     let rest = line.strip_prefix("**")?;
     let (author, tail) = rest.split_once("**")?;
@@ -172,8 +177,8 @@ fn parse_reply_header(line: &str) -> Option<(String, String)> {
     Some((author.to_string(), at.to_string()))
 }
 
-/// Разобрать весь файл комментариев. Битые треды пропускаются, остальные
-/// возвращаются — файл никогда не теряется целиком из-за одной опечатки.
+/// Parse the whole comment file. Broken threads are skipped, the rest are
+/// returned — the file never gets lost entirely because of one typo.
 pub fn parse(text: &str) -> Vec<Thread> {
     let mut threads: Vec<Thread> = Vec::new();
     let mut current: Option<Thread> = None;
@@ -211,7 +216,7 @@ pub fn parse(text: &str) -> Vec<Thread> {
             continue;
         }
         let Some(thread) = current.as_mut() else {
-            continue; // преамбула файла до первого треда
+            continue; // file preamble before the first thread
         };
 
         if reply.is_none() {
@@ -262,15 +267,15 @@ pub fn parse(text: &str) -> Vec<Thread> {
     threads
 }
 
-/// Атомарная запись: сначала `.tmp`, затем `rename`. Файл правят двое —
-/// md-mini и агент, — поэтому частично записанного состояния быть не должно.
+/// Atomic write: `.tmp` first, then `rename`. Two parties edit the file —
+/// md-mini and the agent — so there must never be a partially-written state.
 fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, text).map_err(|e| format!("failed to write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| format!("failed to rename into {}: {e}", path.display()))
 }
 
-/// Прочитать треды документа. Отсутствующий файл — это пустой список, а не ошибка.
+/// Read the document's threads. A missing file is an empty list, not an error.
 pub fn load(doc: &Path) -> Result<Vec<Thread>, String> {
     let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
     match std::fs::read_to_string(&path) {
@@ -287,7 +292,7 @@ fn guard_not_sidecar(doc: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Отрендерить блок одного треда — единственное место, где формат собирается.
+/// Render a single thread block — the one place where the format is assembled.
 fn render_thread(id: &str, status: Status, line: usize, quote: &str, author: &str, at: &str, text: &str) -> String {
     let quoted: String = quote.lines().map(|l| format!("> {l}\n")).collect();
     format!(
@@ -296,7 +301,7 @@ fn render_thread(id: &str, status: Status, line: usize, quote: &str, author: &st
     )
 }
 
-/// Добавить новый тред в конец файла, создав файл с заголовком при необходимости.
+/// Append a new thread to the end of the file, creating it with a header if needed.
 pub fn append_thread(
     doc: &Path,
     id: &str,
@@ -308,9 +313,10 @@ pub fn append_thread(
     append_thread_at(doc, id, line, quote, author, text, &fmt_utc(now_epoch()))
 }
 
-/// Как [`append_thread`], но время реплики задаётся явно, а не берётся из
-/// часов. Нужен тесту формата: он сравнивает результат байт-в-байт с
-/// фикстурой, а `now_epoch()` внутри сделал бы это невозможным.
+/// Like [`append_thread`], but the reply's timestamp is given explicitly
+/// instead of read from the clock. Needed by the format test: it compares
+/// the result byte-for-byte against a fixture, and `now_epoch()` inside
+/// would make that impossible.
 pub fn append_thread_at(
     doc: &Path,
     id: &str,
@@ -342,22 +348,23 @@ pub fn append_thread_at(
     write_atomic(&path, &out)
 }
 
-/// Найти строку-маркер треда по id. Возвращает индекс строки.
+/// Find a thread's marker line by id. Returns the line index.
 fn marker_line_index(lines: &[&str], id: &str) -> Option<usize> {
     lines.iter().position(|line| {
         line.trim_start().starts_with(THREAD_MARKER) && line.contains(&format!("id={id} "))
     })
 }
 
-/// Дописать реплику в конец указанного треда и перевести его в `answered`.
+/// Append a reply to the end of the given thread and move it to `answered`.
 ///
-/// Вставка идёт перед следующим маркером треда (или в конец файла), поэтому
-/// остальной файл не переписывается — важно, раз его правят руками.
+/// The insertion happens right before the next thread marker (or at the end
+/// of the file), so the rest of the file is not rewritten — important since
+/// it's edited by hand.
 pub fn append_reply(doc: &Path, id: &str, author: &str, text: &str) -> Result<(), String> {
     append_reply_at(doc, id, author, text, &fmt_utc(now_epoch()))
 }
 
-/// Как [`append_reply`], но время реплики задаётся явно — см. [`append_thread_at`].
+/// Like [`append_reply`], but the timestamp is given explicitly — see [`append_thread_at`].
 pub fn append_reply_at(doc: &Path, id: &str, author: &str, text: &str, at: &str) -> Result<(), String> {
     let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
     let existing = std::fs::read_to_string(&path)
@@ -391,14 +398,14 @@ pub fn append_reply_at(doc: &Path, id: &str, author: &str, text: &str, at: &str)
     write_atomic(&path, &format!("{}\n", out.join("\n")))
 }
 
-/// Прочитать значение `status=` из строки-маркера; `open`, если атрибут потерян.
+/// Read the `status=` value from a marker line; `open` if the attribute is missing.
 fn status_in_marker(line: &str) -> &str {
     line.split_whitespace()
         .find_map(|pair| pair.strip_prefix("status="))
         .unwrap_or("open")
 }
 
-/// Поменять статус треда, переписав ровно одну строку-маркер.
+/// Change a thread's status by rewriting exactly one marker line.
 pub fn set_status(doc: &Path, id: &str, status: Status) -> Result<(), String> {
     let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
     let existing = std::fs::read_to_string(&path)
@@ -412,22 +419,22 @@ pub fn set_status(doc: &Path, id: &str, status: Status) -> Result<(), String> {
     write_atomic(&path, &format!("{}\n", out.join("\n")))
 }
 
-/// Тред вместе с документом, к которому он относится.
+/// A thread together with the document it belongs to.
 ///
-/// `Deserialize` тоже нужен: `AiResponse` производит оба трейта (её
-/// подписывает CLI-клиент, который десериализует ответ обратно), и
-/// `threads: Option<Vec<Located>>` наследует это требование.
+/// `Deserialize` is also needed: `AiResponse` derives both traits (it's the
+/// CLI client that drives this requirement, since it deserializes the
+/// response back), and `threads: Option<Vec<Located>>` inherits it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Located {
     pub doc: PathBuf,
     pub thread: Thread,
 }
 
-/// Обойти дерево каталогов и собрать все треды со статусом `open`.
+/// Walk the directory tree and collect all threads with status `open`.
 ///
-/// Скоуп задаётся деревом, а не набором открытых окон: `question` и `watch`
-/// работают при закрытом приложении, и cwd агента естественно ограничивает
-/// выборку без всякой отдельной логики скоупа.
+/// The scope is the tree, not the set of open windows: `question` and
+/// `watch` work with the app closed, and the agent's cwd naturally bounds
+/// the selection without any separate scoping logic.
 pub fn collect_open(root: &Path) -> Vec<Located> {
     let mut out = Vec::new();
     collect_open_into(root, &mut out, 0);
@@ -437,7 +444,7 @@ pub fn collect_open(root: &Path) -> Vec<Located> {
 
 fn collect_open_into(dir: &Path, out: &mut Vec<Located>, depth: usize) {
     if depth > 24 {
-        return; // защита от символических циклов
+        return; // guard against symlink cycles
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -447,8 +454,8 @@ fn collect_open_into(dir: &Path, out: &mut Vec<Located>, depth: usize) {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if path.is_dir() {
-            // Не ходим в каталоги, которые заведомо не содержат документов
-            // пользователя и стоят дорого.
+            // Don't descend into directories that are known not to contain
+            // user documents and are expensive to walk.
             if matches!(name.as_ref(), ".git" | "node_modules" | "target") {
                 continue;
             }
@@ -504,9 +511,9 @@ mod tests {
     fn epoch_formats_as_utc_datetime() {
         // 2026-08-24T14:02:03Z
         assert_eq!(fmt_utc(1787580123), "2026-08-24 14:02:03 UTC");
-        // Полночь эпохи — граничный случай алгоритма.
+        // Midnight of the epoch — a boundary case for the algorithm.
         assert_eq!(fmt_utc(0), "1970-01-01 00:00:00 UTC");
-        // Последняя секунда до високосного дня.
+        // The last second before a leap day.
         assert_eq!(fmt_utc(1709164799), "2024-02-28 23:59:59 UTC");
         assert_eq!(fmt_utc(1709164800), "2024-02-29 00:00:00 UTC");
     }
@@ -518,14 +525,14 @@ mod tests {
         assert!(a.starts_with("c-"), "got {a}");
         assert_eq!(a.len(), 8, "c- plus six hex chars");
         assert!(a.chars().skip(2).all(|c| c.is_ascii_hexdigit()));
-        assert_ne!(a, b, "разные seed дают разные id");
+        assert_ne!(a, b, "different seeds give different ids");
     }
 
     #[test]
     fn id_is_unique_against_existing_threads() {
         let taken = ["c-000000".to_string()];
-        // Подобранный seed, чей первый хеш совпал бы с занятым id, должен
-        // привести к другому результату, а не к коллизии.
+        // A chosen seed whose first hash would collide with a taken id should
+        // lead to a different result instead of a collision.
         let id = new_id_avoiding(Path::new("/repo/spec.md"), 1, &taken);
         assert!(!taken.contains(&id));
     }
@@ -590,7 +597,7 @@ Nginx там был сломан.
 Остаться.
 ";
         let threads = parse(text);
-        assert_eq!(threads.len(), 1, "тред без id отброшен");
+        assert_eq!(threads.len(), 1, "the thread without an id is dropped");
         assert_eq!(threads[0].id, "c-ok0001");
     }
 
@@ -654,8 +661,8 @@ Nginx там был сломан.
         let threads = load(&doc).unwrap();
         assert_eq!(threads[0].replies.len(), 2);
         assert_eq!(threads[0].replies[1].author, "agent");
-        assert_eq!(threads[0].status, Status::Answered, "ответ переводит в answered");
-        assert_eq!(threads[1].replies.len(), 1, "второй тред не тронут");
+        assert_eq!(threads[0].status, Status::Answered, "a reply moves it to answered");
+        assert_eq!(threads[1].replies.len(), 1, "the second thread is untouched");
         assert_eq!(threads[1].status, Status::Open);
     }
 
@@ -672,9 +679,9 @@ Nginx там был сломан.
         assert_eq!(
             before.lines().count(),
             after.lines().count(),
-            "изменилась ровно одна строка, структура файла та же"
+            "exactly one line changed, the file's structure is the same"
         );
-        assert!(after.contains("Вопрос?"), "текст реплики цел");
+        assert!(after.contains("Вопрос?"), "reply text is intact");
     }
 
     #[test]
@@ -684,7 +691,7 @@ Nginx там был сломан.
         let before = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
 
         let err = append_reply(&doc, "c-nope00", "agent", "мимо").unwrap_err();
-        assert!(err.contains("c-nope00"), "ошибка называет id: {err}");
+        assert!(err.contains("c-nope00"), "the error names the id: {err}");
         assert_eq!(
             std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap(),
             before
@@ -711,13 +718,13 @@ Nginx там был сломан.
         assert_eq!(found[0].doc, doc);
     }
 
-    /// Межъязыковой контракт формата: этот тред должен сгенерировать ровно
-    /// `src/lib/__fixtures__/comments-contract.md`, байт в байт. Зеркальный
-    /// тест на стороне TypeScript (`comment-contract.test.ts`) разбирает тот
-    /// же файл. Одна фикстура на оба языка — правка формата в одном ломает
-    /// тест в другом, и это единственный сигнал, который у нас есть: без неё
-    /// расхождение форматов молча гасит рендер комментариев, не роняя ни один
-    /// из двух зелёных наборов тестов по отдельности.
+    /// Cross-language contract for the format: this test must generate
+    /// exactly `src/lib/__fixtures__/comments-contract.md`, byte for byte.
+    /// The mirror test on the TypeScript side (`comment-contract.test.ts`)
+    /// parses the same file. One fixture for both languages — a format
+    /// change on one side breaks the test on the other, and that's the only
+    /// signal we have: without it a format divergence silently kills comment
+    /// rendering without failing either language's test suite on its own.
     #[test]
     fn generates_the_shared_contract_fixture_byte_for_byte() {
         const FIXTURE: &str =
