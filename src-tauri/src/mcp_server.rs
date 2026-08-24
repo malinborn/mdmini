@@ -229,6 +229,33 @@ fn tools_list() -> Value {
                 },
                 "required": ["path", "question", "options"]
             }
+        },
+        {
+            "name": "question",
+            "description": "List open comment threads the user left in documents. Reads .mdmini_comments_*.md files directly — works even when md-mini is not running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Document or directory to look under. Defaults to the current working directory."
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "answer",
+            "description": "Append a reply to a comment thread and mark it answered. If the document itself needs changing, use edit first, then answer to close the thread.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Absolute path of the commented document."},
+                    "id": {"type": "string", "description": "Thread id, e.g. c-7f3a2c."},
+                    "text": {"type": "string", "description": "The reply text."}
+                },
+                "required": ["path", "id", "text"]
+            }
         }
     ])
 }
@@ -241,6 +268,35 @@ fn tools_list() -> Value {
 fn handle_tools_call(id: Value, params: &Value, config: &McpConfig) -> String {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
     let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+
+    // `question` and `answer` work directly against the comment files: the
+    // source of truth is the file beside the document, so neither the socket
+    // nor a running app is needed. Return before `AiRequest` construction and
+    // the `send_request` round-trip (with its launch-if-not-running retry)
+    // even start.
+    if name == "question" {
+        let root = arguments
+            .get("path")
+            .and_then(Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let mut resp = AiResponse::ok();
+        resp.threads = Some(crate::comments::collect_open(&root));
+        return tool_result_response(id, &resp, false);
+    }
+    if name == "answer" {
+        let (Some(path), Some(thread_id), Some(text)) = (
+            arguments.get("path").and_then(Value::as_str),
+            arguments.get("id").and_then(Value::as_str),
+            arguments.get("text").and_then(Value::as_str),
+        ) else {
+            return error_response(id, -32602, "answer requires path, id and text");
+        };
+        return match crate::comments::append_reply(Path::new(path), thread_id, "agent", text) {
+            Ok(()) => tool_result_response(id, &AiResponse::ok(), false),
+            Err(e) => tool_result_response(id, &AiResponse::error(e), true),
+        };
+    }
 
     let request = match name {
         "show" => match build_show_request(&arguments) {
@@ -538,11 +594,13 @@ mod tests {
         let response = handle_message(request, &test_config()).unwrap();
         let v: Value = serde_json::from_str(&response).unwrap();
         let tools = v["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 3);
+        assert_eq!(tools.len(), 5);
         let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"show"));
         assert!(names.contains(&"edit"));
         assert!(names.contains(&"ask"));
+        assert!(names.contains(&"question"));
+        assert!(names.contains(&"answer"));
         for tool in tools {
             assert!(!tool["description"].as_str().unwrap().is_empty());
             assert_eq!(tool["inputSchema"]["type"], json!("object"));
@@ -678,12 +736,8 @@ mod tests {
     fn tools_call_ask_round_trips_request_shape_and_answer() {
         let canned = AiResponse {
             ok: true,
-            error: None,
-            changed_lines: None,
             answer: Some("Yes".to_string()),
-            answers: None,
-            custom: None,
-            threads: None,
+            ..Default::default()
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -713,12 +767,8 @@ mod tests {
     fn tools_call_ask_multi_true_round_trips_request_and_answers() {
         let canned = AiResponse {
             ok: true,
-            error: None,
-            changed_lines: None,
-            answer: None,
             answers: Some(vec!["A".to_string(), "C".to_string()]),
-            custom: None,
-            threads: None,
+            ..Default::default()
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -744,12 +794,8 @@ mod tests {
     fn tools_call_ask_free_text_true_round_trips_request_and_custom() {
         let canned = AiResponse {
             ok: true,
-            error: None,
-            changed_lines: None,
-            answer: None,
-            answers: None,
             custom: Some("Something else".to_string()),
-            threads: None,
+            ..Default::default()
         };
         let (path, rx) = spawn_fake_socket(canned);
         let config = McpConfig {
@@ -791,5 +837,119 @@ mod tests {
         let config = McpConfig::from_flags(&["--socket".to_string(), "/tmp/x.sock".to_string()]);
         assert_eq!(config.socket_path, PathBuf::from("/tmp/x.sock"));
         assert!(!config.allow_launch);
+    }
+
+    // `question`/`answer` read and write comment files directly — no socket
+    // involved — so these tests use `test_config()`'s socket-to-nowhere on
+    // purpose: if either tool ever fell through to `send_request`, these
+    // would fail with a connection error instead of the expected result.
+
+    static COMMENT_TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// A fresh temp directory containing one document, used as the `path`
+    /// argument for `question`/`answer` tests. Mirrors `comments::tests::temp_doc`,
+    /// which is private to that module.
+    fn temp_doc(name: &str) -> PathBuf {
+        let n = COMMENT_TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!(
+            "mdmini-mcp-comments-test-{}-{}",
+            std::process::id(),
+            n
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn question_on_a_directory_with_no_comment_files_is_ok_and_empty() {
+        let dir = temp_doc("spec.md").parent().unwrap().to_path_buf();
+        let request = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"question","arguments":{{"path":"{}"}}}}}}"#,
+            dir.display()
+        );
+        let response = handle_message(&request, &test_config()).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(false));
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        let resp: AiResponse = serde_json::from_str(text).unwrap();
+        assert!(resp.ok);
+        assert_eq!(resp.threads.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn question_finds_an_open_thread_under_the_given_path() {
+        let doc = temp_doc("spec.md");
+        crate::comments::append_thread(&doc, "c-aaaaaa", 3, "quote here", "Макс", "Вопрос?")
+            .unwrap();
+
+        let request = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"question","arguments":{{"path":"{}"}}}}}}"#,
+            doc.parent().unwrap().display()
+        );
+        let response = handle_message(&request, &test_config()).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        let resp: AiResponse = serde_json::from_str(text).unwrap();
+        let threads = resp.threads.unwrap();
+        assert_eq!(threads.len(), 1);
+        assert_eq!(threads[0].thread.id, "c-aaaaaa");
+        assert_eq!(threads[0].doc, doc);
+    }
+
+    #[test]
+    fn answer_missing_any_required_field_is_invalid_params() {
+        for arguments in [
+            json!({"id": "c-aaaaaa", "text": "hi"}),
+            json!({"path": "/tmp/a.md", "text": "hi"}),
+            json!({"path": "/tmp/a.md", "id": "c-aaaaaa"}),
+        ] {
+            let request = json!({
+                "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                "params": {"name": "answer", "arguments": arguments}
+            });
+            let response = handle_message(&request.to_string(), &test_config()).unwrap();
+            let v: Value = serde_json::from_str(&response).unwrap();
+            assert_eq!(v["error"]["code"], json!(-32602), "arguments: {arguments}");
+        }
+    }
+
+    #[test]
+    fn answer_against_an_unknown_thread_is_a_tool_error_not_a_protocol_error() {
+        let doc = temp_doc("spec.md");
+        crate::comments::append_thread(&doc, "c-aaaaaa", 1, "q", "Макс", "Вопрос?").unwrap();
+
+        let request = json!({
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {"name": "answer", "arguments": {"path": doc, "id": "c-nope00", "text": "hi"}}
+        });
+        let response = handle_message(&request.to_string(), &test_config()).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(true));
+        let text = v["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("c-nope00"), "got {text}");
+    }
+
+    #[test]
+    fn answer_appends_a_reply_and_marks_the_thread_answered() {
+        let doc = temp_doc("spec.md");
+        crate::comments::append_thread(&doc, "c-aaaaaa", 1, "q", "Макс", "Вопрос?").unwrap();
+
+        let request = json!({
+            "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+            "params": {"name": "answer", "arguments": {"path": doc, "id": "c-aaaaaa", "text": "Ответ."}}
+        });
+        let response = handle_message(&request.to_string(), &test_config()).unwrap();
+        let v: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(v["result"]["isError"], json!(false));
+
+        let threads = crate::comments::collect_open(doc.parent().unwrap());
+        // The thread is now `answered`, not `open`, so `collect_open` no
+        // longer returns it — asserting on the file directly instead.
+        assert!(threads.is_empty());
+        let text = std::fs::read_to_string(crate::comments::sidecar_path(&doc).unwrap()).unwrap();
+        assert!(text.contains("status=answered"));
+        assert!(text.contains("**agent** ·"));
+        assert!(text.contains("Ответ."));
     }
 }
