@@ -105,7 +105,15 @@ fn validate_ask(question: &str, options: &[String]) -> Result<(), String> {
 }
 
 /// Response written back on the same connection, one JSON object per line.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+///
+/// `Default` matters beyond convenience: this struct has grown fields twice
+/// already (`answers`/`custom` for multi-choice/free-text `ask`, now
+/// `threads` for `question`), and every field but `ok` is `Option`. A
+/// default-constructed response — `ok: false`, everything else absent — is
+/// the semantically right "nothing happened yet" value, and it lets test
+/// call sites build one with `..Default::default()` instead of naming every
+/// field, so the next field added here doesn't touch them at all.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AiResponse {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -935,6 +943,9 @@ USAGE
   mdmini show <file> [--line N | --find TEXT] [--socket PATH]
   mdmini edit <file> [--show] [--allow-empty] [--socket PATH] < new-content
   mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N | --at-find TEXT] [--timeout SECS] [--socket PATH]
+  mdmini question [<file>]
+  mdmini answer <file> --id ID < reply-text
+  mdmini watch [<dir>]
   mdmini mcp [--socket PATH]
   mdmini help
   mdmini agent [--mcp]
@@ -1017,6 +1028,42 @@ ASK — post a question with option buttons, block until the user answers
     mdmini ask notes.md --question "Which reviewers?" --option A --option B --option C --multi
     mdmini ask notes.md --question "Ship it?" --option Yes --option No --free-text
 
+COMMENTS — the reverse direction: the user comments, you answer
+  mdmini question [<file>]
+  mdmini answer <file> --id ID < reply-text
+  mdmini watch [<dir>]
+
+  The user selects a fragment in a document and writes a comment. Threads live
+  in `.mdmini_comments_<doc>.md` beside the document, as plain markdown — so
+  these three verbs are LOCAL and OFFLINE: no command socket, no running app.
+  (Contrast show/edit/ask, which drive a live window and need one.)
+
+    question [<file>]   List open threads: id, status, anchor line, quoted
+                        fragment, and every reply. With a path, that document
+                        only; without one, everything under the current
+                        directory. Prints {"ok":true,"threads":[...]}.
+    answer <file> --id ID
+                        Append your reply from stdin and mark the thread
+                        answered. Empty stdin is refused.
+    watch [<dir>]       Long-running. Prints one line per newly-open thread and
+                        never repeats one. Hand it to a Claude Code Monitor with
+                        persistent: true — each line then interrupts your live
+                        session, so you answer with full context instead of
+                        polling. Without persistent: true the monitor dies after
+                        five minutes, and silence looks exactly like "no
+                        comments".
+
+  If a comment asks for a change rather than an answer, make the change with
+  `edit`, then close the thread with `answer`.
+
+  No MCP and no md-mini? The file is readable markdown — read the sidecar and
+  append a reply with ordinary file tools. Same result.
+
+  Examples:
+    mdmini question
+    mdmini question docs/spec.md
+    echo "Because nginx was broken on that host." | mdmini answer docs/spec.md --id c-7f3a2c
+
 JSON RESPONSE CONTRACT
   show, edit, and ask each print exactly one line of JSON to stdout, never
   stderr.
@@ -1094,7 +1141,19 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `cat new-content.md | mdmini edit <file> [--show]` — replace the file's live buffer with the **complete** new content read from stdin. md-mini diffs it against what's on screen, applies only the changed span, and highlights it. `--show` also scrolls to the change.
 - `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead. Add `--free-text` to also let the user type a custom answer — prints `{"ok":true,"custom":"..."}` (or alongside `answers` in `--multi` mode) when they do.
 
-All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff."#;
+All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff.
+
+### Comments the user leaves for you
+
+The user can also comment on a fragment of a document and expect you to answer. Threads live in `.mdmini_comments_<doc>.md` beside the document as plain markdown, so these verbs need no running app:
+
+- `mdmini question [<file>]` — list open threads (id, status, anchor, quoted fragment, replies). Without a path, everything under the current directory.
+- `echo "reply" | mdmini answer <file> --id c-7f3a2c` — append your reply and mark the thread answered.
+- `mdmini watch [<dir>]` — long-running; prints one line per newly-open thread.
+
+If your harness can react to a stream (Claude Code: `Monitor({command: "mdmini watch", description: "new mdmini comments", persistent: true})`), arm it once per session and you get woken in this same session, with your context intact, instead of polling. `persistent: true` matters: without it the monitor dies after five minutes and its silence looks exactly like "no comments". Also add a `Stop` hook running `mdmini question` that blocks the turn while anything is open — a monitor that emits too much is stopped by the harness without telling you, and the hook is what stops comments piling up unseen.
+
+If your harness cannot do either, check `mdmini question` at natural points: before asking the user something in chat, and before reporting that you are done. A comment line is an interruption, not a user message — finish the current step cleanly, then answer. If a comment asks for a change rather than an answer, make it with `edit`, then close the thread with `answer`."#;
 
 /// Common instruction-file locations, shared by `mdmini agent`'s CLI-syntax
 /// snippet and its `--mcp` behavioral-snippet counterpart below.
@@ -1134,7 +1193,15 @@ pub(crate) const MCP_AGENT_SNIPPET: &str = r#"## md-mini via MCP — how to use 
 - Chain questions: read each answer and build the next ask from it. Answers arrive as `answer` (string), `answers` (array), and/or `custom` (their typed text).
 - After edits, the changed span stays highlighted until the user presses Esc or you edit again — use `show: true` on the edit when they should see the change immediately.
 - Respect their attention: batch related questions into one `ask` with options rather than many small ones; timeouts/dismissals mean "not now", not failure — fall back to chat.
-- `edit` takes the COMPLETE new document, never a diff; md-mini diffs internally and preserves their scroll position and undo history."#;
+- `edit` takes the COMPLETE new document, never a diff; md-mini diffs internally and preserves their scroll position and undo history.
+
+### Comments the user leaves for you
+
+- Arm this once at the start of a session: `Monitor({command: "mdmini watch", description: "new mdmini comments", persistent: true})`. Every line it prints is a new comment, delivered as an interruption in this session — so you answer with the context you already have. `persistent: true` is not optional: without it the monitor dies after five minutes and its silence is indistinguishable from "no comments".
+- A monitor line is an interruption, not a message from the user. Bring the current step to a consistent state first, then answer at that checkpoint — abandoning a half-finished edit to reply is worse for them than replying a minute later.
+- Use the `question` tool to read open threads and `answer` to reply. Also check `question` before asking them something in chat and before reporting that you are done: they may have already answered you in the document.
+- If a comment asks for a change rather than an answer, make it with `edit`, then close the thread with `answer`.
+- Add a `Stop` hook that runs `mdmini question` and blocks the turn while anything is still open. This is the backstop that matters: a monitor emitting too much is stopped by the harness, and you will not necessarily notice — without the hook, comments pile up in silence."#;
 
 /// Text for `mdmini agent --mcp` — printed by `mdmini help` for `mdmini agent
 /// [--mcp]`. Local and offline.
@@ -1513,12 +1580,8 @@ mod tests {
     fn ai_response_custom_only_round_trips() {
         let resp = AiResponse {
             ok: true,
-            error: None,
-            changed_lines: None,
-            answer: None,
-            answers: None,
             custom: Some("Something else".to_string()),
-            threads: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert_eq!(json, r#"{"ok":true,"custom":"Something else"}"#);
@@ -1910,7 +1973,9 @@ mod tests {
     #[test]
     fn help_text_mentions_all_verbs() {
         let text = help_text();
-        for verb in ["show", "edit", "ask", "mcp", "help", "agent"] {
+        for verb in [
+            "show", "edit", "ask", "question", "answer", "watch", "mcp", "help", "agent",
+        ] {
             assert!(text.contains(verb), "help text missing verb: {}", verb);
         }
         assert!(text.contains("--line"));
@@ -1928,6 +1993,12 @@ mod tests {
         assert!(text.contains("--free-text"));
         assert!(text.contains("\"custom\""));
         assert!(text.contains("--mcp"));
+        assert!(text.contains("--id"));
+        // The three comment verbs are useless to an agent that doesn't learn
+        // they work with the app closed, and Monitor is useless without the
+        // flag — so the help text is asserted to say both.
+        assert!(text.contains(".mdmini_comments_"));
+        assert!(text.contains("persistent: true"));
     }
 
     #[test]
