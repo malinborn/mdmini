@@ -1,14 +1,15 @@
-//! `mdmini watch` — поток событий о новых комментариях, предназначенный для
-//! Claude Code Monitor: каждая строка stdout будит живую сессию агента.
+//! `mdmini watch` — a stream of events about new comments, meant to be handed
+//! to a Claude Code Monitor: every line of stdout wakes the agent's live
+//! session.
 //!
-//! Сознательно не ходит в командный сокет: источник истины — файлы
-//! `.mdmini_comments_*.md`, поэтому доставка работает и при закрытом
-//! приложении, а скоуп задаётся деревом каталогов, то есть совпадает с cwd
-//! агента без отдельной логики скоупа.
+//! Deliberately never touches the command socket. The source of truth is the
+//! `.mdmini_comments_*.md` files, so delivery keeps working with the app
+//! closed, and the scope is a directory tree — which happens to coincide with
+//! the agent's cwd, so no scope logic of its own is needed.
 //!
-//! Флуд-контроль здесь не оптимизация, а условие работоспособности: Monitor
-//! останавливает слишком болтливый монитор, и агент об этом не узнаёт. Поэтому
-//! строка печатается ровно один раз на переход треда в `open`.
+//! Flood control here is not an optimisation but a condition of working at
+//! all: the harness stops a monitor that emits too much, and the agent is not
+//! told. Hence exactly one line per thread becoming `open`.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -19,16 +20,16 @@ use notify::{RecursiveMode, Watcher};
 
 use crate::comments::Located;
 
-/// Уже отданные наружу треды. Живёт в памяти процесса-монитора.
+/// Threads already reported. Lives in the monitor process's memory.
 #[derive(Default)]
 pub struct Seen {
     emitted: HashSet<String>,
 }
 
 impl Seen {
-    /// Отобрать те треды, о которых ещё не сообщали. Тред, ушедший из выборки
-    /// (получил ответ или закрыт) забывается, поэтому вернувшийся в `open`
-    /// тред — это снова событие: человек дописал уточнение и ждёт ответа.
+    /// Pick out the threads not yet reported. A thread that leaves the set
+    /// (answered or closed) is forgotten, so one returning to `open` is an
+    /// event again: the human added a follow-up and is waiting.
     pub fn newly_open<'a>(&mut self, open: &'a [Located]) -> Vec<&'a Located> {
         let current: HashSet<String> = open.iter().map(|l| l.thread.id.clone()).collect();
         self.emitted.retain(|id| current.contains(id));
@@ -43,8 +44,8 @@ impl Seen {
     }
 }
 
-/// Одна строка события. Всё в одну строку: Monitor батчит вывод по 200мс, и
-/// многострочное событие смешалось бы с соседним.
+/// One event line. Everything on a single line: the harness batches output
+/// within 200ms, so a multi-line event would blend into its neighbour.
 pub fn event_line(located: &Located) -> String {
     let question = located
         .thread
@@ -61,7 +62,7 @@ pub fn event_line(located: &Located) -> String {
     )
 }
 
-/// Запустить наблюдение. Возвращает код выхода процесса.
+/// Start watching. Returns the process exit code.
 pub fn run(root: &Path) -> i32 {
     let (tx, rx) = mpsc::channel();
     let mut watcher = match notify::recommended_watcher(move |res| {
@@ -79,33 +80,33 @@ pub fn run(root: &Path) -> i32 {
     }
 
     let mut seen = Seen::default();
-    // Первый проход: уже лежащие open-треды — это тоже события. Агент,
-    // повесивший монитор посреди работы, должен узнать про накопленное.
+    // First pass: threads already sitting open are events too. An agent that
+    // arms the monitor mid-task has to learn about what accumulated before.
     emit(&mut seen, root);
 
     loop {
         match rx.recv_timeout(Duration::from_secs(60)) {
             Ok(Ok(event)) => {
-                // Атомарная запись в comments.rs — это write в `.tmp`, затем
-                // `rename` на итоговое имя. Событие Create/Modify/Remove на
-                // самом `.tmp` пути не несёт готового контента (и появляется
-                // до rename), а событие для итогового пути приходит уже после
-                // rename — поэтому фильтруем по итоговому пути через
-                // `is_sidecar`, которое ни один `.tmp`-путь не проходит: у
-                // него другое расширение, не имя вида `.mdmini_comments_*`.
+                // The atomic write in comments.rs is a write to `.tmp` followed
+                // by a `rename` onto the final name. An event on the `.tmp`
+                // path carries no finished content and arrives before the
+                // rename, while the event for the final path arrives after it —
+                // so filtering on the final path via `is_sidecar` is what makes
+                // this correct. No `.tmp` path passes that check: its name is
+                // not of the `.mdmini_comments_*` shape.
                 let touched_sidecar = event.paths.iter().any(|p| crate::comments::is_sidecar(p));
                 if touched_sidecar {
-                    // Небольшая задержка: rename на некоторых ФС дробится на
-                    // отдельные события, и без паузы можно прочитать файл в
-                    // промежутке.
+                    // Small delay: on some filesystems a rename is split into
+                    // separate events, and without a pause the file can be
+                    // read in the gap between them.
                     std::thread::sleep(Duration::from_millis(50));
                     emit(&mut seen, root);
                 }
             }
             Ok(Err(e)) => eprintln!("watch error: {e}"),
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                // Периодическая ресинхронизация: fsevents умеет терять события
-                // при массовых операциях (переключение ветки, git checkout).
+                // Periodic resync: fsevents can drop events during bulk
+                // operations such as a branch switch or a git checkout.
                 emit(&mut seen, root);
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => return 0,
@@ -155,9 +156,9 @@ mod tests {
     fn a_thread_that_leaves_and_returns_to_open_emits_again() {
         let mut seen = Seen::default();
         assert_eq!(seen.newly_open(&[located("c-aaaaaa")]).len(), 1);
-        // Агент ответил — треда больше нет в open-выборке.
+        // The agent answered — the thread is no longer in the open set.
         assert!(seen.newly_open(&[]).is_empty());
-        // Человек дописал уточнение — тред снова open, это новое событие.
+        // The human added a follow-up — open again, so a new event.
         assert_eq!(seen.newly_open(&[located("c-aaaaaa")]).len(), 1);
     }
 
@@ -168,7 +169,7 @@ mod tests {
         assert!(line.contains("c-aaaaaa"));
         assert!(line.contains("цитата"));
         assert!(line.contains("Вопрос?"));
-        assert!(!line.contains('\n'), "ровно одна строка: {line}");
+        assert!(!line.contains('\n'), "exactly one line: {line}");
     }
 
     #[test]

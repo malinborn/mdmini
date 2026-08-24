@@ -1,9 +1,10 @@
 /**
- * Чистые помощники для слоя комментариев. Формат файла — контракт, в который
- * пишут и Rust, и агенты, и человек руками, поэтому парсер здесь терпимый:
- * непонятный тред пропускается, остальные возвращаются.
+ * Pure helpers for the comment layer. The file format is a contract written to
+ * by Rust, by agents, and by people editing it by hand, so the parser here is
+ * forgiving: a thread it cannot make sense of is skipped and the rest are
+ * still returned.
  *
- * Ничего из Tauri и CodeMirror — модуль тестируется в изоляции.
+ * Nothing from Tauri or CodeMirror — this module is tested in isolation.
  */
 
 export type CommentStatus = 'open' | 'answered' | 'resolved';
@@ -17,7 +18,7 @@ export interface CommentReply {
 export interface CommentThread {
   id: string;
   status: CommentStatus;
-  /** Номер строки на момент записи — подсказка, а не истина. */
+  /** Line number as of the last write — a hint, not the truth. */
   line: number;
   quote: string;
   replies: CommentReply[];
@@ -53,7 +54,7 @@ function parseReplyHeader(line: string): { author: string; at: string } | null {
   return { author: match[1], at: match[2].trim() };
 }
 
-/** Разобрать содержимое файла комментариев. */
+/** Parse the contents of a comment file. */
 export function parseComments(text: string): CommentThread[] {
   const threads: CommentThread[] = [];
   let current: CommentThread | null = null;
@@ -103,9 +104,10 @@ export function parseComments(text: string): CommentThread[] {
 }
 
 /**
- * Где рисовать тред. Привязка идёт поиском цитаты; сохранённый номер строки —
- * только fallback, потому что текст мог сдвинуться. Не нашли цитату — тред не
- * исчезает, а помечается отвязанным: молча уехать он не должен.
+ * Where to draw a thread. Attachment is by searching for the quote; the stored
+ * line number is only a fallback, because the text may have moved. If the quote
+ * is gone the thread does not disappear — it is marked detached, because
+ * drifting away silently is the one outcome it must never have.
  */
 export function anchorPosition(
   doc: string,
@@ -131,7 +133,7 @@ export function anchorPosition(
   return { pos: clamped, to: clamped, orphaned: true };
 }
 
-/** Путь файла комментариев для документа — то же правило, что в Rust. */
+/** Comment-file path for a document — the same rule as in Rust. */
 export function sidecarPath(docPath: string): string {
   const slash = docPath.lastIndexOf('/');
   const dir = slash < 0 ? '' : docPath.slice(0, slash + 1);
@@ -190,8 +192,8 @@ export function buildWatchPrompt(docPath: string): string {
 }
 
 /**
- * Текст для кнопки «отправить в агента»: вставляется в чат любому агенту,
- * включая тех, у кого нет ни MCP, ни механизма пробуждения.
+ * Text behind the "send to agent" button: pasted into a chat with any agent,
+ * including ones that have neither MCP nor a way of being woken.
  */
 export function buildHandoffPrompt(docPath: string, id: string): string {
   return [
