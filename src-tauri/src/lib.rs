@@ -8,6 +8,7 @@ mod paths;
 mod recovery;
 mod session;
 mod updater;
+pub mod watch;
 mod watcher;
 mod window;
 
