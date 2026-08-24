@@ -176,13 +176,25 @@ pub fn run() {
                 // broadcasts to every window, which is right for global
                 // preferences (theme, zoom) but here would drop a draft comment
                 // card into every open document at once.
+                // "Comment on Selection" acts on one document's selection, so
+                // it needs exactly one handler to run exactly once — which the
+                // generic path below cannot give it.
+                //
+                // Two traps, both learned the hard way. First, `is_focused()`
+                // queried here is not reliable: the menu bar is what the OS
+                // considers active, and gating on it silently swallowed the
+                // command. Second, the generic path emits per window in a
+                // loop, and `onMenuEvent` listens *globally* — and a global
+                // listener's target is `Any`, so it also receives targeted
+                // emits (the same trap `onAiCommand` documents). With two
+                // windows open, one menu click therefore arrived twice in each
+                // window and created a draft card per delivery.
+                //
+                // So: emit once, app-wide, and let the frontend ignore it
+                // unless its own window has focus. That is the only place
+                // where focus is actually knowable.
                 if id == "ai_comment" {
-                    for (_label, win) in _app.webview_windows() {
-                        if win.is_focused().unwrap_or(false) {
-                            let _ = win.emit("menu-event", &id);
-                            break;
-                        }
-                    }
+                    let _ = _app.emit("menu-event", &id);
                     return;
                 }
 

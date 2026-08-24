@@ -448,6 +448,13 @@
    * selected — an empty quote would give the thread no anchor to survive on.
    */
   function createCommentFromSelection(): void {
+    // Menu events reach every window: `onMenuEvent` listens globally, and a
+    // global listener's target is `Any`. That is harmless for idempotent
+    // actions like theme or zoom, but this one creates a card — so without
+    // this guard a single menu click would start a draft in every open
+    // document. Focus is only knowable here, not in the Rust menu handler,
+    // where the menu bar itself is what the OS considers active.
+    if (!document.hasFocus()) return;
     const view = editorHandle?.view;
     if (!view || !fileState.filePath) return;
     const range = view.state.selection.main;
