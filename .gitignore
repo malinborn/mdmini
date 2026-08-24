@@ -24,5 +24,11 @@ vite.config.ts.timestamp-*
 # Superpowers (brainstorm server temp files)
 .superpowers/brainstorm/
 
-# Claude
-.claude/
+# Claude — ignore everything except the project-level config worth sharing.
+# Note the `/*`: ignoring the directory itself would make the re-includes below
+# unreachable, since git never descends into an excluded directory.
+# Deliberately still ignored: settings.local.json (per-machine permissions) and
+# worktrees/ (multi-GB working copies of this very repo).
+.claude/*
+!.claude/skills/
+!.claude/agents/
