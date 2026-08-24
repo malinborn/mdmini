@@ -256,6 +256,144 @@ pub fn parse(text: &str) -> Vec<Thread> {
     threads
 }
 
+/// Атомарная запись: сначала `.tmp`, затем `rename`. Файл правят двое —
+/// md-mini и агент, — поэтому частично записанного состояния быть не должно.
+fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("failed to write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("failed to rename into {}: {e}", path.display()))
+}
+
+/// Прочитать треды документа. Отсутствующий файл — это пустой список, а не ошибка.
+pub fn load(doc: &Path) -> Result<Vec<Thread>, String> {
+    let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Ok(parse(&text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("failed to read {}: {e}", path.display())),
+    }
+}
+
+fn guard_not_sidecar(doc: &Path) -> Result<(), String> {
+    if is_sidecar(doc) {
+        return Err("refusing to comment on a comment file".to_string());
+    }
+    Ok(())
+}
+
+/// Отрендерить блок одного треда — единственное место, где формат собирается.
+fn render_thread(id: &str, status: Status, line: usize, quote: &str, author: &str, at: &str, text: &str) -> String {
+    let quoted: String = quote.lines().map(|l| format!("> {l}\n")).collect();
+    format!(
+        "<!-- mdmini:c id={id} status={status} line={line} -->\n{quoted}\n**{author}** · {at}\n{text}\n",
+        status = status.as_str()
+    )
+}
+
+/// Добавить новый тред в конец файла, создав файл с заголовком при необходимости.
+pub fn append_thread(
+    doc: &Path,
+    id: &str,
+    line: usize,
+    quote: &str,
+    author: &str,
+    text: &str,
+) -> Result<(), String> {
+    guard_not_sidecar(doc)?;
+    let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
+    let doc_name = doc
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "bad document path".to_string())?;
+
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut out = if existing.trim().is_empty() {
+        format!("<!-- mdmini:comments v=1 doc={doc_name} -->\n")
+    } else {
+        let mut e = existing;
+        if !e.ends_with('\n') {
+            e.push('\n');
+        }
+        e
+    };
+    out.push('\n');
+    out.push_str(&render_thread(
+        id,
+        Status::Open,
+        line,
+        quote,
+        author,
+        &fmt_utc(now_epoch()),
+        text,
+    ));
+    write_atomic(&path, &out)
+}
+
+/// Найти строку-маркер треда по id. Возвращает индекс строки.
+fn marker_line_index(lines: &[&str], id: &str) -> Option<usize> {
+    lines.iter().position(|line| {
+        line.trim_start().starts_with(THREAD_MARKER) && line.contains(&format!("id={id} "))
+    })
+}
+
+/// Дописать реплику в конец указанного треда и перевести его в `answered`.
+///
+/// Вставка идёт перед следующим маркером треда (или в конец файла), поэтому
+/// остальной файл не переписывается — важно, раз его правят руками.
+pub fn append_reply(doc: &Path, id: &str, author: &str, text: &str) -> Result<(), String> {
+    let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
+    let existing = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+    let lines: Vec<&str> = existing.lines().collect();
+    let start = marker_line_index(&lines, id).ok_or_else(|| format!("unknown comment id: {id}"))?;
+
+    let end = lines
+        .iter()
+        .enumerate()
+        .skip(start + 1)
+        .find(|(_, line)| line.trim_start().starts_with(THREAD_MARKER))
+        .map(|(i, _)| i)
+        .unwrap_or(lines.len());
+
+    let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    out[start] = out[start].replace(
+        &format!("status={}", status_in_marker(&out[start])),
+        &format!("status={}", Status::Answered.as_str()),
+    );
+
+    let block = format!("\n**{author}** · {}\n{text}", fmt_utc(now_epoch()));
+    let mut insert_at = end;
+    while insert_at > start + 1 && out[insert_at - 1].trim().is_empty() {
+        insert_at -= 1;
+    }
+    for (offset, line) in block.lines().enumerate() {
+        out.insert(insert_at + offset, line.to_string());
+    }
+
+    write_atomic(&path, &format!("{}\n", out.join("\n")))
+}
+
+/// Прочитать значение `status=` из строки-маркера; `open`, если атрибут потерян.
+fn status_in_marker(line: &str) -> &str {
+    line.split_whitespace()
+        .find_map(|pair| pair.strip_prefix("status="))
+        .unwrap_or("open")
+}
+
+/// Поменять статус треда, переписав ровно одну строку-маркер.
+pub fn set_status(doc: &Path, id: &str, status: Status) -> Result<(), String> {
+    let path = sidecar_path(doc).ok_or_else(|| "bad document path".to_string())?;
+    let existing = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+    let lines: Vec<&str> = existing.lines().collect();
+    let index = marker_line_index(&lines, id).ok_or_else(|| format!("unknown comment id: {id}"))?;
+
+    let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    let old = status_in_marker(&out[index]).to_string();
+    out[index] = out[index].replace(&format!("status={old}"), &format!("status={}", status.as_str()));
+    write_atomic(&path, &format!("{}\n", out.join("\n")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,5 +524,95 @@ Nginx там был сломан.
     fn multiline_quote_is_joined_with_newlines() {
         let text = "<!-- mdmini:c id=c-222222 status=open line=1 -->\n> первая\n> вторая\n\n**Макс** · 14:00\nt\n";
         assert_eq!(parse(text)[0].quote, "первая\nвторая");
+    }
+
+    // Every test below shares the name "spec.md". A seed of `now_epoch()` alone
+    // (as originally drafted) collides two ways: within one process, parallel
+    // tests in the same second hash to the same dir; across processes, two
+    // `cargo test` invocations landing in the same second replay an identical
+    // seed sequence (the counter also resets to 0) and inherit the previous
+    // run's leftover sidecar file instead of starting clean. Mix in the pid for
+    // cross-process entropy, and wipe the dir regardless as a last-resort guard.
+    fn temp_doc(name: &str) -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let seed = now_epoch()
+            .wrapping_mul(1_000_003)
+            .wrapping_add(std::process::id() as u64)
+            .wrapping_add(COUNTER.fetch_add(1, Ordering::Relaxed));
+        let dir = std::env::temp_dir().join(format!("mdmini-comments-test-{}", new_id(Path::new(name), seed)));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    #[test]
+    fn append_creates_the_file_with_a_header() {
+        let doc = temp_doc("spec.md");
+        append_thread(&doc, "c-aaaaaa", 12, "цитата", "Макс", "Вопрос?").unwrap();
+
+        let text = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
+        assert!(text.starts_with("<!-- mdmini:comments v=1 doc=spec.md -->"));
+        let threads = parse(&text);
+        assert_eq!(threads.len(), 1);
+        assert_eq!(threads[0].id, "c-aaaaaa");
+        assert_eq!(threads[0].status, Status::Open);
+        assert_eq!(threads[0].quote, "цитата");
+        assert_eq!(threads[0].replies[0].text, "Вопрос?");
+    }
+
+    #[test]
+    fn append_reply_lands_in_the_right_thread_and_sets_answered() {
+        let doc = temp_doc("spec.md");
+        append_thread(&doc, "c-aaaaaa", 1, "q1", "Макс", "Первый?").unwrap();
+        append_thread(&doc, "c-bbbbbb", 2, "q2", "Макс", "Второй?").unwrap();
+
+        append_reply(&doc, "c-aaaaaa", "agent", "Ответ на первый.").unwrap();
+
+        let threads = load(&doc).unwrap();
+        assert_eq!(threads[0].replies.len(), 2);
+        assert_eq!(threads[0].replies[1].author, "agent");
+        assert_eq!(threads[0].status, Status::Answered, "ответ переводит в answered");
+        assert_eq!(threads[1].replies.len(), 1, "второй тред не тронут");
+        assert_eq!(threads[1].status, Status::Open);
+    }
+
+    #[test]
+    fn set_status_rewrites_only_the_marker() {
+        let doc = temp_doc("spec.md");
+        append_thread(&doc, "c-aaaaaa", 5, "q", "Макс", "Вопрос?").unwrap();
+        let before = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
+
+        set_status(&doc, "c-aaaaaa", Status::Resolved).unwrap();
+
+        let after = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
+        assert_eq!(load(&doc).unwrap()[0].status, Status::Resolved);
+        assert_eq!(
+            before.lines().count(),
+            after.lines().count(),
+            "изменилась ровно одна строка, структура файла та же"
+        );
+        assert!(after.contains("Вопрос?"), "текст реплики цел");
+    }
+
+    #[test]
+    fn answering_an_unknown_id_is_an_error_and_leaves_the_file_alone() {
+        let doc = temp_doc("spec.md");
+        append_thread(&doc, "c-aaaaaa", 1, "q", "Макс", "Вопрос?").unwrap();
+        let before = std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap();
+
+        let err = append_reply(&doc, "c-nope00", "agent", "мимо").unwrap_err();
+        assert!(err.contains("c-nope00"), "ошибка называет id: {err}");
+        assert_eq!(
+            std::fs::read_to_string(sidecar_path(&doc).unwrap()).unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn a_comment_file_cannot_itself_be_commented() {
+        let doc = temp_doc(".mdmini_comments_spec.md");
+        let err = append_thread(&doc, "c-aaaaaa", 1, "q", "Макс", "?").unwrap_err();
+        assert!(err.contains("comment file"), "got {err}");
     }
 }
