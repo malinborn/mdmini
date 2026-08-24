@@ -245,8 +245,8 @@ pub(crate) fn connect_cli_doc() -> String {
         "# Connect AI via CLI\n\n\
 Give an AI agent with shell access — Claude Code and similar — direct access to your open documents: it can jump you to a spot, push edits into the live buffer, and ask you questions with buttons in the document itself.\n\n\
 It won't work that out on its own — it needs the instructions below. Two ways to give them to it, both fine:\n\n\
-1. **Paste the block into its instruction file.** Simplest, and always in effect.\n\
-2. **Make a skill of it and point at the skill from that file.** Hand the block to your agent and ask; see the note after it.\n\n\
+1. **[Paste the block](#md-mini-ai-interface) into its instruction file** — simplest, and always in effect.\n\
+2. **[Make a skill of it](#making-this-a-skill-instead-of-a-permanent-block), and point at the skill from that file** — the same behavior, loaded only when it's relevant.\n\n\
 Instruction file locations:\n\n\
 {}\n\n\
 ---\n\n\
@@ -284,8 +284,8 @@ pub(crate) fn teach_doc() -> String {
         "# Teach Your AI md-mini\n\n\
 Connecting md-mini over MCP is enough for an agent to *call* show/edit/ask — but knowing *when* to reach for them comes from the note below, and without it the tools mostly go unused.\n\n\
 Two ways to give it that note, both fine:\n\n\
-1. **Paste the block into its instruction file.** Simplest, and always in effect.\n\
-2. **Make a skill of it and point at the skill from that file.** Hand the block to your agent and ask; see the note after it.\n\n\
+1. **[Paste the block](#md-mini-via-mcp-how-to-use-it-well) into its instruction file** — simplest, and always in effect.\n\
+2. **[Make a skill of it](#making-this-a-skill-instead-of-a-permanent-block), and point at the skill from that file** — the same behavior, loaded only when it's relevant.\n\n\
 Instruction file locations:\n\n\
 {}\n\n\
 ---\n\n\
@@ -362,6 +362,50 @@ mod tests {
             assert!(doc.contains("Two ways to give"), "both paths should be stated up front");
             assert!(doc.contains("Making this a skill"));
             assert!(doc.contains("~/.claude/skills/mdmini/SKILL.md"));
+        }
+    }
+
+    /// Mirror of `slugify` in `src/lib/editor/heading-slugs.ts`, enough for the
+    /// ASCII headings these docs use: lowercase, drop everything that is not a
+    /// letter, digit, space or hyphen, then join words with hyphens.
+    fn slugify(text: &str) -> String {
+        let cleaned: String = text
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-')
+            .collect();
+        let joined = cleaned.split_whitespace().collect::<Vec<_>>().join("-");
+        let mut out = joined;
+        while out.contains("--") {
+            out = out.replace("--", "-");
+        }
+        out.trim_matches('-').to_string()
+    }
+
+    /// The "two ways" list links into the document it is part of. A renamed
+    /// heading in either snippet breaks those links silently — md-mini's click
+    /// handler resolves the slug, finds nothing, and does nothing at all.
+    #[test]
+    fn in_document_links_resolve_to_a_heading_in_the_same_doc() {
+        for doc in [connect_cli_doc(), teach_doc()] {
+            let headings: Vec<String> = doc
+                .lines()
+                .filter(|l| l.starts_with('#'))
+                .map(|l| slugify(l.trim_start_matches('#').trim()))
+                .collect();
+
+            let mut links = 0;
+            for (i, _) in doc.match_indices("](#") {
+                let slug: String = doc[i + 3..].chars().take_while(|c| *c != ')').collect();
+                links += 1;
+                assert!(
+                    headings.contains(&slug),
+                    "link #{} has no matching heading; headings: {:?}",
+                    slug,
+                    headings
+                );
+            }
+            assert!(links >= 2, "expected both paths to be links, found {}", links);
         }
     }
 

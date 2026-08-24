@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { EditorState } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { Strikethrough, Table } from '@lezer/markdown';
 import { slugify } from './editor/heading-slugs';
 
 // The welcome document navigates itself with in-document links, which resolve
@@ -23,4 +27,25 @@ describe('bundled AI docs', () => {
       }
     });
   }
+});
+
+// The AI menu docs put their "two ways" links inside bold. setup.ts's click
+// handler resolves the URL from a `Link` node in the syntax tree, so a nesting
+// that swallowed the link would render fine and do nothing when clicked.
+describe('a link nested in bold', () => {
+  it('still parses with its URL reachable in the syntax tree', () => {
+    const state = EditorState.create({
+      doc: '1. **[Paste the block](#md-mini-ai-interface) into its file** — simplest.',
+      extensions: [markdown({ base: markdownLanguage, extensions: [Strikethrough, Table] })],
+    });
+
+    let url: string | null = null;
+    syntaxTree(state).iterate({
+      enter(node) {
+        if (node.name === 'URL') url = state.doc.sliceString(node.from, node.to);
+      },
+    });
+
+    expect(url).toBe('#md-mini-ai-interface');
+  });
 });
