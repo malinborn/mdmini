@@ -44,6 +44,10 @@ For other MCP clients, add this to your `mcpServers` config:
 
 The tools are self-describing, so no instruction-file snippet is required — but behavior guidance still helps. Run `mdmini agent --mcp` and paste its output into your agent's instructions for noticeably better AI behavior.
 
+## Either way: make it a skill, not a permanent tenant
+
+An instruction file is loaded on every turn. If your agent supports skills, hand it the printed block and ask for a skill called `mdmini` plus a one-line pointer in `CLAUDE.md` — "for specs, docs, comment threads, or anything a human has to read and decide on, use the `mdmini` skill". Same behavior, none of the context cost when md-mini isn't involved. Keep the comment-watching setup out of the skill, though: it has to be armed at the start of a session, so it belongs in the always-loaded file.
+
 ## What your AI can do now
 
 | Command | What it does |

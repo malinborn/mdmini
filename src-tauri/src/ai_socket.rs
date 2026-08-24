@@ -1116,7 +1116,10 @@ AGENT
       agents already connected via `mdmini mcp` — the tools are
       self-describing there, so this covers usage culture instead
       (when to ask in the document vs. chat, reading multi-choice/
-      free-text answers). Exit 0. Local and offline either way.
+      free-text answers). Either form ends with a note on turning the
+      block into an on-demand skill instead, so it doesn't sit in the
+      agent's context on every turn. Exit 0. Local and offline either
+      way.
 
 DEV BUILDS
   Release and dev builds use different command sockets:
@@ -1164,6 +1167,25 @@ pub(crate) const INSTRUCTION_FILE_LOCATIONS: &str = "\
 \x20 .cursor/rules or .cursorrules     Cursor\n\
 \x20 .github/copilot-instructions.md   GitHub Copilot";
 
+/// Advice printed after either agent snippet, and shown in the "Connect AI via
+/// CLI" / "Teach your AI md-mini" menu docs: an instruction file is loaded on
+/// every turn, so an agent that supports skills should be asked to fold the
+/// block into one and keep only a pointer in the always-loaded file. Reused
+/// verbatim by `docs/ai-interface.md` — keep both in sync by hand.
+pub(crate) const SKILL_TIP: &str = r#"## Rather not carry this in context on every turn?
+
+An instruction file is loaded on every single turn — this block included. If your agent supports skills, hand it the block and ask for a skill instead:
+
+> Turn these md-mini instructions into a skill called `mdmini`, and leave only a one-line pointer to it in my CLAUDE.md.
+
+A skill (`~/.claude/skills/mdmini/SKILL.md` for Claude Code) is read only when it's relevant, so the always-loaded file keeps just the pointer:
+
+    - **mdmini** — for specs, docs, comment threads, or anything a human has to read and decide on, use the `mdmini` skill.
+
+One part does not belong in the skill: the comment-watching setup (arming `mdmini watch` as a Monitor, and the Stop hook that runs `mdmini question`). That has to happen at the *start* of a session, before anything would remind the agent md-mini exists — keep it in the always-loaded file, or in your harness's hook config.
+
+No skill support? Paste the block itself, as above."#;
+
 /// Text for `mdmini agent` — printed by `mdmini help` for
 /// `mdmini agent`. Local and offline.
 fn agent_text() -> String {
@@ -1171,9 +1193,11 @@ fn agent_text() -> String {
         "Paste the block below into your AI agent's instruction file. Common locations:\n\n\
         {}\n\n\
         --- copy from here ---\n\
+        {}\n\
+        --- copy to here ---\n\n\
         {}\n\n\
         Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed; run `mdmini agent --mcp` for a short usage-culture snippet worth pasting alongside it.",
-        INSTRUCTION_FILE_LOCATIONS, AGENT_SNIPPET
+        INSTRUCTION_FILE_LOCATIONS, AGENT_SNIPPET, SKILL_TIP
     )
 }
 
@@ -1210,8 +1234,10 @@ fn mcp_agent_text() -> String {
         "Paste the block below into your AI agent's instruction file if md-mini is connected via MCP (mdmini mcp). Common locations:\n\n\
         {}\n\n\
         --- copy from here ---\n\
+        {}\n\
+        --- copy to here ---\n\n\
         {}",
-        INSTRUCTION_FILE_LOCATIONS, MCP_AGENT_SNIPPET
+        INSTRUCTION_FILE_LOCATIONS, MCP_AGENT_SNIPPET, SKILL_TIP
     )
 }
 
@@ -2005,6 +2031,15 @@ mod tests {
         assert!(text.contains("AGENTS.md"));
         assert!(text.contains("## md-mini AI interface"));
         assert!(text.contains("--mcp"), "should point at agent --mcp for MCP setups");
+    }
+
+    #[test]
+    fn both_agent_texts_offer_the_skill_alternative() {
+        for text in [agent_text(), mcp_agent_text()] {
+            assert!(text.contains("--- copy to here ---"), "the paste block needs an end marker now that advice follows it");
+            assert!(text.contains("ask for a skill instead"));
+            assert!(text.contains("~/.claude/skills/mdmini/SKILL.md"));
+        }
     }
 
     #[test]

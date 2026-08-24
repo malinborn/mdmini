@@ -238,8 +238,8 @@ pub(crate) fn getting_started_doc() -> &'static str {
 }
 
 /// Content for the "Connect AI via CLI" menu item — composed from
-/// `ai_socket::AGENT_SNIPPET`/`INSTRUCTION_FILE_LOCATIONS` so the menu doc and
-/// `mdmini agent`'s own output can never drift apart.
+/// `ai_socket::AGENT_SNIPPET`/`INSTRUCTION_FILE_LOCATIONS`/`SKILL_TIP` so the
+/// menu doc and `mdmini agent`'s own output can never drift apart.
 pub(crate) fn connect_cli_doc() -> String {
     format!(
         "# Connect AI via CLI\n\n\
@@ -248,9 +248,12 @@ Paste the block below into your agent's instruction file. Common locations:\n\n\
 {}\n\n\
 ---\n\n\
 {}\n\n\
+---\n\n\
+{}\n\n\
 `mdmini agent` prints this same block, any time you need it again.\n",
         crate::ai_socket::INSTRUCTION_FILE_LOCATIONS,
         crate::ai_socket::AGENT_SNIPPET,
+        crate::ai_socket::SKILL_TIP,
     )
 }
 
@@ -271,8 +274,8 @@ That's the whole connection — the tools are self-describing. For a short note 
 }
 
 /// Content for the "Teach your AI md-mini" menu item — composed from
-/// `ai_socket::MCP_AGENT_SNIPPET`/`INSTRUCTION_FILE_LOCATIONS`, same discipline
-/// as `connect_cli_doc`.
+/// `ai_socket::MCP_AGENT_SNIPPET`/`INSTRUCTION_FILE_LOCATIONS`/`SKILL_TIP`,
+/// same discipline as `connect_cli_doc`.
 pub(crate) fn teach_doc() -> String {
     format!(
         "# Teach Your AI md-mini\n\n\
@@ -280,9 +283,12 @@ Connecting md-mini over MCP is enough for an agent to call show/edit/ask — but
 {}\n\n\
 ---\n\n\
 {}\n\n\
+---\n\n\
+{}\n\n\
 `mdmini agent --mcp` prints this same block. A CLI-connected agent gets the equivalent guidance built into what `mdmini agent` prints.\n",
         crate::ai_socket::INSTRUCTION_FILE_LOCATIONS,
         crate::ai_socket::MCP_AGENT_SNIPPET,
+        crate::ai_socket::SKILL_TIP,
     )
 }
 
@@ -341,6 +347,14 @@ mod tests {
         let doc = connect_cli_doc();
         assert!(doc.starts_with("# Connect AI via CLI"));
         assert!(doc.contains("## md-mini AI interface"));
+    }
+
+    #[test]
+    fn cli_and_teach_docs_offer_the_skill_alternative() {
+        for doc in [connect_cli_doc(), teach_doc()] {
+            assert!(doc.contains("ask for a skill instead"));
+            assert!(doc.contains("~/.claude/skills/mdmini/SKILL.md"));
+        }
     }
 
     #[test]
