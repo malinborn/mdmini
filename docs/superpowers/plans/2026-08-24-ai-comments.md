@@ -2371,7 +2371,7 @@ export async function commentResolve(path: string, id: string): Promise<void> {
     for (const thread of threads) {
       if (thread.status === 'resolved') continue;
       const { pos, orphaned } = anchorPosition(doc, thread.quote, thread.line);
-      effects.push(addAiComment.of({ thread, pos, orphaned }));
+      effects.push(addAiComment.of({ thread, pos, orphaned, actions: commentActions }));
     }
     editorView.dispatch({ effects });
   }
@@ -2380,7 +2380,23 @@ export async function commentResolve(path: string, id: string): Promise<void> {
 Подключить настоящие действия виджета при монтировании:
 
 ```ts
-  setCommentActions({
+**API-замечание, обязательное к прочтению:** реализация задачи 8 сознательно отошла от черновика выше. Модульного синглтона `commentActions` и сеттера `setCommentActions` **не существует** — колбэки едут прямо в payload эффекта, ровно как `onAnswer` уже едет в `AskSpec` у `ai-ask.ts`. Подпись фактическая:
+
+```ts
+export const addAiComment = StateEffect.define<{
+  thread: CommentThread;
+  pos: number;
+  orphaned: boolean;
+  actions: CommentActions;
+}>();
+```
+
+Так из модульной области видимости убрано состояние, привязанное к конкретному view: нет сеттера, который можно забыть позвать, и нет утечки, если в одном JS-контексте когда-нибудь окажется два `EditorView`. `eq()` функции не сравнивает (как и `AskWidget.eq` не сравнивает `onAnswer`), поэтому один и тот же объект действий можно передавать в каждый эффект.
+
+Значит в `App.svelte` надо собрать один объект действий и передавать его в каждый `addAiComment.of(...)`:
+
+```ts
+  const commentActions: CommentActions = {
     reply: (id, text) => {
       const path = fileState.path;
       if (!path) return;
@@ -2408,7 +2424,7 @@ export async function commentResolve(path: string, id: string): Promise<void> {
       if (at === null) return;
       editorView.dispatch({ changes: { from: at, insert: `\n${text}\n` } });
     },
-  });
+  };
 ```
 
 Зарегистрировать новый слушатель в том же блоке `onMount`, рядом с `onFileChangedExternally` (`src/App.svelte:661-663`):
