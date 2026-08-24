@@ -1,6 +1,7 @@
 import { type StateEffect } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { addAiComment, clearAiComments } from '@app/lib/editor/ai-comment';
+import { clearAiHighlights, setAiHighlights } from '@app/lib/editor/ai-highlight';
 import { anchorPosition, type CommentThread } from '@app/lib/comment-format';
 import { mountDemoEditor, prefersReducedMotion } from './editor-demo';
 
@@ -100,9 +101,11 @@ function answerCall(id: string): string {
   return `mdmini answer ${DOC_NAME} --id ${id}`;
 }
 
-// Typing speeds. A pasted prompt is not typed by a human, so it lands far
-// faster than the question the visitor writes by hand.
-const MS_PASTE = 9;
+// Typing speeds. Note there is no paste speed: the watch prompt is pasted, so
+// it lands whole, in one frame, with a ⌘V keycap next to it. Typing it out
+// character by character read as "write this by hand", which is the one thing
+// this step is not — the prompt comes from the AI menu, already on the
+// clipboard.
 const MS_AGENT = 13;
 const MS_HUMAN = 30;
 const MS_SELECT = 15;
@@ -158,6 +161,28 @@ function buildTerminal(host: HTMLElement): TerminalDom {
   const body = host.querySelector<HTMLElement>('.cmt-term-body');
   if (!body) throw new Error('cmt-term: body missing');
   return { root: host, body };
+}
+
+/**
+ * The ⌘V keycap, built to sit *at the insertion point* — inline in the row,
+ * right after the `$`, exactly where the text is about to appear.
+ *
+ * An earlier version parked a badge in the panel's corner. It stated the fact
+ * but did not read as an action: the eye had to connect a label in one place to
+ * text appearing in another. Pressing a key where the text lands, and swapping
+ * the two in one frame, is what makes it read as a paste rather than as typing.
+ */
+function makeKeycap(): HTMLElement {
+  const key = document.createElement('span');
+  key.className = 'cmt-term-key';
+  key.setAttribute('aria-hidden', 'true');
+  for (const glyph of ['⌘', 'V']) {
+    const cap = document.createElement('span');
+    cap.className = 'cmt-term-keycap';
+    cap.textContent = glyph;
+    key.appendChild(cap);
+  }
+  return key;
 }
 
 /** Appends a row and returns the span its text goes into. */
@@ -471,21 +496,26 @@ export function mount(container: HTMLElement): void {
     overlay.toast.classList.add('is-visible');
     if (!(await sleep(500, myGen))) return false;
 
+    // The paste, as one tactile beat: the keycap appears at the prompt, is
+    // pressed, and the whole line replaces it in a single frame. Never typed
+    // out character by character — the prompt came off the clipboard, put there
+    // by the AI menu, and typing it would say "write this yourself".
     const pasted = addRow(terminal, 'in');
-    if (
-      !(await typeInto(
-        (v) => {
-          pasted.textContent = v;
-        },
-        PASTED_PROMPT,
-        MS_PASTE,
-        myGen
-      ))
-    ) {
-      return false;
-    }
-    if (!(await sleep(320, myGen))) return false;
+    const key = makeKeycap();
+    pasted.parentElement?.appendChild(key);
+    if (!(await sleep(80, myGen))) return false;
+    key.classList.add('is-in');
+    if (!(await sleep(420, myGen))) return false;
+    key.classList.add('is-pressed');
+    if (!(await sleep(190, myGen))) return false;
+
+    key.remove();
+    pasted.textContent = PASTED_PROMPT;
+    pasted.parentElement?.classList.add('is-pasted');
+    terminal.body.scrollTop = terminal.body.scrollHeight;
+    if (!(await sleep(900, myGen))) return false;
     overlay.toast.classList.remove('is-visible');
+    if (!(await sleep(260, myGen))) return false;
 
     const call = addRow(terminal, 'tool');
     if (
@@ -618,7 +648,7 @@ export function mount(container: HTMLElement): void {
       threads.length = 0;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: `${DOC}\n\n` },
-        effects: clearAiComments.of(null),
+        effects: [clearAiComments.of(null), clearAiHighlights.of(null)],
       });
       view.dispatch({ selection: { anchor: view.state.doc.length } });
       view.scrollDOM.scrollTop = 0;
@@ -666,7 +696,13 @@ export function mount(container: HTMLElement): void {
       if (!(await press(ID_1, 'insert into text', myGen))) return;
       const at = commentWidgetLine(view, ID_1);
       if (at !== null) {
-        view.dispatch({ changes: { from: at, insert: `\n${ANSWER_1}\n` } });
+        // Highlighted exactly as `insertIntoText` does it in the app: text from
+        // an agent reads the same whether it arrived via `mdmini edit` (the
+        // edit slide, two slides back) or via a comment thread.
+        view.dispatch({
+          changes: { from: at, insert: `\n${ANSWER_1}\n` },
+          effects: setAiHighlights.of([{ from: at + 1, to: at + 1 + ANSWER_1.length }]),
+        });
       }
       if (!(await sleep(900, myGen))) return;
 

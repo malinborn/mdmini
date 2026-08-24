@@ -164,6 +164,76 @@
   color: #9192b3;
 }
 
+/* ⌘V, drawn at the insertion point.
+   The watch prompt comes off the clipboard — the AI menu put it there — so it
+   lands whole instead of being typed out, and this is what says so. It lives
+   inline in the row, right after the `$`, so the key is pressed exactly where
+   the text then appears; the two swap in one frame. A version of this parked in
+   the panel's corner instead stated the fact without reading as an action. */
+.cmt-term-key {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: baseline;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+.cmt-term-key.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.cmt-term-keycap {
+  min-width: 16px;
+  padding: 1px 4px 2px;
+  border-radius: 4px;
+  background: #2c2b4a;
+  border: 1px solid #55558a;
+  /* Thicker bottom edge reads as the height of a physical key — it is what the
+     press then flattens. */
+  border-bottom: 2px solid #6a6aa8;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+  color: #e4e4f2;
+  transition:
+    transform 0.09s ease-out,
+    background-color 0.09s ease-out,
+    border-bottom-width 0.09s ease-out,
+    border-bottom-color 0.09s ease-out;
+}
+
+/* The press: the cap drops onto its own bottom edge and lights up. Transform
+   and colour only, so it stays on the compositor. */
+.cmt-term-key.is-pressed .cmt-term-keycap {
+  transform: translateY(1px);
+  background: #6fd9c0;
+  border-color: #6fd9c0;
+  border-bottom-width: 1px;
+  border-bottom-color: #4fbda4;
+  color: #171629;
+}
+
+/* Ties the keycap to the line it produced: a one-shot tint on the pasted text,
+   so the two read as one event rather than as a badge floating nearby. */
+.cmt-term-row--in.is-pasted .cmt-term-text {
+  animation: cmt-paste-land 1.1s ease-out;
+}
+
+@keyframes cmt-paste-land {
+  0% {
+    background: rgba(111, 217, 192, 0.26);
+    box-shadow: 0 0 0 3px rgba(111, 217, 192, 0.26);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
 /* The wake-up line. This is the one row that is neither the human typing nor
    the agent choosing to act — it arrives on its own and interrupts the session,
    so it gets its own weight. */
@@ -327,9 +397,14 @@
     transition: none;
   }
   /* The menu never opens in this mode, and a toast with nothing to announce is
-     just an obstruction over the document. */
+     just an obstruction over the document. Same for the keycap: with no paste
+     to narrate, it would sit over the transcript forever. */
   .cmt-menu,
-  .cmt-toast {
+  .cmt-toast,
+  .cmt-term-key {
     display: none;
+  }
+  .cmt-term-row--in.is-pasted .cmt-term-text {
+    animation: none;
   }
 }
