@@ -51,7 +51,7 @@
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "url": "https://md-mini.com/",
     "downloadUrl": "https://github.com/malinborn/mdmini/releases",
-    "softwareVersion": "1.0.1",
+    "softwareVersion": "1.1.0",
     "license": "https://opensource.org/licenses/GPL-3.0"
   }
   </script>
@@ -456,6 +456,22 @@
       <div class="changelog-list">
 
         <details class="changelog-entry" open>
+          <summary class="changelog-summary">
+            <span class="changelog-version">v1.1.0</span>
+            <span class="changelog-date">2026-08-24</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Now you can ask it back &mdash; comments your agent answers</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Comment on any text</strong> &mdash; select a fragment and press <code>&#8679;&#8984;M</code>, or use the &#128172; in Live Render's selection toolbar. The quoted words stay highlighted in the document, the card header carries an excerpt of them, and putting the caret in a commented fragment makes its cards shimmer &mdash; and the other way around. With several comments stacked under one paragraph, that is the difference between finding the right card and hunting for it</li>
+            <li><strong>Your agent gets woken, not polled</strong> &mdash; <code>AI &rarr; Connect Agent to Doc Questions</code> copies a prompt that arms a watcher over your project. With Claude Code's Monitor tool, a new comment interrupts the session that already has your context, the moment you send it. That is the whole design: nothing here spawns an agent or hands your question to one that knows nothing about the work</li>
+            <li><strong>The answer comes back into the thread</strong> &mdash; <code>mdmini answer plan.md --id c-4f2a1b</code>. If the comment asked for a change rather than an answer, <strong>insert into text</strong> folds it into the document &mdash; highlighted like any other AI edit, Escape to dismiss, <code>&#8984;Z</code> to take it back. If it was just a question, <strong>resolve</strong> closes the thread</li>
+            <li><strong>The comments live next to your file</strong> &mdash; in <code>.mdmini_comments_&lt;file&gt;.md</code>, plain markdown you can read, edit by hand and diff in git. md-mini never rewrites that file wholesale, only appends to it. So the feature works with the app closed, works for agents with no MCP, and needs no store of its own &mdash; md-mini is deliberately not the source of truth here</li>
+            <li><strong>Git worktrees stop being a problem</strong> &mdash; comments sit beside the copy they were written on, so the agent watching that tree is the one that answers. No routing, no claims, no queue to divide between sessions</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
           <summary class="changelog-summary">
             <span class="changelog-version">v1.0.1</span>
             <span class="changelog-date">2026-08-23</span>
