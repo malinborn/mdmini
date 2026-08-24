@@ -406,7 +406,14 @@
       if (draft) {
         // First text on a draft is what creates the thread in the file.
         commentDrafts.delete(id);
-        void commentCreate(path, draft.line, draft.quote, text).then(reloadComments);
+        void commentCreate(path, draft.line, draft.quote, text).then(async () => {
+          // The sidecar has only just come into existence, so the watcher armed
+          // when this document was opened isn't watching it yet. Re-registering
+          // the file rebuilds the watcher over both paths — otherwise the very
+          // first agent reply would arrive with nothing listening for it.
+          await invoke('register_open_file', { path }).catch(() => {});
+          await reloadComments();
+        });
         return;
       }
       void commentReply(path, id, text).then(reloadComments);
