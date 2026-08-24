@@ -9,8 +9,11 @@ Lets an AI agent (Claude Code and similar) drive a running md-mini window direct
 | `mdmini show <file> [--line N \| --find "text"]` | Open the file (or focus its existing window) and scroll the target into view with a ~1.6s pulse highlight. `--line` is 1-based, clamped to the document. `--find` locates the first substring match (case-sensitive). Neither flag → just open/focus, no scroll. `--line` and `--find` are mutually exclusive. |
 | `cat new.md \| mdmini edit <file> [--show] [--allow-empty]` | Read the **complete** new document content from stdin, diff it against the live buffer, apply only the changed span, and highlight it. `--show` additionally scrolls the change into view. If the file isn't open yet, md-mini opens a window for it first, then applies the edit. Empty stdin is refused by default (`--allow-empty` to intentionally clear the buffer) — see below. |
 | `mdmini ask <file> --question TEXT --option TEXT [--option TEXT ...] [--multi] [--free-text] [--at-line N \| --at-find TEXT] [--timeout SECS]` | Post `TEXT` as a question with 2-6 option buttons (one per `--option`, repeatable) inside the file's document, **blocking until the user answers**, and return the choice. Single-choice (default): blocks until one click, returns the chosen option's text as `answer`. `--multi`: checkbox mode — the user may check any number of options (including none) and confirms, returning the checked options as `answers` (an array; `[]` is a valid explicit "confirmed none"). `--free-text`: also offers a free-text field — a typed answer comes back as `custom`, alongside `answers` in `--multi` mode. `--at-line`/`--at-find` (mutually exclusive) place the question near a location, same semantics as `show`'s `--line`/`--find`. `--timeout` bounds the wait, default 300s, clamped to 10-3600s. The file must already be open, or exist on disk — unlike `edit`, `ask` cannot "start a new file". |
-| `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit`/`ask` as MCP tools instead of CLI verbs — see "MCP server" below. |
-| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
+| `mdmini question [<file>]` | List the open comment threads the user has left in documents — id, status, anchor line, quoted fragment, and the whole thread. With a path, only that document; without one, everything under the current directory. **Local and offline** — reads the comment files directly, so it works with md-mini closed. See "Comments: the reverse direction" below. |
+| `mdmini answer <file> --id ID` | Append a reply to thread `ID` from stdin and mark it `answered`. Local and offline, same as `question`. Refuses empty stdin. |
+| `mdmini watch [<dir>]` | Long-running: watch a directory tree (default: the current directory) for comment files and print **one line per newly-open thread**. Meant to be handed to a Claude Code Monitor, which turns each line into an interruption in the live session. Local and offline. |
+| `mdmini mcp [--socket PATH]` | Run a stdio MCP server exposing `show`/`edit`/`ask`/`question`/`answer` as MCP tools instead of CLI verbs — see "MCP server" below. |
+| `mdmini help` | Print a complete reference of every `mdmini` verb (opening files, `show`, `edit`, `ask`, `question`, `answer`, `watch`, `mcp`, `help`, `agent`) plus the JSON response contract and exit codes. Local and offline — no running app required. |
 | `mdmini agent [--mcp]` | Print a ready-to-paste instruction block for an AI agent's instruction file (CLAUDE.md, AGENTS.md, etc.). Without `--mcp`: the CLI-syntax show/edit/ask reference — see below. With `--mcp`: a shorter behavioral snippet for agents already connected via `mdmini mcp`, where the tools are self-describing and what's missing is usage culture — see "MCP server" below. Local and offline either way. |
 
 Examples:
@@ -126,6 +129,124 @@ The `ai` subcommand is intercepted in `main.rs` before Tauri initializes anythin
   - Not persisted across app restarts — it's in-memory CM6 state (`aiHighlightField`), not saved with the document.
 - Edits go through the same single-span `ChangeSet` + scroll-snapshot mechanism as an external file reload, but — unlike a reload — stay a normal, undoable history step: an AI edit is content the user didn't author, and Cmd+Z is how they reject it. (Contrast an external-reload or session-restore transaction, which does use `Transaction.addToHistory.of(false)`.) The document-changed listener still fires normally, so the edit still marks the file dirty and schedules the regular autosave — the file on disk catches up like any other in-app edit.
 
+## Comments: the reverse direction
+
+`show`, `edit` and `ask` all run agent → document. Comments run the other way: the
+user selects a fragment, writes a comment, and an agent answers **in the live
+working session that already has the context** — not in a fresh background one.
+
+### Where comments live
+
+For a document `CLAUDE.md`, its comments live in `.mdmini_comments_CLAUDE.md` in
+the same directory. The markdown of the document itself is never touched, so a
+full-document `edit` from an agent cannot destroy a comment, and `git diff` on
+the document stays clean.
+
+The file is ordinary markdown, and its format is a contract that md-mini, agents
+and humans all write to:
+
+```markdown
+<!-- mdmini:comments v=1 doc=CLAUDE.md -->
+
+<!-- mdmini:c id=c-7f3a2c status=open line=42 -->
+> We ship via Caddy on the host
+
+**Вы** · 2026-08-24 14:02:00 UTC
+Почему не nginx? Разверни абзац.
+
+**agent** · 2026-08-24 14:05:00 UTC
+Nginx on this host was broken, so…
+```
+
+- A thread starts at a line beginning `<!-- mdmini:c `. Attributes are `k=v`,
+  space-separated; unknown ones are ignored, and a malformed marker is skipped
+  rather than costing you the rest of the file.
+- The `> ` lines right after the marker are the anchor quote. Re-attachment is by
+  **searching for that quote**; `line=` is only a hint and a fallback. If the
+  quote is gone, the thread is shown at its stored line and marked detached — it
+  never silently disappears.
+- A reply is `**author** · timestamp` followed by its body, up to the next reply
+  or the next thread.
+- Statuses are `open` / `answered` / `resolved`. Threads are never deleted;
+  `resolved` is history.
+- md-mini only ever appends a thread, appends a reply, or rewrites one marker
+  line. It never regenerates the file, because you may have edited it by hand.
+
+**Nothing here needs md-mini running.** `question`, `answer` and `watch` read and
+write these files directly — no command socket, unlike `show`/`edit`/`ask`, which
+need a live window. When the app *is* open, an agent's reply reaches the UI
+through md-mini's file watcher.
+
+**`.gitignore` is your call, and md-mini never edits it.** Ignoring
+`.mdmini_comments_*` keeps review chatter out of history; committing it makes
+review threads travel with the branch into a PR. Both are reasonable.
+
+**Worktrees resolve themselves.** Comments sit beside the copy of the document
+they were written on, and the answering agent is the one whose session is
+watching that tree. There is nothing to route.
+
+### Tier 1 — Claude Code: Monitor plus a Stop hook
+
+Once per session the agent arms a monitor:
+
+```js
+Monitor({
+  command: "mdmini watch",
+  description: "new mdmini comments",
+  persistent: true,
+})
+```
+
+Every line of stdout becomes an interruption in that same live session — no
+polling, no subagent, full context retained.
+
+Three things this needs, and each one is load-bearing:
+
+1. **`persistent: true` is mandatory.** Without it the monitor's default timeout
+   is five minutes (one hour maximum). It would die mid-session, and silence from
+   a dead monitor looks exactly like "no comments".
+2. **A Stop hook is the mandatory second layer, not a nicety.** A monitor that
+   emits too much is stopped automatically by the harness, and the agent is not
+   guaranteed to notice. "Monitor dead, comments piling up silently" is a real
+   path, and the only thing that closes it is a check when the turn ends: run
+   `mdmini question`, and if anything is `open`, block the stop and hand the
+   threads back as text.
+3. **`watch` emits once per thread becoming open, and never re-emits.** Otherwise
+   a burst of edits floods the monitor and gets it killed. A thread that is
+   answered and then gets a further human reply becomes open again — and that is
+   a new event, deliberately, because the user is waiting again.
+
+**Interruption discipline.** A monitor line arrives mid-work. The default should
+be: bring the current step to a consistent state, then answer at that checkpoint.
+Dropping everything halfway through an edit to answer a comment is worse for the
+user than answering thirty seconds later.
+
+**Stop hook — verify the contract for your version before relying on it.** The
+mechanism that is stable across Claude Code versions is the exit-code one: exit
+`2` from the hook to block, with the text you want the model to see on stderr.
+The hook receives JSON on stdin including `stop_hook_active`, which it must check
+— if it is already true, exit `0` and let the turn end, or you risk looping.
+There is also a JSON-decision form, but its exact field names have moved between
+versions, so check `/hooks` or the current docs rather than copying a snippet
+from anywhere (including this file) as though it were pinned.
+
+### Tier 2 — agents with no wake-up mechanism
+
+Codex, Cursor and similar have no way for an outside process to interrupt a local
+session: the turn only returns to the model when a tool returns. For those, the
+comment card has a **"send to agent"** button that copies a ready-made prompt
+naming the comment file, the document and the thread id. Paste it into whatever
+agent you are already talking to.
+
+This path needs neither MCP nor md-mini's verbs — the comment file is plain
+markdown, so an agent can read it and append a reply with ordinary file tools.
+That is also why the feature is useful from day one, before any instruction-file
+or hook setup exists.
+
+A blocking, self-looping `question` was considered and deliberately rejected: a
+model told to spin in a polling loop drops out of it, and the timeouts cost
+turns. One reliable path beats two, one of which lies.
+
 ## MCP server
 
 `mdmini mcp` runs a stdio [MCP](https://modelcontextprotocol.io) server instead of the CLI verbs above: same `show`/`edit`/`ask` operations, same command socket underneath, wrapped as MCP tools over JSON-RPC 2.0 on stdin/stdout. Nothing new to run — it's the existing socket protocol with a different transport in front, implemented in `mcp_server.rs` (`ai_socket.rs` stays focused on the socket protocol itself).
@@ -202,6 +323,14 @@ An agent connected over MCP already gets `show`/`edit`/`ask` as self-describing 
 - After edits, the changed span stays highlighted until the user presses Esc or you edit again — use `show: true` on the edit when they should see the change immediately.
 - Respect their attention: batch related questions into one `ask` with options rather than many small ones; timeouts/dismissals mean "not now", not failure — fall back to chat.
 - `edit` takes the COMPLETE new document, never a diff; md-mini diffs internally and preserves their scroll position and undo history.
+
+### Comments the user leaves for you
+
+- Arm this once at the start of a session: `Monitor({command: "mdmini watch", description: "new mdmini comments", persistent: true})`. Every line it prints is a new comment, delivered as an interruption in this session — so you answer with the context you already have. `persistent: true` is not optional: without it the monitor dies after five minutes and its silence is indistinguishable from "no comments".
+- A monitor line is an interruption, not a message from the user. Bring the current step to a consistent state first, then answer at that checkpoint — abandoning a half-finished edit to reply is worse for them than replying a minute later.
+- Use the `question` tool to read open threads and `answer` to reply. Also check `question` before asking them something in chat and before reporting that you are done: they may have already answered you in the document.
+- If a comment asks for a change rather than an answer, make it with `edit`, then close the thread with `answer`.
+- Add a `Stop` hook that runs `mdmini question` and blocks the turn while anything is still open. This is the backstop that matters: a monitor emitting too much is stopped by the harness, and you will not necessarily notice — without the hook, comments pile up in silence.
 ```
 
 ## Using this from an AI agent's CLAUDE.md
@@ -219,6 +348,18 @@ If `mdmini` is available, use it to point at things in the user's open editor an
 - `mdmini ask <file> --question "..." --option A --option B [--option ...]` — post a question with 2-6 option buttons inside the document and block until the user clicks one; prints `{"ok":true,"answer":"A"}` with the chosen option's text. Add `--multi` for checkbox mode (any number of options, including none, checked and confirmed) — prints `{"ok":true,"answers":["A","C"]}` instead. Add `--free-text` to also let the user type a custom answer — prints `{"ok":true,"custom":"..."}` (or alongside `answers` in `--multi` mode) when they do.
 
 All three verbs print one line of JSON to stdout: `{"ok":true}` (plus `"changed_lines":[[start,end]]` for `edit`, `"answer":"..."` for `ask`, `"answers":[...]` for `ask --multi`, or `"custom":"..."` for a typed `ask --free-text` answer) on success, `{"ok":false,"error":"..."}` on failure. Exit code 0 = success, 1 = md-mini rejected the request, 2 = md-mini isn't running or the command was malformed. If the target file isn't already open, `edit`/`show` open a new window for it automatically — the file must already exist on disk (`ask` requires the same: already open, or existing on disk). Always send the full document on stdin for `edit`, never a diff.
+
+### Comments the user leaves for you
+
+The user can also comment on a fragment of a document and expect you to answer. Threads live in `.mdmini_comments_<doc>.md` beside the document as plain markdown, so these verbs need no running app:
+
+- `mdmini question [<file>]` — list open threads (id, status, anchor, quoted fragment, replies). Without a path, everything under the current directory.
+- `echo "reply" | mdmini answer <file> --id c-7f3a2c` — append your reply and mark the thread answered.
+- `mdmini watch [<dir>]` — long-running; prints one line per newly-open thread.
+
+If your harness can react to a stream (Claude Code: `Monitor({command: "mdmini watch", description: "new mdmini comments", persistent: true})`), arm it once per session and you get woken in this same session, with your context intact, instead of polling. `persistent: true` matters: without it the monitor dies after five minutes and its silence looks exactly like "no comments". Also add a `Stop` hook running `mdmini question` that blocks the turn while anything is open — a monitor that emits too much is stopped by the harness without telling you, and the hook is what stops comments piling up unseen.
+
+If your harness cannot do either, check `mdmini question` at natural points: before asking the user something in chat, and before reporting that you are done. A comment line is an interruption, not a user message — finish the current step cleanly, then answer. If a comment asks for a change rather than an answer, make it with `edit`, then close the thread with `answer`.
 ```
 
 Prefer MCP? `claude mcp add --scope user mdmini -- mdmini mcp` registers md-mini's show/edit/ask tools directly — then no instruction-file snippet is needed; run `mdmini agent --mcp` for a short usage-culture snippet worth pasting alongside it.

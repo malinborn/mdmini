@@ -47,6 +47,11 @@
             <strong>mdmini {toast.payload.latest}</strong> available
             <span class="md-toast-dim">(you have v{toast.payload.current})</span>
           </span>
+          <!-- What the release actually brings. A version number on its own
+               never told anyone why to upgrade. -->
+          {#if toast.payload.highlight}
+            <span class="md-toast-highlight">{toast.payload.highlight}</span>
+          {/if}
           <button class="md-toast-cmd" title="Click to copy" onclick={copyBrewCommand}>
             {copied ? 'Copied!' : BREW_CMD}
           </button>
@@ -69,6 +74,21 @@
           >
             Getting Started
           </button>
+        {:else if toast.payload.kind === 'ai-watch-copied'}
+          <!-- Says what to do next, not just that a copy happened: the
+               clipboard is only half the action — the prompt still has to be
+               pasted into an agent session. -->
+          {#if toast.payload.saved}
+            <span class="md-toast-text">
+              <strong>Watch command copied</strong>
+              <span class="md-toast-dim">— paste it into your agent's session</span>
+            </span>
+          {:else}
+            <span class="md-toast-text">
+              <strong>Save the file first</strong>
+              <span class="md-toast-dim">— an unsaved document has no path to watch</span>
+            </span>
+          {/if}
         {:else}
           <span class="md-toast-text">
             <strong>That was your AI</strong>

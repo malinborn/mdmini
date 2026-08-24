@@ -23,7 +23,9 @@ export type MenuAction =
   | 'theme_aurora_light'
   | 'theme_aurora_dark'
   | 'theme_system'
-  | 'recent_files';
+  | 'recent_files'
+  | 'ai_comment'
+  | 'ai_watch_command';
 
 export function onMenuEvent(handler: (action: MenuAction) => void): Promise<() => void> {
   return listen<string>('menu-event', (event) => {
@@ -51,10 +53,16 @@ export function onSessionRestored(handler: (count: number) => void): Promise<() 
 }
 
 /** A newer release was found. Emitted to every window by the polling one. */
-export function onUpdateAvailable(
-  handler: (info: { latest: string; current: string }) => void
-): Promise<() => void> {
-  return listen<{ latest: string; current: string }>('update-available', (event) => {
+/** Matches `UpdateInfo` in src-tauri/src/updater.rs. */
+export interface UpdateInfo {
+  latest: string;
+  current: string;
+  /** One line from the release notes; absent when the notes had nothing usable. */
+  highlight?: string;
+}
+
+export function onUpdateAvailable(handler: (info: UpdateInfo) => void): Promise<() => void> {
+  return listen<UpdateInfo>('update-available', (event) => {
     handler(event.payload);
   });
 }
@@ -110,6 +118,27 @@ export interface AiCommandPayload {
  */
 export function onAiCommand(handler: (payload: AiCommandPayload) => void): Promise<() => void> {
   return getCurrentWebviewWindow().listen<AiCommandPayload>('ai-command', (event) => {
+    handler(event.payload);
+  });
+}
+
+/**
+ * The comment sidecar of a document changed on disk — usually an agent
+ * appending a reply.
+ *
+ * Deliberately NOT `file-changed-externally`. That path early-returns on any
+ * path but the open document's, and when the buffer is dirty it pops a
+ * blocking modal asking whether to reload — neither is right here. The
+ * document itself did not change, and an agent writing a reply must never
+ * interrupt the user with a dialog.
+ *
+ * Window-targeted, so it must be listened for through the current webview
+ * window rather than the global `listen`, for the same reason `onAiCommand`
+ * documents: a global listener's target is `Any` and would also match
+ * targeted emits, so every window would react to every document's comments.
+ */
+export function onCommentsChanged(handler: (path: string) => void): Promise<() => void> {
+  return getCurrentWebviewWindow().listen<string>('comments-changed', (event) => {
     handler(event.payload);
   });
 }

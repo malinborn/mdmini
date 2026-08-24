@@ -77,3 +77,56 @@ pub async fn sync_beta_in_cycle_menu(
     state.sync_beta_in_cycle(enabled);
     Ok(())
 }
+
+/// Comment threads of a document, read from its sidecar. A document with no
+/// sidecar yet returns an empty list rather than an error — that is the normal
+/// state for most files.
+#[command]
+pub async fn comment_threads(path: String) -> Result<Vec<crate::comments::Thread>, String> {
+    crate::comments::load(std::path::Path::new(&path))
+}
+
+/// Creates a thread anchored to `quote` and returns its id.
+///
+/// The id is generated against the ids already in the file, so a hand-edited
+/// file that happens to contain a colliding id cannot produce a duplicate.
+#[command]
+pub async fn comment_create(
+    path: String,
+    line: usize,
+    quote: String,
+    text: String,
+) -> Result<String, String> {
+    let doc = std::path::Path::new(&path);
+    let taken: Vec<String> = crate::comments::load(doc)?
+        .into_iter()
+        .map(|thread| thread.id)
+        .collect();
+    let id = crate::comments::new_id_avoiding(doc, crate::comments::now_epoch(), &taken);
+    crate::comments::append_thread(doc, &id, line, &quote, "You", &text)?;
+    Ok(id)
+}
+
+/// Appends the user's own reply and puts the thread back to `open`.
+///
+/// `append_reply` sets `answered`, which is right for an agent but wrong here:
+/// the user replying again means they are waiting once more, and `open` is
+/// exactly what `mdmini watch` emits an event for — so this is what wakes the
+/// agent for a follow-up question.
+#[command]
+pub async fn comment_reply(path: String, id: String, text: String) -> Result<(), String> {
+    let doc = std::path::Path::new(&path);
+    crate::comments::append_reply(doc, &id, "You", &text)?;
+    crate::comments::set_status(doc, &id, crate::comments::Status::Open)
+}
+
+/// Marks a thread `resolved`. It stays in the file as history — threads are
+/// never deleted, and pruning them is ordinary editing of a markdown file.
+#[command]
+pub async fn comment_resolve(path: String, id: String) -> Result<(), String> {
+    crate::comments::set_status(
+        std::path::Path::new(&path),
+        &id,
+        crate::comments::Status::Resolved,
+    )
+}

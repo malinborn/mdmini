@@ -1,5 +1,13 @@
 /* Live-render — floating selection formatting toolbar (Phase 6) */
 
+/* The comment button carries an emoji rather than a letter glyph, so it needs
+ * its own sizing — the format buttons are tuned for single characters in the
+ * code font. */
+.cm-selection-toolbar-btn-comment {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
 .cm-selection-toolbar-popup {
   position: fixed;
   z-index: 9999;

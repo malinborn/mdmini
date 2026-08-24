@@ -1,4 +1,5 @@
 pub mod ai_socket;
+pub mod comments;
 mod commands;
 pub mod mcp_server;
 mod menu;
@@ -7,6 +8,7 @@ mod paths;
 mod recovery;
 mod session;
 mod updater;
+pub mod watch;
 mod watcher;
 mod window;
 
@@ -58,6 +60,10 @@ pub fn run() {
             commands::write_file,
             commands::file_exists,
             commands::get_pending_file,
+            commands::comment_threads,
+            commands::comment_create,
+            commands::comment_reply,
+            commands::comment_resolve,
             window::open_file_window_cmd,
             window::register_open_file,
             recovery::save_recovery,
@@ -161,6 +167,34 @@ pub fn run() {
                     {
                         eprintln!("AI menu: {}", e);
                     }
+                    return;
+                }
+
+                // "Comment on Selection" acts on a specific document's
+                // selection, so it goes to the focused window only — same
+                // reasoning as "close" below. The generic path at the bottom
+                // broadcasts to every window, which is right for global
+                // preferences (theme, zoom) but here would drop a draft comment
+                // card into every open document at once.
+                // "Comment on Selection" acts on one document's selection, so
+                // it needs exactly one handler to run exactly once — which the
+                // generic path below cannot give it.
+                //
+                // Two traps, both learned the hard way. First, `is_focused()`
+                // queried here is not reliable: the menu bar is what the OS
+                // considers active, and gating on it silently swallowed the
+                // command. Second, the generic path emits per window in a
+                // loop, and `onMenuEvent` listens *globally* — and a global
+                // listener's target is `Any`, so it also receives targeted
+                // emits (the same trap `onAiCommand` documents). With two
+                // windows open, one menu click therefore arrived twice in each
+                // window and created a draft card per delivery.
+                //
+                // So: emit once, app-wide, and let the frontend ignore it
+                // unless its own window has focus. That is the only place
+                // where focus is actually knowable.
+                if id == "ai_comment" {
+                    let _ = _app.emit("menu-event", &id);
                     return;
                 }
 

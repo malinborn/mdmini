@@ -216,6 +216,28 @@ pub fn build_menu(
             &MenuItemBuilder::with_id("ai_teach", "Teach your AI md-mini").build(app)?,
         )
         .separator()
+        // The one item here that *does* something to the open document rather
+        // than explaining setup. It carries an accelerator because it is used
+        // repeatedly while reading, but it stays in the menu regardless: the
+        // PR #11 lesson is that a feature needs a permanent home a user can
+        // scan for, not only a shortcut they have to already know.
+        //
+        // No handling needed in lib.rs — an unclaimed id falls through to the
+        // generic `menu-event` emit, and the frontend switches on it.
+        .item(
+            &MenuItemBuilder::with_id("ai_comment", "Comment on Selection")
+                .accelerator("CmdOrCtrl+Shift+M")
+                .build(app)?,
+        )
+        // Nothing in the app can make an agent watch for comments — that has
+        // to happen in the agent's own session, which the editor cannot reach
+        // into. So the discoverable surface is a command the user hands over,
+        // and it belongs next to the other "Connect AI via …" items.
+        .item(
+            &MenuItemBuilder::with_id("ai_watch_command", "Connect Agent to Doc Questions")
+                .build(app)?,
+        )
+        .separator()
         .item(&MenuItemBuilder::with_id("ai_playbook", "AI Playbook").build(app)?)
         .build()?;
 

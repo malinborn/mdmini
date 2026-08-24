@@ -21,6 +21,10 @@ use serde::Serialize;
 pub struct UpdateInfo {
     pub latest: String,
     pub current: String,
+    /// One-line summary from the release notes, when there is one. A bare
+    /// version number never told anyone why to upgrade.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<String>,
 }
 
 #[derive(Default)]
@@ -113,9 +117,14 @@ pub async fn report_update(
     state: tauri::State<'_, UpdateState>,
     latest: String,
     current: String,
+    highlight: Option<String>,
 ) -> Result<(), String> {
     use tauri::Emitter;
-    let info = UpdateInfo { latest, current };
+    let info = UpdateInfo {
+        latest,
+        current,
+        highlight,
+    };
     if state.record(info.clone()) {
         let _ = app.emit("update-available", info);
     }
@@ -150,6 +159,7 @@ mod tests {
         UpdateInfo {
             latest: latest.to_string(),
             current: "0.5.0".to_string(),
+            highlight: None,
         }
     }
 

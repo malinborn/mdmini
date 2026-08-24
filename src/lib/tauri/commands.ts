@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import type { ThemeSetting } from '../theme-resolve';
 import type { EditorEngine } from '../stores.svelte';
+import type { CommentThread } from '../comment-format';
 
 export async function readFile(path: string): Promise<string> {
   return invoke<string>('read_file', { path });
@@ -60,4 +61,39 @@ export interface PendingOpen {
   content: string | null;
   cursor: number;
   topLine: number;
+}
+
+/**
+ * Comment threads of a document, read from its `.mdmini_comments_<doc>.md`
+ * sidecar. An absent sidecar is an empty list, not an error — most documents
+ * have no comments, and the file only appears once the first one is written.
+ */
+export async function commentThreads(path: string): Promise<CommentThread[]> {
+  return invoke<CommentThread[]>('comment_threads', { path });
+}
+
+/** Creates a thread anchored to `quote` and returns its new id. */
+export async function commentCreate(
+  path: string,
+  line: number,
+  quote: string,
+  text: string
+): Promise<string> {
+  return invoke<string>('comment_create', { path, line, quote, text });
+}
+
+/**
+ * Appends the user's own reply and returns the thread to `open`.
+ *
+ * The status matters: an agent's reply means "answered", but the user replying
+ * again means they are waiting once more — and `open` is exactly what
+ * `mdmini watch` emits an event for, so the agent gets woken by it.
+ */
+export async function commentReply(path: string, id: string, text: string): Promise<void> {
+  return invoke('comment_reply', { path, id, text });
+}
+
+/** Marks a thread `resolved`. It stays in the file as history, never deleted. */
+export async function commentResolve(path: string, id: string): Promise<void> {
+  return invoke('comment_resolve', { path, id });
 }

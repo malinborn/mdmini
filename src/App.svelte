@@ -3,7 +3,7 @@
   import Editor from './lib/editor/Editor.svelte';
   import type { EditorHandle } from './lib/editor/Editor.svelte';
   import { createThemeStore, createEngineStore, createZoomStore, createLineGlowStore, createFileState, createRecentFilesStore } from './lib/stores.svelte';
-  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, syncEngineMenu, syncBetaInCycleMenu, type PendingOpen } from './lib/tauri/commands';
+  import { readFile, writeFile, fileExists, showOpenDialog, showSaveDialog, syncThemeMenu, syncEngineMenu, syncBetaInCycleMenu, commentThreads, commentCreate, commentReply, commentResolve, type PendingOpen } from './lib/tauri/commands';
   import {
     onMenuEvent,
     onOpenFile,
@@ -12,7 +12,9 @@
     onUpdateAvailable,
     onUpdateDismissed,
     onAiCommand,
+    onCommentsChanged,
     type AiCommandPayload,
+    type UpdateInfo,
   } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
@@ -23,7 +25,7 @@
   import { shouldShowHint, nextCheckDelay } from './lib/ai-hint';
   import { previewCompartment, lineGlowCompartment } from './lib/editor/setup';
   import { EditorView, highlightActiveLine } from '@codemirror/view';
-  import { ChangeSet } from '@codemirror/state';
+  import { ChangeSet, type StateEffect } from '@codemirror/state';
   import { livePreviewPlugin } from './lib/editor/preview/plugin';
   import { LIVE_PREVIEW, LIVE_RENDER, flavourFacet } from './lib/editor/preview/flavour';
   import { liveRenderExtensions } from './lib/editor/live-render';
@@ -40,6 +42,14 @@
     aiHighlightRanges,
   } from './lib/editor/ai-highlight';
   import { addAiAsk, removeAiAsk } from './lib/editor/ai-ask';
+  import {
+    addAiComment,
+    aiCommentField,
+    clearAiComments,
+    CommentWidget,
+    type CommentActions,
+  } from './lib/editor/ai-comment';
+  import { anchorPosition, buildHandoffPrompt, buildWatchPrompt } from './lib/comment-format';
   import './lib/theme/dark.css';
   import './lib/theme/light.css';
   import './lib/theme/aurora-dark.css';
@@ -247,6 +257,11 @@
       fileState.isDirty = false;
       recentFiles.add(path);
 
+      // A different document means different comments; drafts belonged to the
+      // file we just left and must not reappear anchored in this one.
+      commentDrafts = new Map();
+      void reloadComments();
+
       // Detect file type and switch editor mode
       const basename = path.split('/').pop()?.toLowerCase() ?? '';
       const ext = path.split('.').pop()?.toLowerCase() ?? '';
@@ -264,6 +279,16 @@
         editorHandle?.setCodeMode(null);
         activePreview = 'markdown';
       }
+
+      // `setCodeMode`/`setEnvMode` above reconfigure the preview compartment
+      // themselves, and the markdown branch installs a bare livePreviewPlugin
+      // — no flavour facet, no live-render bundle. Re-assert the engine's own
+      // configuration on top, or a freshly opened window sits in a half-built
+      // state: in live-render that meant no atomic markers, no hidden markers
+      // and no selection toolbar until the engine was toggled by hand.
+      // `activePreview` was just assigned, so this cannot rely on the $effect
+      // firing first.
+      applyPreviewConfig();
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -314,6 +339,187 @@
         }
       }
     }
+  }
+
+  // --- Comment threads (the reverse AI channel) ---
+
+  /**
+   * Anchor of a thread the user has started but not yet written. Draft threads
+   * exist only in CM6 state — nothing is written to the sidecar until there is
+   * actual text, so opening the menu item and changing your mind leaves no
+   * file behind and no empty thread for an agent to be woken by.
+   *
+   * Keyed by the synthetic id the draft widget carries; `commentActions.reply`
+   * uses the presence of a key here to decide "create" versus "append".
+   */
+  let commentDrafts = new Map<string, { line: number; quote: string }>();
+  let commentDraftSeq = 0;
+
+  /**
+   * Rebuild every comment widget from the sidecar.
+   *
+   * Wholesale rather than incremental: threads are few, the file is small, and
+   * a full rebuild cannot drift out of sync with the file the way a diff could.
+   * Resolved threads are skipped — they stay in the file as history, but the
+   * document should not accumulate closed cards forever.
+   */
+  async function reloadComments(): Promise<void> {
+    const path = fileState.filePath;
+    const view = editorHandle?.view;
+    if (!view) return;
+    if (!path) {
+      view.dispatch({ effects: clearAiComments.of(null) });
+      return;
+    }
+    const threads = await commentThreads(path).catch(() => []);
+    const doc = view.state.doc.toString();
+    const effects: StateEffect<unknown>[] = [clearAiComments.of(null)];
+    for (const thread of threads) {
+      if (thread.status === 'resolved') continue;
+      const { pos, to, orphaned } = anchorPosition(doc, thread.quote, thread.line);
+      effects.push(addAiComment.of({ thread, pos, to, orphaned, actions: commentActions }));
+    }
+    // Drafts are not in the file, so a reload would otherwise silently discard
+    // half-typed comments — re-add them on top.
+    for (const [id, draft] of commentDrafts) {
+      const { pos, to, orphaned } = anchorPosition(doc, draft.quote, draft.line);
+      effects.push(
+        addAiComment.of({
+          thread: { id, status: 'open', line: draft.line, quote: draft.quote, replies: [] },
+          pos,
+          to,
+          orphaned,
+          actions: commentActions,
+        })
+      );
+    }
+    view.dispatch({ effects });
+  }
+
+  /** Document offset a comment widget currently sits at, or null if it's gone. */
+  function commentWidgetPos(id: string): number | null {
+    const view = editorHandle?.view;
+    if (!view) return null;
+    const set = view.state.field(aiCommentField, false);
+    if (!set) return null;
+    let found: number | null = null;
+    set.between(0, view.state.doc.length, (from, _to, value) => {
+      const widget = (value.spec as { widget: unknown }).widget;
+      if (widget instanceof CommentWidget && widget.spec.thread.id === id) found = from;
+    });
+    return found;
+  }
+
+  const commentActions: CommentActions = {
+    reply: (id, text) => {
+      const path = fileState.filePath;
+      if (!path) return;
+      const draft = commentDrafts.get(id);
+      if (draft) {
+        // First text on a draft is what creates the thread in the file.
+        commentDrafts.delete(id);
+        void commentCreate(path, draft.line, draft.quote, text).then(async () => {
+          // The sidecar has only just come into existence, so the watcher armed
+          // when this document was opened isn't watching it yet. Re-registering
+          // the file rebuilds the watcher over both paths — otherwise the very
+          // first agent reply would arrive with nothing listening for it.
+          await invoke('register_open_file', { path }).catch(() => {});
+          await reloadComments();
+        });
+        return;
+      }
+      void commentReply(path, id, text).then(reloadComments);
+    },
+    resolve: (id) => {
+      const path = fileState.filePath;
+      if (!path) return;
+      if (commentDrafts.delete(id)) {
+        // Nothing was ever written; just drop the card.
+        void reloadComments();
+        return;
+      }
+      void commentResolve(path, id).then(reloadComments);
+    },
+    handoff: (id) => {
+      const path = fileState.filePath;
+      if (!path) return;
+      void navigator.clipboard.writeText(buildHandoffPrompt(path, id));
+    },
+    insertIntoText: (id, text) => {
+      const view = editorHandle?.view;
+      const at = commentWidgetPos(id);
+      if (!view || at === null) return;
+      // A normal, undoable edit: the answer is content the user chose to
+      // accept, and Cmd+Z is how they take it back.
+      view.dispatch({ changes: { from: at, insert: `\n${text}\n` } });
+    },
+  };
+
+  /**
+   * Put the "start watching this document's comments" prompt on the clipboard.
+   *
+   * Same focus guard as comment creation, and for the same reason: a menu event
+   * reaches every window, and only the focused one should answer for its own
+   * document. The toast is the whole point — a clipboard write is invisible.
+   */
+  function copyWatchCommand(): void {
+    if (!document.hasFocus()) return;
+    const path = fileState.filePath;
+    if (!path) {
+      toasts.push({ kind: 'ai-watch-copied', saved: false });
+      return;
+    }
+    void navigator.clipboard
+      .writeText(buildWatchPrompt(path))
+      .then(() => toasts.push({ kind: 'ai-watch-copied', saved: true }))
+      .catch(() => toasts.push({ kind: 'ai-watch-copied', saved: false }));
+  }
+
+  /**
+   * Start a comment on the selection, or on the caret's line if nothing is
+   * selected — an empty quote would give the thread no anchor to survive on.
+   */
+  function createCommentFromSelection(): void {
+    // Menu events reach every window: `onMenuEvent` listens globally, and a
+    // global listener's target is `Any`. That is harmless for idempotent
+    // actions like theme or zoom, but this one creates a card — so without
+    // this guard a single menu click would start a draft in every open
+    // document. Focus is only knowable here, not in the Rust menu handler,
+    // where the menu bar itself is what the OS considers active.
+    //
+    // The in-editor toolbar button calls `startCommentFromSelection` directly
+    // instead: a click inside this window's own toolbar already says which
+    // document is meant, and going through the guard would make the button
+    // untestable under automation, where nothing holds OS focus.
+    if (!document.hasFocus()) return;
+    startCommentFromSelection();
+  }
+
+  /** The actual work, with no focus guard — see `createCommentFromSelection`. */
+  function startCommentFromSelection(): void {
+    const view = editorHandle?.view;
+    if (!view || !fileState.filePath) return;
+    const range = view.state.selection.main;
+    const line = view.state.doc.lineAt(range.from);
+    const quote = range.empty
+      ? line.text.trim()
+      : view.state.sliceDoc(range.from, range.to).trim();
+    if (!quote) return;
+
+    commentDraftSeq += 1;
+    const id = `draft:${commentDraftSeq}`;
+    commentDrafts.set(id, { line: line.number, quote });
+    view.dispatch({
+      effects: addAiComment.of({
+        thread: { id, status: 'open', line: line.number, quote, replies: [] },
+        pos: range.from,
+        // A draft already knows its exact range — no quote search needed, and
+        // the fragment gets highlighted from the moment the card appears.
+        to: range.empty ? line.to : range.to,
+        orphaned: false,
+        actions: commentActions,
+      }),
+    });
   }
 
   // --- AI command handling (`mdmini show`/`edit`) ---
@@ -633,6 +839,12 @@
         case 'recent_files':
           showRecentFiles = true;
           break;
+        case 'ai_comment':
+          createCommentFromSelection();
+          break;
+        case 'ai_watch_command':
+          copyWatchCommand();
+          break;
       }
 
       // macOS/muda toggles the clicked CheckMenuItem natively before this
@@ -664,6 +876,13 @@
 
     const unlistenAiCommand = onAiCommand((payload) => {
       handleAiCommand(payload);
+    });
+
+    // An agent appended a reply to this document's sidecar. Only the comment
+    // cards are rebuilt — the document itself did not change, so nothing here
+    // touches the buffer, the dirty flag, or autosave.
+    const unlistenComments = onCommentsChanged(() => {
+      void reloadComments();
     });
 
     // Drag & drop: open files dropped onto the window
@@ -702,16 +921,16 @@
 
     // The notice itself is process-wide: Rust broadcasts a find to every window
     // and remembers dismissal, so it does not have to be closed window by window.
-    invoke<{ latest: string; current: string } | null>('pending_update')
+    invoke<UpdateInfo | null>('pending_update')
       .then((info) => {
-        if (info) toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+        if (info) toasts.push({ kind: 'update', latest: info.latest, current: info.current, highlight: info.highlight });
       })
       .catch(() => {
         // Update notices are best-effort; never surface this.
       });
 
     const unlistenUpdateAvailable = onUpdateAvailable((info) => {
-      toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+      toasts.push({ kind: 'update', latest: info.latest, current: info.current, highlight: info.highlight });
     });
 
     const unlistenUpdateDismissed = onUpdateDismissed(() => {
@@ -749,6 +968,7 @@
       unlistenOpenFile.then((fn) => fn());
       unlistenExternalChange.then((fn) => fn());
       unlistenAiCommand.then((fn) => fn());
+      unlistenComments.then((fn) => fn());
       unlistenDragDrop.then((fn) => fn());
       unlistenSessionRestored.then((fn) => fn());
       unlistenUpdateAvailable.then((fn) => fn());
@@ -813,7 +1033,20 @@
   //    files keep their own preview plugin and ignore the flavour, which only
   //    means anything for markdown.
   // 3. Markdown picks its plugin plus the flavour facet.
-  $effect(() => {
+  /**
+   * Put the preview compartment into the shape the current engine and file
+   * type call for.
+   *
+   * Called both from the `$effect` below and imperatively after a file opens,
+   * because `Editor.svelte`'s `setCodeMode`/`setEnvMode` reconfigure the SAME
+   * compartment — and its markdown branch installs a bare `livePreviewPlugin`
+   * with no flavour facet and no live-render bundle. `handleOpenFilePath`
+   * calls `setCodeMode(null)` for every markdown file, so on a freshly opened
+   * window it wiped whatever this effect had just installed: live-render was
+   * dead until the engine was toggled by hand, which re-ran the effect. Two
+   * owners of one compartment, and this one is authoritative.
+   */
+  function applyPreviewConfig(): void {
     const e = engine.value;
     const v = editorHandle?.view;
     if (!v) return;
@@ -841,9 +1074,22 @@
       effects: previewCompartment.reconfigure([
         livePreviewPlugin,
         flavourFacet.of(liveRender ? LIVE_RENDER : LIVE_PREVIEW),
-        ...(liveRender ? liveRenderExtensions() : []),
+        // The toolbar's comment button reaches the same code path as the menu
+        // item, minus the focus guard: a click in this window's own toolbar is
+        // unambiguous about which document is meant.
+        ...(liveRender
+          ? liveRenderExtensions({ onComment: () => startCommentFromSelection() })
+          : []),
       ]),
     });
+  }
+
+  $effect(() => {
+    // Read both dependencies unconditionally so the effect re-runs on either.
+    void engine.value;
+    void editorHandle?.view;
+    void activePreview;
+    applyPreviewConfig();
   });
 </script>
 

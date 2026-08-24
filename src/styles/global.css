@@ -164,6 +164,20 @@ body {
   font-size: 12px;
 }
 
+/* The release's own words, under the version line. Dimmer than the heading but
+ * brighter than `-dim`: it is the reason to upgrade, so it should be read, not
+ * skipped. Bounded to two lines — the builder already caps the length, this
+ * only guards against an unusually narrow window. */
+.md-toast-highlight {
+  opacity: 0.85;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .md-toast kbd {
   font-family: var(--font-code);
   font-size: 11px;

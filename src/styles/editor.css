@@ -1411,3 +1411,172 @@
   background-image: linear-gradient(90deg, rgba(var(--color-glow), 0.10) 0%, transparent 60%) !important;
   box-shadow: 0 0 12px 4px rgba(var(--color-glow), 0.06) !important;
 }
+
+/* AI-комментарии — обратное направление AI-интерфейса. Одна визуальная семья
+ * с `.cm-ai-ask`, поэтому те же токены `--ai-ask-*`.
+ *
+ * `.cm-ai-comment-wrap` — корень виджета, и CM6 измеряет его высоту по
+ * DOM-боксу, куда margin не входит. Вертикальные отступы поэтому padding
+ * здесь, а не margin на `.cm-ai-comment`. */
+.cm-ai-comment-wrap {
+  padding: 0.4rem 0;
+}
+
+.cm-ai-comment {
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  /* Непрозрачный стек, ОБЯЗАТЕЛЬНО оба свойства — ровно как у `.cm-ai-ask`.
+   * `--ai-ask-bg` это заливка с альфой 6–10%, а слой drawSelection лежит на
+   * z-index -2, то есть позади контента: без сплошного background-color
+   * выделение просвечивает сквозь карточку. */
+  background-color: var(--bg-base);
+  background-image: linear-gradient(var(--ai-ask-bg), var(--ai-ask-bg));
+  font-size: 0.9em;
+  /* Протяжённое выделение по документу не должно закрашивать карточку. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Поле ввода — единственное место в карточке, где выделение текста нужно. */
+.cm-ai-comment-input:focus {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm-ai-comment-orphaned {
+  border-style: dashed;
+}
+
+.cm-ai-comment-head {
+  opacity: 0.7;
+  font-size: 0.85em;
+  margin-bottom: 0.4rem;
+}
+
+.cm-ai-comment-reply {
+  margin-bottom: 0.4rem;
+}
+
+.cm-ai-comment-author {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+.cm-ai-comment-text {
+  white-space: pre-wrap;
+}
+
+.cm-ai-comment-input {
+  width: 100%;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 4px;
+  background: var(--ai-ask-chip-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.cm-ai-comment-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.cm-ai-comment-button {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 4px;
+  background: var(--ai-ask-chip-bg);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.cm-ai-comment-button:hover {
+  background: var(--ai-ask-chip-hover-bg);
+}
+
+/* Confirmation state after a click whose effect is invisible — copying to the
+ * clipboard. Reuses the ask accent so it reads as "this happened", not as a
+ * second action to press. */
+.cm-ai-comment-button.cm-ai-comment-button-done {
+  color: var(--ai-ask-accent-text);
+  background: var(--ai-ask-accent);
+  border-color: var(--ai-ask-accent);
+}
+
+.cm-ai-comment-button.cm-ai-comment-button-done:hover {
+  background: var(--ai-ask-accent);
+}
+
+/* The fragment a thread is anchored to. The card alone states its quote but
+ * leaves the reader hunting for the words in the text — this is what makes a
+ * comment feel attached to something. An underline plus a faint wash rather
+ * than a strong fill, so a document with several threads stays readable. */
+.cm-ai-comment-anchor {
+  background: var(--ai-ask-bg);
+  border-bottom: 2px solid var(--ai-ask-border);
+}
+
+/* Excerpt of the quoted fragment in the card header. Pushed to the right so
+ * the id and status keep their place, and truncated by the builder rather than
+ * by CSS — a hard character budget reads better than an ellipsis that lands
+ * wherever the card happens to end. */
+.cm-ai-comment-excerpt {
+  float: right;
+  max-width: 60%;
+  margin-left: 0.6rem;
+  opacity: 0.75;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Attention link between a card and its fragment ---
+ *
+ * Both directions use the same shimmer already defined for AI edits
+ * (`cm-ai-shimmer`), on the accent token — which in the aurora themes IS the
+ * aurora, so this needs no palette of its own. Slow and low-contrast on
+ * purpose: it says "these two belong together", it is not an alert. */
+.cm-ai-comment.cm-ai-comment-attention {
+  border-color: var(--ai-ask-accent);
+  background-image: linear-gradient(
+    90deg,
+    var(--ai-ask-bg) 0%,
+    var(--ai-ask-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-ask-bg) 65%,
+    var(--ai-ask-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 3.2s ease-in-out infinite;
+}
+
+.cm-ai-comment-anchor.cm-ai-comment-anchor-attention {
+  border-bottom-color: var(--ai-ask-accent);
+  background-image: linear-gradient(
+    90deg,
+    var(--ai-ask-bg) 0%,
+    var(--ai-ask-bg) 35%,
+    var(--ai-edit-shimmer) 50%,
+    var(--ai-ask-bg) 65%,
+    var(--ai-ask-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: cm-ai-shimmer 3.2s ease-in-out infinite;
+}
+
+/* Motion is the whole mechanism here, so with it suppressed the link has to be
+ * carried by colour alone — otherwise the feature silently disappears for
+ * anyone who asked the OS for less animation. */
+@media (prefers-reduced-motion: reduce) {
+  .cm-ai-comment.cm-ai-comment-attention,
+  .cm-ai-comment-anchor.cm-ai-comment-anchor-attention {
+    animation: none;
+    background-image: linear-gradient(var(--ai-edit-shimmer), var(--ai-edit-shimmer));
+  }
+}

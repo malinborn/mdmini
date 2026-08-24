@@ -30,6 +30,54 @@ export function isNewer(latest: string, current: string): boolean {
   return lc > cc;
 }
 
+/** Longest highlight the toast can show without wrapping past two lines. */
+const HIGHLIGHT_MAX = 120;
+
+/**
+ * One-line summary of what a release brings, pulled from its notes.
+ *
+ * The toast used to say only "a newer version exists", which answers the wrong
+ * question — nobody upgrades because a number changed. The release body's first
+ * real line is written for humans, so it is the one worth showing.
+ *
+ * Markdown headings, list bullets and emphasis are stripped: the toast renders
+ * plain text, and raw `### ` or `- **bold**` in it reads as a rendering bug.
+ * Returns null rather than a truncated word salad when there is nothing usable.
+ */
+export function releaseHighlight(body: string | null | undefined): string | null {
+  if (!body) return null;
+
+  let firstHeading: string | null = null;
+
+  for (const raw of body.split('\n')) {
+    const isHeading = /^\s*#{1,6}\s/.test(raw);
+    const line = raw
+      .replace(/^\s*#{1,6}\s*/, '')
+      .replace(/^\s*[-*+]\s+/, '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/[*_`]/g, '')
+      .trim();
+    if (line.length < 8) continue; // blank, a divider, or a bare word
+    if (/^!\[|^\[!\[/.test(line)) continue; // badge or image row
+
+    // Section headings are usually navigation, not news — "What's new" tells
+    // the reader nothing. Prefer the prose under them, and fall back to the
+    // first heading only if the notes turn out to be headings all the way
+    // down, so a terse release still says something.
+    if (isHeading) {
+      firstHeading ??= line;
+      continue;
+    }
+    return clampHighlight(line);
+  }
+
+  return firstHeading ? clampHighlight(firstHeading) : null;
+}
+
+function clampHighlight(line: string): string {
+  return line.length > HIGHLIGHT_MAX ? `${line.slice(0, HIGHLIGHT_MAX - 1)}…` : line;
+}
+
 export async function checkForUpdates(): Promise<void> {
   try {
     const current = await getCurrentVersion();
@@ -46,7 +94,11 @@ export async function checkForUpdates(): Promise<void> {
 
     // Rust decides whether this is worth showing — it remembers dismissals and
     // suppresses the repeat report every subsequent hour.
-    await invoke('report_update', { latest, current });
+    await invoke('report_update', {
+      latest,
+      current,
+      highlight: releaseHighlight(data.body as string | null),
+    });
   } catch {
     // Network error, repo not found — silently ignore
   }
