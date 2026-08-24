@@ -34,8 +34,36 @@ type MermaidAPI = {
 let mermaidModule: MermaidAPI | null = null;
 let mermaidLoading: Promise<MermaidAPI> | null = null;
 
-function currentTheme(): 'default' | 'dark' {
-  return document.documentElement.dataset.theme?.endsWith('dark') ? 'dark' : 'default';
+/**
+ * Resolves which mermaid built-in theme ('default' light / 'dark') a given
+ * view's diagram should render with.
+ *
+ * Walks up from the view's own DOM to the nearest `[data-theme]` ancestor
+ * instead of always reading `document.documentElement`. In the app there is
+ * only one themed element (`<html data-theme="...">`, set in App.svelte), so
+ * `closest()` resolves straight to `documentElement` and this is a no-op.
+ * The landing page's demo cards each carry their own `data-theme` (see
+ * `site/styles/demo-themes.css`) independent of the page's — without this,
+ * every embedded diagram rendered with the *page's* theme regardless of the
+ * card it sat on, so a light-themed card on a dark page got a dark diagram.
+ */
+export function resolveTheme(view: EditorView): 'default' | 'dark' {
+  const scope = (view.dom.closest('[data-theme]') as HTMLElement | null) ?? document.documentElement;
+  return scope.dataset.theme?.endsWith('dark') ? 'dark' : 'default';
+}
+
+/**
+ * Cache key for a rendered diagram: the resolved mermaid theme plus the
+ * source text. Deliberately coarse-grained on the *resolved* theme ('default'
+ * | 'dark'), not the app's four theme names — 'light' and 'aurora-light' both
+ * render as 'default', so they correctly share a cache entry instead of
+ * re-rendering an identical SVG twice.
+ */
+export function mermaidCacheKey(view: EditorView, source: string): string {
+  // The separator is written as an escape, not a raw NUL byte: a literal NUL
+  // in the source makes git treat this file as binary, which silently breaks
+  // diffs and merges on it. The runtime key is identical either way.
+  return `${resolveTheme(view)}\u0000${source}`;
 }
 
 async function loadMermaid(): Promise<MermaidAPI> {
@@ -43,47 +71,48 @@ async function loadMermaid(): Promise<MermaidAPI> {
   if (mermaidLoading) return mermaidLoading;
 
   mermaidLoading = import('mermaid').then((m) => {
-    const api = m.default;
-    (api.initialize as (config: Record<string, unknown>) => void)({
-      startOnLoad: false,
-      theme: currentTheme(),
-      suppressErrors: true,
-    });
-    mermaidModule = api as unknown as MermaidAPI;
+    mermaidModule = m.default as unknown as MermaidAPI;
     return mermaidModule;
   });
 
   return mermaidLoading;
 }
 
-// -- Render cache (content-addressed) --
+// -- Render cache (theme + content addressed) --
 
 const cache = new Map<string, MermaidCacheEntry>();
 const MAX_CACHE = 50;
 
-export function getCached(source: string): MermaidCacheEntry | undefined {
-  const entry = cache.get(source);
+export function getCached(view: EditorView, source: string): MermaidCacheEntry | undefined {
+  const key = mermaidCacheKey(view, source);
+  const entry = cache.get(key);
   if (entry !== undefined) {
     // Promote to most-recently-used by re-inserting at tail
-    cache.delete(source);
-    cache.set(source, entry);
+    cache.delete(key);
+    cache.set(key, entry);
   }
   return entry;
 }
 
-function setCache(source: string, entry: MermaidCacheEntry): void {
+function setCache(key: string, entry: MermaidCacheEntry): void {
   if (cache.size >= MAX_CACHE) {
     const first = cache.keys().next().value;
     if (first !== undefined) cache.delete(first);
   }
-  cache.set(source, entry);
+  cache.set(key, entry);
 }
 
 // -- Render queue (sequential, mermaid can't render concurrently) --
 
 let renderCounter = 0;
 let rendering = false;
-const queue: Array<{ source: string; view: EditorView; resolve: () => void }> = [];
+const queue: Array<{
+  key: string;
+  source: string;
+  theme: 'default' | 'dark';
+  view: EditorView;
+  resolve: () => void;
+}> = [];
 
 async function processQueue(): Promise<void> {
   if (rendering) return;
@@ -91,20 +120,24 @@ async function processQueue(): Promise<void> {
 
   while (queue.length > 0) {
     const job = queue.shift()!;
-    if (cache.has(job.source) && cache.get(job.source)!.svg !== null) {
+    if (cache.has(job.key) && cache.get(job.key)!.svg !== null) {
       job.resolve();
       continue;
     }
 
     try {
       const api = await loadMermaid();
+      // Queue processing is strictly sequential (the `rendering` guard above),
+      // so it's safe to flip mermaid's global theme config per job even
+      // though `render()` itself takes no per-call theme argument.
+      api.initialize({ startOnLoad: false, theme: job.theme, suppressErrors: true });
       const id = `mermaid-render-${renderCounter++}`;
       const { svg } = await api.render(id, job.source);
-      setCache(job.source, { svg, error: null });
+      setCache(job.key, { svg, error: null });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      const prev = cache.get(job.source);
-      setCache(job.source, {
+      const prev = cache.get(job.key);
+      setCache(job.key, {
         svg: prev?.svg ?? null,
         error: errorMsg,
       });
@@ -126,19 +159,20 @@ async function processQueue(): Promise<void> {
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const DEBOUNCE_MS = 300;
 
-export function requestRender(source: string, view: EditorView): void {
-  const existing = cache.get(source);
+export function requestRender(view: EditorView, source: string): void {
+  const key = mermaidCacheKey(view, source);
+  const existing = cache.get(key);
   if (existing?.svg) return;
 
-  const existing_timer = debounceTimers.get(source);
+  const existing_timer = debounceTimers.get(key);
   if (existing_timer) clearTimeout(existing_timer);
 
   debounceTimers.set(
-    source,
+    key,
     setTimeout(() => {
-      debounceTimers.delete(source);
+      debounceTimers.delete(key);
       void new Promise<void>((resolve) => {
-        queue.push({ source, view, resolve });
+        queue.push({ key, source, theme: resolveTheme(view), view, resolve });
         processQueue();
       });
     }, DEBOUNCE_MS)
@@ -149,9 +183,16 @@ export function requestRender(source: string, view: EditorView): void {
 
 export function reinitializeTheme(): void {
   if (!mermaidModule) return;
+  // This fires on a *page*-level theme change (the app's theme menu, or the
+  // landing's toggle) — it has no specific view, so it reads the document's
+  // own theme directly rather than through resolveTheme(). Demo cards with
+  // their own fixed data-theme are unaffected by the page toggle in the
+  // first place; the next render for any view still resolves its own theme
+  // fresh via the queue in processQueue().
+  const theme = document.documentElement.dataset.theme?.endsWith('dark') ? 'dark' : 'default';
   mermaidModule.initialize({
     startOnLoad: false,
-    theme: currentTheme(),
+    theme,
     suppressErrors: true,
   });
   cache.clear();
@@ -275,12 +316,12 @@ export function decorateMermaidBlock(
 
   if (!source.trim()) return;
 
-  const cached = getCached(source);
+  const cached = getCached(view, source);
   const svg = cached?.svg ?? null;
   const error = cached?.error ?? null;
 
   if (!cached || !cached.svg) {
-    requestRender(source, view);
+    requestRender(view, source);
   }
 
   // Tell CM6 how tall this will be before it is ever laid out, so its height map

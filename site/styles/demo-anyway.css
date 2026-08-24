@@ -1,0 +1,440 @@
+/* Styles for the anyway demo. Owned by site/demos/anyway.ts.
+ *
+ * Design canvas: every positioned element below lives on a fixed 380x400
+ * coordinate system (deliberately tall/narrow — see anyway.ts's fitStage for
+ * why). anyway.ts scales that whole canvas with a single `transform: scale()`
+ * on `.anyway-stage`, computed from the real, measured width of
+ * `.anyway-stage-wrap` AND a target stage height (so it fills the ~490px
+ * carousel row at desktop widths instead of sitting centered in a mostly
+ * empty box) — never from a guessed breakpoint. Never add a second,
+ * viewport-based sizing rule here: it would fight the JS-computed one and can
+ * drift out of sync with it. Positions/sizes below must stay inside this
+ * 380x400 box; anyway.ts's DESIGN_W/DESIGN_H constants must keep matching it.
+ *
+ * Tokens: this slide's container carries both `data-theme` and
+ * `data-demo-theme="aurora-dark"` (see site/index.html), so every custom
+ * property from demo-themes.css's `[data-demo-theme='aurora-dark']` block
+ * (--bg-base, --bg-surface, --text-primary, --text-subtle, --color-border,
+ * --color-heading, --color-link, --highlight, --font-text, --font-code) is
+ * already available here by inheritance. --brand-gradient comes from
+ * landing.css's bare `:root` block, which (unlike the theme tokens) is never
+ * scoped, so it's safe to reuse directly for the Dock icon.
+ *
+ * Every animation classname and @keyframes here is private to this file on
+ * purpose — nothing is shared with landing.css's `.caret-blink`/`.pulse-hl`,
+ * even though they'd look similar, so this demo never breaks if another
+ * agent renames or removes those.
+ */
+
+.anyway-root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.anyway-label {
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  color: var(--text-subtle);
+  min-height: 13px;
+}
+
+.anyway-frame {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--bg-base);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+/* Real, measured box: anyway.ts reads this element's clientWidth and writes
+   its height back in px, synchronously, in the same task that builds the
+   card's contents — so a visitor never sees an unsized card that then grows
+   once JS "catches up" (see landing.css's hover-pause comment for why that
+   specific failure mode matters on this page). */
+.anyway-stage-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.anyway-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 380px;
+  height: 400px;
+  transform-origin: top left;
+}
+
+/* ── Reduced motion: one calm frame, no transitions/animations anywhere ── */
+.anyway-root.is-static .anyway-stage * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── Shared "window" chrome (terminal + mdmini mocks) ── */
+.anyway-winbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.anyway-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.anyway-dot--red { background: #ff5f57; }
+.anyway-dot--yellow { background: #febc2e; }
+.anyway-dot--green { background: #28c840; }
+
+.anyway-wintitle {
+  margin-left: 4px;
+  font-family: var(--font-text);
+  font-size: 11px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Terminal ── */
+.anyway-terminal {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  /* Wide enough to show the whole batch command ("mdmini README.md
+     CLAUDE.md auth_spec.md", 40 chars) without clipping — the point of Act 1
+     is watching that exact line get typed in full, not just its first third. */
+  width: 322px;
+  height: 106px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--color-border);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.anyway-terminal.is-visible { opacity: 1; transform: none; }
+
+.anyway-termbody {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 16px 12px;
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.anyway-prompt { color: var(--color-link); }
+
+.anyway-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--text-primary);
+  margin-left: 1px;
+}
+.anyway-caret.is-blinking { animation: anyway-blink 1s step-end infinite; }
+@keyframes anyway-blink {
+  0%, 55% { opacity: 1; }
+  60%, 100% { opacity: 0; }
+}
+
+/* ── mdmini mock windows (3 cascaded + 1 solo for the "as an app" act) ── */
+.anyway-win {
+  position: absolute;
+  /* Wide enough that "auth_spec.md — md-mini" (the longest of the three
+     cascade titles) never hits `.anyway-wintitle`'s ellipsis — verified by
+     screenshot. */
+  width: 232px;
+  height: 122px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(16px) scale(0.85);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.anyway-win.is-open { opacity: 1; transform: none; }
+
+.anyway-win--0 { left: 66px; top: 112px; transition-delay: 0s; }
+.anyway-win--1 { left: 92px; top: 146px; transition-delay: 0.13s; }
+.anyway-win--2 { left: 118px; top: 180px; transition-delay: 0.26s; }
+.anyway-win--solo { left: 74px; top: 128px; width: 232px; height: 128px; transition-delay: 0s; }
+
+.anyway-winbody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px;
+}
+.anyway-skel {
+  display: block;
+  height: 6px;
+  width: 88%;
+  border-radius: 3px;
+  background: var(--highlight);
+}
+.anyway-skel--head { height: 9px; width: 58%; background: var(--color-heading); opacity: 0.85; }
+.anyway-skel--sm { width: 52%; }
+.anyway-skel--md { width: 72%; }
+
+/* ── Dock ── */
+.anyway-dock {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 352px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--color-border);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.anyway-dock.is-visible { opacity: 1; transform: none; }
+
+.anyway-dockicon {
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  width: 42px;
+  height: 42px;
+  margin-left: -21px;
+  border-radius: 12px;
+  background: var(--brand-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  transition: transform 0.16s ease;
+}
+.anyway-dockicon.is-pressed { transform: scale(0.85); }
+.anyway-dockicon-text {
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+}
+
+/* ── Document icons (dock-drop act) ──
+ * Real Finder-style icons: a folded-corner "page" with a few skeleton text
+ * lines, filename centered beneath (flex column, so a short "README.md" and
+ * a wide "auth_spec.md" both center correctly under their own icon).
+ *
+ * `--select-delay` staggers each file's selected-look transition (border,
+ * fill, badge-like name pill) so the highlight visibly sweeps left-to-right
+ * as the marquee grows over them, instead of all three snapping at once.
+ * The base opacity/transform transition (fade-in / dim / hide) intentionally
+ * has NO delay, so those three states change together.
+ */
+.anyway-file {
+  position: absolute;
+  top: 66px;
+  width: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.anyway-file--0 { left: 27px; --select-delay: 0s; }
+.anyway-file--1 { left: 153px; --select-delay: 0.16s; }
+.anyway-file--2 { left: 280px; --select-delay: 0.32s; }
+
+.anyway-file.is-visible { opacity: 1; transform: none; }
+/* Dimming to a ghost (picked up) and hiding (dropped) each win the cascade
+   over `.is-visible` by appearing later in the sheet. */
+.anyway-file.is-lifted { opacity: 0.32; }
+.anyway-file.is-gone { opacity: 0; }
+
+.anyway-file-icon {
+  position: relative;
+  width: 34px;
+  height: 40px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color 0.3s ease var(--select-delay, 0s),
+    background-color 0.3s ease var(--select-delay, 0s),
+    box-shadow 0.3s ease var(--select-delay, 0s);
+}
+/* Folded top-right corner: a shaded triangle laid over the page, not a cut
+   corner — clip-path would also clip this pseudo-element's own geometry. */
+.anyway-file-icon::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 10px 10px 0 0;
+  border-color: var(--highlight) transparent transparent transparent;
+}
+.anyway-file-icon-line {
+  position: absolute;
+  left: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-subtle);
+  opacity: 0.5;
+}
+.anyway-file-icon-line--1 { top: 16px; width: 18px; }
+.anyway-file-icon-line--2 { top: 22px; width: 14px; }
+.anyway-file-icon-line--3 { top: 28px; width: 20px; }
+
+.anyway-file.is-selected .anyway-file-icon {
+  border-color: var(--color-link);
+  background-color: var(--color-selection);
+  box-shadow: 0 0 0 3px rgba(var(--color-glow), 0.28);
+}
+
+.anyway-file-name {
+  font-family: var(--font-code);
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition:
+    color 0.3s ease var(--select-delay, 0s),
+    background-color 0.3s ease var(--select-delay, 0s);
+}
+.anyway-file.is-selected .anyway-file-name {
+  color: var(--text-primary);
+  background-color: var(--color-selection);
+}
+
+/* ── Marquee (dock-drop act) ──
+ * The translucent rectangle macOS draws while rubber-band-selecting. Grows
+ * from a fixed top-left anchor (the press point) via a `width`/`height`
+ * transition, which is what lets one `.is-dragging` toggle read as a
+ * diagonal drag out to the bottom-right corner.
+ */
+.anyway-marquee {
+  position: absolute;
+  left: 16px;
+  top: 54px;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  border: 1px solid var(--color-link);
+  border-radius: 2px;
+  background: rgba(var(--color-glow), 0.16);
+  transition: width 0.48s ease, height 0.48s ease, opacity 0.25s ease;
+  pointer-events: none;
+}
+.anyway-marquee.is-dragging { width: 344px; height: 82px; opacity: 1; }
+.anyway-marquee.is-releasing { opacity: 0; }
+
+/* ── Carried stack (dock-drop act) ──
+ * The small fanned-icon "you're dragging N items" thumbnail macOS shows
+ * once a selection is picked up. Shares a coordinate anchor and transform
+ * values with `.anyway-cursor` below (see its comment) so the two travel
+ * together pixel-for-pixel from pickup to the Dock icon.
+ */
+.anyway-stack {
+  position: absolute;
+  left: 16px;
+  top: 4px;
+  width: 30px;
+  height: 34px;
+  opacity: 0;
+  transform: translate(344px, 132px) scale(0.5);
+  transition: transform 0.46s ease, opacity 0.3s ease;
+  pointer-events: none;
+}
+.anyway-stack.is-visible { opacity: 1; transform: translate(344px, 132px) scale(1); }
+.anyway-stack.is-carried { transform: translate(174px, 358px) scale(0.62); }
+.anyway-stack.is-dropped { opacity: 0; transform: translate(174px, 358px) scale(0.22); }
+
+.anyway-stack-card {
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 22px;
+  height: 26px;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  border: 1px solid var(--color-link);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.anyway-stack-card--0 { transform: rotate(-8deg) translate(-3px, 1px); z-index: 1; }
+.anyway-stack-card--1 { transform: rotate(3deg) translate(2px, -1px); z-index: 2; }
+.anyway-stack-card--2 { z-index: 3; }
+
+.anyway-stack-badge {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  z-index: 4;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-link);
+  color: var(--bg-base);
+  font-family: var(--font-text);
+  font-weight: 700;
+  font-size: 9px;
+}
+
+/* ── Cursor (shared: "as an app" click + "dock drop" marquee/carry) ──
+ * `.is-visible` / `.is-clicking` are shared with Act 2 above. The
+ * `.is-marquee` modifier re-anchors the cursor to Act 3's own coordinate
+ * space (base position 16,4 — above-left of the files, before the press),
+ * and every state transform below is written cumulative-from-that-base
+ * (CSS `transform` doesn't add across classes, so each phase must restate
+ * the full offset): armed (onto the press point) → dragging (rides the
+ * marquee's growing corner, ending exactly at `.anyway-stack.is-visible`'s
+ * pickup point) → carried (same end point `.anyway-stack.is-carried` uses,
+ * so cursor and stack arrive at the Dock icon together).
+ */
+.anyway-cursor {
+  position: absolute;
+  left: 328px;
+  top: 46px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-base);
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.42s ease;
+  pointer-events: none;
+}
+.anyway-cursor.is-visible { opacity: 0.85; }
+.anyway-cursor.is-at-dock { transform: translate(-138px, 320px); }
+.anyway-cursor.is-clicking { animation: anyway-click-pulse 0.35s ease-out; }
+@keyframes anyway-click-pulse {
+  0% { box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 0 rgba(255, 255, 255, 0.55); }
+  100% { box-shadow: 0 0 0 2px var(--bg-base), 0 0 0 12px rgba(255, 255, 255, 0); }
+}
+
+.anyway-cursor.is-marquee { left: 16px; top: 4px; }
+.anyway-cursor.is-marquee.is-armed { transform: translate(0, 50px); }
+.anyway-cursor.is-marquee.is-dragging { transform: translate(344px, 132px); }
+.anyway-cursor.is-marquee.is-carried { transform: translate(174px, 358px); }

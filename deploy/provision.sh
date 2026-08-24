@@ -146,11 +146,13 @@ md-mini.com {
 	header -Server
 
 	# The two Cache-Control matchers are exact complements, so no response can
-	# ever collect both values.
-	@assets path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2
+	# collect both values. /assets/*.js and /assets/*.css are the Vite build's
+	# content-hashed bundles — safe to cache for a month; a rebuild changes the
+	# filename. Unhashed .js/.css elsewhere deliberately stays no-cache.
+	@assets path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2 /assets/*.js /assets/*.css
 	header @assets Cache-Control "public, max-age=2592000"
 
-	@everything_else not path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2
+	@everything_else not path *.png *.jpg *.jpeg *.webp *.ico *.svg *.woff2 /assets/*.js /assets/*.css
 	header @everything_else Cache-Control "no-cache"
 
 	file_server

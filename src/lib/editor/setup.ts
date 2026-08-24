@@ -28,6 +28,20 @@ export const previewCompartment = new Compartment();
 export const languageCompartment = new Compartment();
 export const lineGlowCompartment = new Compartment();
 
+/**
+ * Opens a rendered link. Uses the Tauri shell plugin in the app; falls back to
+ * a browser tab when that plugin has no backend (the landing page embeds this
+ * same editor). The plugin call must be returned so its rejection reaches the
+ * catch — otherwise the fallback never runs.
+ */
+export function openExternalUrl(url: string): Promise<void> {
+  return import('@tauri-apps/plugin-shell')
+    .then(({ open }) => open(url))
+    .catch(() => {
+      window.open(url, '_blank');
+    });
+}
+
 export function createExtensions(): Extension[] {
   return [
     editorTheme,
@@ -118,11 +132,7 @@ export function createExtensions(): Extension[] {
             navigateToHeading(view, url.slice(1));
             return true;
           }
-          import('@tauri-apps/plugin-shell').then(({ open }) => {
-            open(url);
-          }).catch(() => {
-            window.open(url, '_blank');
-          });
+          openExternalUrl(url);
           return true;
         }
         return false;

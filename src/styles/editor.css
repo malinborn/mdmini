@@ -917,7 +917,11 @@
 .cm-env-key {
   font-weight: 700;
   color: var(--color-accent);
-  min-width: 20ch;
+  /* The 20ch column aligns values across a file, but it must be allowed to give
+     way in a narrow window: as a hard minimum it squeezed the value pill toward
+     zero width, and with the pill free to wrap the masked secret then broke one
+     character per line. Cap the column at a share of the row instead. */
+  min-width: min(20ch, 45%);
 }
 
 .cm-env-eq {
@@ -931,6 +935,11 @@
   padding: 1px 8px;
   font-family: var(--font-code);
   color: var(--color-text);
+  /* A value is one token — it may be clipped by the row, never broken across
+     lines a character at a time. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cm-env-value-masked {
@@ -953,6 +962,8 @@
   color: var(--color-list-marker);
   transition: background 0.15s, color 0.15s;
   margin-left: auto;
+  white-space: nowrap;
+  flex: none;
 }
 
 .cm-env-copy:hover {

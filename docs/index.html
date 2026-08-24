@@ -3,15 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mdmini — Minimalist Markdown Editor for macOS</title>
-  <meta name="description" content="Free minimalist markdown editor for macOS with live preview, mermaid diagrams, GFM tables, syntax highlighting. Built with Tauri, lightweight and fast." />
-  <meta name="keywords" content="markdown editor, macOS, markdown, live preview, mermaid diagrams, GFM tables, code editor, Tauri, open source, free" />
-  <link rel="canonical" href="https://md-mini.com/" />
+
   <script>
     if (location.hostname.endsWith('.github.io')) {
       location.replace('https://md-mini.com' + location.pathname.replace(/^\/mdmini/, '') + location.search + location.hash);
     }
   </script>
+  <script>
+    // Set the theme before first paint so the page never flashes the wrong palette.
+    (function () {
+      var stored = null;
+      try { stored = localStorage.getItem('mdmini-site:theme'); } catch (e) { /* private mode */ }
+      var dark = stored ? stored === 'dark' : !window.matchMedia('(prefers-color-scheme: light)').matches;
+      document.documentElement.setAttribute('data-theme', dark ? 'aurora-dark' : 'aurora-light');
+    })();
+  </script>
+
+  <title>mdmini — Minimalist Markdown Editor for macOS</title>
+  <meta name="description" content="Free minimalist markdown editor for macOS with live preview, mermaid diagrams, GFM tables, syntax highlighting. Built with Tauri, lightweight and fast." />
+  <meta name="keywords" content="markdown editor, macOS, markdown, live preview, mermaid diagrams, GFM tables, code editor, Tauri, open source, free" />
+  <link rel="canonical" href="https://md-mini.com/" />
   <link rel="alternate" type="text/plain" href="https://md-mini.com/llms.txt" title="LLM-readable description" />
 
   <!-- Open Graph -->
@@ -45,1217 +56,688 @@
   }
   </script>
 
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-  <style>
-    /* ── Design tokens (Rosé Pine dark) ── */
-    :root {
-      --base:        #191724;
-      --surface:     #1f1d2e;
-      --overlay:     #26233a;
-      --muted:       #6e6a86;
-      --subtle:      #908caa;
-      --text:        #e0def4;
-      --love:        #eb6f92;
-      --gold:        #f6c177;
-      --rose:        #ebbcba;
-      --pine:        #31748f;
-      --foam:        #9ccfd8;
-      --iris:        #c4a7e7;
-      --highlight:   #403d52;
-
-      --font-sans:   -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      --font-mono:   "SFMono-Regular", "Menlo", "Monaco", "Consolas", monospace;
-
-      --radius-sm:   6px;
-      --radius-md:   10px;
-      --radius-lg:   16px;
-
-      --transition:  140ms ease;
-    }
-
-    /* ── Reset ── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      background-color: var(--base);
-      color: var(--text);
-      font-family: var(--font-sans);
-      font-size: 16px;
-      line-height: 1.65;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    a {
-      color: var(--iris);
-      text-decoration: none;
-      transition: color var(--transition), opacity var(--transition);
-    }
-    a:hover { color: var(--foam); }
-
-    /* ── Layout ── */
-    .container {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    section {
-      padding: 80px 0;
-    }
-
-    /* ── Nav ── */
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(25, 23, 36, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--overlay);
-    }
-
-    .nav-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 56px;
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    .nav-logo {
-      font-family: var(--font-mono);
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-      letter-spacing: -0.02em;
-    }
-    .nav-logo span { color: var(--iris); }
-
-    .nav-links {
-      display: flex;
-      gap: 24px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      font-size: 14px;
-      color: var(--subtle);
-    }
-    .nav-links a:hover { color: var(--text); }
-
-    /* ── Hero ── */
-    .hero {
-      padding: 96px 0 80px;
-      text-align: center;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-family: var(--font-mono);
-      color: var(--subtle);
-      background: var(--overlay);
-      border: 1px solid var(--highlight);
-      border-radius: 20px;
-      padding: 4px 12px;
-      margin-bottom: 28px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .hero-badge .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--iris);
-      opacity: 0.8;
-    }
-
-    h1 {
-      font-size: clamp(40px, 8vw, 68px);
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
-      color: var(--text);
-      margin-bottom: 20px;
-    }
-
-    .hero-tagline {
-      font-size: clamp(16px, 2.5vw, 19px);
-      color: var(--subtle);
-      max-width: 520px;
-      margin: 0 auto 44px;
-      line-height: 1.6;
-    }
-
-    .install-blocks {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 10px;
-      max-width: 100%;
-    }
-
-    .install-block {
-      display: inline-flex;
-      align-items: stretch;
-      gap: 0;
-      background: var(--surface);
-      border: 1px solid var(--overlay);
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      max-width: 100%;
-    }
-
-    .install-label {
-      font-size: 12px;
-      font-family: var(--font-mono);
-      color: var(--muted);
-      padding: 0 14px;
-      white-space: nowrap;
-      border-right: 1px solid var(--overlay);
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      min-width: 96px;
-      box-sizing: border-box;
-    }
-
-    .install-cmd {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      color: var(--text);
-      padding: 10px 16px;
-      line-height: 1.5;
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      column-gap: 0.4em;
-      row-gap: 3px;
-      flex: 1;
-      min-width: 0;
-      box-sizing: border-box;
-    }
-
-    .install-cmd .cmd-seg { white-space: nowrap; }
-    .install-cmd .brew { color: var(--gold); }
-    .install-cmd .pkg  { color: var(--iris); }
-
-    .copy-btn {
-      background: none;
-      border: none;
-      border-left: 1px solid var(--overlay);
-      color: var(--subtle);
-      cursor: pointer;
-      padding: 0 14px;
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-      transition: color var(--transition), background var(--transition);
-      flex-shrink: 0;
-    }
-    .copy-btn:hover {
-      color: var(--text);
-      background: var(--overlay);
-    }
-    .copy-btn svg { display: block; }
-
-    .hero-links {
-      margin-top: 24px;
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 20px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 500;
-      transition: opacity var(--transition), background var(--transition);
-    }
-
-    .btn-primary {
-      background: var(--iris);
-      color: var(--base);
-    }
-    .btn-primary:hover { opacity: 0.88; color: var(--base); }
-
-    .btn-ghost {
-      background: var(--overlay);
-      color: var(--text);
-      border: 1px solid var(--highlight);
-    }
-    .btn-ghost:hover { background: var(--highlight); color: var(--text); }
-
-    /* ── Features ── */
-    .section-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--iris);
-      margin-bottom: 12px;
-    }
-
-    .section-heading {
-      font-size: clamp(24px, 4vw, 34px);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      margin-bottom: 48px;
-    }
-
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 2px;
-      background: var(--overlay);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      border: 1px solid var(--overlay);
-    }
-
-    .feature-card {
-      background: var(--surface);
-      padding: 28px 24px;
-      transition: background var(--transition);
-    }
-
-    .feature-card:hover {
-      background: var(--base);
-    }
-
-    .feature-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--radius-sm);
-      background: var(--overlay);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 14px;
-      font-size: 17px;
-    }
-
-    .feature-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-
-    .feature-desc {
-      font-size: 13px;
-      color: var(--subtle);
-      line-height: 1.55;
-    }
-
-    /* ── CLI demo ── */
-    .cli-section {
-      padding: 80px 0;
-    }
-
-    .terminal {
-      background: var(--surface);
-      border: 1px solid var(--overlay);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      max-width: 560px;
-      margin: 0 auto;
-    }
-
-    .terminal-bar {
-      background: var(--overlay);
-      padding: 11px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .terminal-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-    }
-    .terminal-dot.red    { background: #eb6f92; }
-    .terminal-dot.yellow { background: #f6c177; }
-    .terminal-dot.green  { background: #31748f; }
-
-    .terminal-title {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--muted);
-      margin-left: 4px;
-    }
-
-    .terminal-body {
-      padding: 24px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      line-height: 1.8;
-    }
-
-    .t-prompt   { color: var(--muted); }
-    .t-cmd      { color: var(--text); }
-    .t-out      { color: var(--subtle); }
-    .t-iris     { color: var(--iris); }
-    .t-pine     { color: var(--foam); }
-    .t-gold     { color: var(--gold); }
-    .t-cursor {
-      display: inline-block;
-      width: 7px;
-      height: 14px;
-      background: var(--iris);
-      opacity: 0.7;
-      vertical-align: text-bottom;
-      animation: blink 1.1s step-end infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 0.7; }
-      50%       { opacity: 0; }
-    }
-
-    /* ── Changelog ── */
-    #changelog {
-      padding: 80px 0;
-    }
-
-    .changelog-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .changelog-entry {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 32px;
-      padding: 32px 0;
-      border-top: 1px solid var(--overlay);
-    }
-
-    .changelog-entry:last-child {
-      border-bottom: 1px solid var(--overlay);
-    }
-
-    .changelog-meta {
-      padding-top: 2px;
-    }
-
-    .changelog-version {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--iris);
-      margin-bottom: 4px;
-    }
-
-    .changelog-date {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .changelog-tag {
-      display: inline-block;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      padding: 2px 7px;
-      border-radius: 4px;
-      margin-top: 8px;
-    }
-    .changelog-tag.initial  { background: rgba(196,167,231,0.15); color: var(--iris); }
-    .changelog-tag.feature  { background: rgba(156,207,216,0.15); color: var(--foam); }
-    .changelog-tag.fix      { background: rgba(235,111,146,0.15); color: var(--love); }
-    .changelog-tag.perf     { background: rgba(246,193,119,0.15); color: var(--gold); }
-
-    .changelog-body h3 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 10px;
-      letter-spacing: -0.01em;
-    }
-
-    .changelog-body p {
-      font-size: 14px;
-      color: var(--subtle);
-      margin-bottom: 12px;
-      line-height: 1.6;
-    }
-
-    .changelog-body ul {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .changelog-body li {
-      font-size: 14px;
-      color: var(--subtle);
-      padding-left: 18px;
-      position: relative;
-      line-height: 1.5;
-    }
-
-    .changelog-body li::before {
-      content: "·";
-      position: absolute;
-      left: 6px;
-      color: var(--iris);
-      font-weight: 700;
-    }
-
-    .changelog-body li strong {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    .changelog-body code {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      background: var(--overlay);
-      color: var(--foam);
-      padding: 1px 5px;
-      border-radius: 4px;
-    }
-
-    /* ── Footer ── */
-    footer {
-      border-top: 1px solid var(--overlay);
-      padding: 40px 0;
-    }
-
-    .footer-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .footer-left {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .footer-name {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .footer-sub {
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .footer-links {
-      display: flex;
-      gap: 20px;
-      list-style: none;
-    }
-
-    .footer-links a {
-      font-size: 13px;
-      color: var(--subtle);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .footer-links a:hover { color: var(--text); }
-
-    /* ── Screenshot ── */
-    .screenshot-wrap {
-      position: relative;
-      max-width: 900px;
-      margin: 40px auto 0;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--overlay);
-    }
-
-    .screenshot-wrap img {
-      display: block;
-      width: 100%;
-      height: auto;
-      border-radius: var(--radius-lg);
-    }
-
-    .screenshot-wrap::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 55%;
-      background: linear-gradient(to bottom, transparent 0%, var(--base) 100%);
-      pointer-events: none;
-      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-    }
-
-    /* ── Divider ── */
-    .divider {
-      height: 1px;
-      background: var(--overlay);
-      margin: 0;
-    }
-
-    /* ── Responsive ── */
-    @media (max-width: 600px) {
-      section { padding: 60px 0; }
-      .hero    { padding: 64px 0 56px; }
-
-      .install-label { display: none; }
-
-      .changelog-entry {
-        grid-template-columns: 1fr;
-        gap: 12px;
-      }
-      .changelog-meta {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .changelog-tag { margin-top: 0; }
-
-      .nav-links { display: none; }
-    }
-  </style>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+  <script type="module" crossorigin src="/assets/index-CqC51LNI.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-D1N7XzPU.css">
 </head>
 <body>
 
-  <!-- Nav -->
-  <nav>
-    <div class="nav-inner">
-      <span class="nav-logo">md<span>mini</span></span>
+  <nav class="site-nav">
+    <div class="wrap site-nav-inner">
+      <a href="#top" class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <span class="brand-mark-text">md</span>
+          <span class="brand-caret"></span>
+        </span>
+        mdmini
+      </a>
       <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#changelog">Changelog</a></li>
+        <li class="nav-anchor-only"><a href="#ai">AI-native</a></li>
+        <li class="nav-anchor-only"><a href="#features">Features</a></li>
+        <li><a href="#install">Install</a></li>
+        <li class="nav-anchor-only"><a href="#changelog">Changelog</a></li>
         <li><a href="https://github.com/malinborn/mdmini">GitHub</a></li>
       </ul>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Theme: automatic">
+        <span class="theme-toggle-label">Auto</span>
+      </button>
     </div>
   </nav>
 
-  <!-- Hero -->
-  <div class="container">
-    <section class="hero">
-      <div class="hero-badge"><span class="dot"></span>macOS · free · open source</div>
-
-      <h1>mdmini</h1>
-
-      <p class="hero-tagline">
-        A minimalist live-preview markdown editor for macOS.
-        Lightweight, fast, distraction-free &mdash; and driveable by the AI agent
-        already sitting in your terminal.
-      </p>
-
-      <div class="install-blocks">
-        <div class="install-block">
-          <span class="install-label">$ install</span>
-          <span class="install-cmd">
-            <span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">tap</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">trust</span>&nbsp;<span class="pkg">malinborn/mdmini</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">install</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span></span>
-          </span>
-          <button class="copy-btn" onclick="copyCmd(this, 'brew tap malinborn/mdmini &amp;&amp; brew trust malinborn/mdmini &amp;&amp; brew install --cask mdmini')" title="Copy to clipboard" aria-label="Copy install command">
-            <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-            <svg class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
-              <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="install-block">
-          <span class="install-label">$ update</span>
-          <span class="install-cmd">
-            <span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">update</span>&nbsp;<span style="color:var(--muted)">&amp;&amp;</span></span><span class="cmd-seg"><span class="brew">brew</span>&nbsp;<span style="color:var(--subtle)">upgrade</span>&nbsp;<span style="color:var(--subtle)">--cask</span>&nbsp;<span class="pkg">mdmini</span></span>
-          </span>
-          <button class="copy-btn" onclick="copyCmd(this, 'brew update &amp;&amp; brew upgrade --cask mdmini')" title="Copy to clipboard" aria-label="Copy update command">
-            <svg class="copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M3 11V3.5A1.5 1.5 0 014.5 2H10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-            </svg>
-            <svg class="check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display:none">
-              <path d="M3 8l4 4 6-7" stroke="var(--foam)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
+  <header id="top" class="hero">
+    <div class="hero-aurora" aria-hidden="true">
+      <div class="hero-aurora-field">
+        <span class="hero-aurora-light hero-aurora-light--wash-violet-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--wash-teal-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--wash-blue-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--wash-violet-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--wash-teal-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--wash-blue-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--core-violet-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--core-teal-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--core-violet-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--core-teal-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--neon-pink-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--neon-cyan-1"></span>
+        <span class="hero-aurora-light hero-aurora-light--neon-pink-2"></span>
+        <span class="hero-aurora-light hero-aurora-light--neon-cyan-2"></span>
       </div>
-
-      <div class="hero-links">
-        <a class="btn btn-ghost" href="https://github.com/malinborn/mdmini">
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
-            <path fill-rule="evenodd" d="M7.5.85a6.65 6.65 0 00-2.102 12.96c.333.06.456-.144.456-.322v-1.129c-1.852.402-2.244-.893-2.244-.893-.303-.77-.74-1.006-.74-1.006-.603-.413.045-.404.045-.404.668.047 1.02.686 1.02.686.594 1.018 1.558.724 1.94.554.06-.43.232-.724.422-.89C5.03 9.95 3.55 9.375 3.55 6.982c0-.71.254-1.29.67-1.745-.067-.166-.29-.826.064-1.72 0 0 .546-.175 1.788.666A6.23 6.23 0 017.5 3.97c.552.002 1.108.075 1.627.22 1.24-.84 1.786-.666 1.786-.666.355.894.132 1.554.065 1.72.417.454.67 1.035.67 1.745 0 2.401-1.483 2.97-2.895 3.127.228.196.43.582.43 1.172v1.736c0 .18.121.385.46.32A6.652 6.652 0 007.5.85z"/>
-          </svg>
-          GitHub
-        </a>
-      </div>
-    </section>
-  </div>
-
-  <!-- Screenshot -->
-  <div class="container">
-    <div class="screenshot-wrap">
-      <img src="sample_image.png" alt="mdmini screenshot — live-preview markdown editor" />
     </div>
-  </div>
+    <div class="wrap">
+    <div class="hero-content">
+      <h1 class="hero-title hero-title--reveal">mdmini<span class="hero-caret caret-blink" aria-hidden="true"></span></h1>
+      <p class="hero-tagline">A minimalist yet powerful <span class="reveal-word reveal-word--code">markdown</span> editor your agent can <span class="reveal-word reveal-word--bold">drive</span>.</p>
+      <div class="hero-pills">
+        <span class="pill">macOS</span>
+        <span class="pill">free</span>
+        <span class="pill">open source</span>
+      </div>
+      <div class="hero-cta">
+        <div class="install-row install-row--hero">
+          <code class="install-code"><span class="install-prompt">$</span> <span class="tok-keyword">brew</span> tap <span class="tok-string">malinborn/mdmini</span> <span class="tok-operator">&amp;&amp;</span> <span class="tok-keyword">brew</span> trust <span class="tok-string">malinborn/mdmini</span> <span class="tok-operator">&amp;&amp;</span> <span class="tok-keyword">brew</span> install <span class="tok-propertyName">--cask</span> <span class="tok-string">mdmini</span></code>
+          <button id="copy-install" class="copy-btn" type="button" aria-label="Copy install command">
+            <span class="copy-btn-label">Copy</span>
+          </button>
+        </div>
+        <a class="hero-secondary-link" href="https://github.com/malinborn/mdmini">Or look at the source on GitHub &rarr;</a>
+      </div>
+    </div>
+    </div>
+  </header>
 
-  <div class="divider"></div>
+  <section id="ai" class="ai-section">
+    <div class="wrap">
+      <div class="ai-card">
+        <div class="carousel" id="ai-carousel">
+          <div class="carousel-track" id="carousel-track">
+           <div class="track-inner" id="track-inner">
 
-  <!-- Features -->
-  <div class="container" id="features">
-    <section>
-      <div class="section-label">What it does</div>
-      <div class="section-heading">Everything you need,<br>nothing you don't</div>
+            <article class="slide" data-slide-index="0">
+              <div class="slide-left">
+                <div class="slide-copy">
+                  <div class="slide-eyebrow">AI CAN USE YOUR NOTEBOOK</div>
+                  <h2>Your agent can point.</h2>
+                  <p>The agent opens or focuses a file, scrolls to a line or a text match, and pulse-highlights it: &ldquo;look here.&rdquo;</p>
+                </div>
+                <div class="demo-chrome" data-demo-chrome="point" aria-hidden="true"></div>
+              </div>
+              <div class="demo" data-demo="point" data-demo-theme="aurora-light" data-theme="aurora-light" data-demo-height="410" style="--demo-h: 410px">
+                <div class="demo-bar">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="demo-name">runbook.md &mdash; md-mini</span>
+                </div>
+                <div class="demo-body"><noscript>Live editor demo requires JavaScript.</noscript></div>
+                <div class="demo-caption">claude &middot; look here</div>
+              </div>
+            </article>
 
+            <article class="slide" data-slide-index="1">
+              <div class="slide-left">
+                <div class="slide-copy">
+                  <div class="slide-eyebrow">AI CAN USE YOUR NOTEBOOK</div>
+                  <h2>Your agent can edit.</h2>
+                  <p>The agent pushes new content into the live buffer; mdmini diffs it, applies only the changed span, and keeps it highlighted until you press Esc. Every AI edit is a normal undo step &mdash; Cmd+Z rejects it.</p>
+                </div>
+                <div class="demo-chrome" data-demo-chrome="edit" aria-hidden="true"></div>
+              </div>
+              <div class="demo" data-demo="edit" data-demo-theme="light" data-theme="light" data-demo-height="410" style="--demo-h: 410px">
+                <div class="demo-bar">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="demo-name">runbook.md &mdash; md-mini</span>
+                </div>
+                <div class="demo-body"><noscript>Live editor demo requires JavaScript.</noscript></div>
+                <div class="demo-caption">AI edit &middot; Esc to accept &middot; &#8984;Z to undo</div>
+              </div>
+            </article>
+
+            <article class="slide" data-slide-index="2">
+              <div class="slide-copy">
+                <div class="slide-eyebrow">AI CAN USE YOUR NOTEBOOK</div>
+                <h2>Your agent can ask.</h2>
+                <p>Questions appear right where they belong in the text &mdash; single choice, multi-select checkboxes, optional free-text. Each answer arrives instantly, so the agent can chain follow-ups.</p>
+              </div>
+              <div class="demo" data-demo="ask" data-demo-theme="dark" data-theme="dark" data-demo-height="449" style="--demo-h: 449px">
+                <div class="demo-bar">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="demo-name">runbook.md &mdash; md-mini</span>
+                </div>
+                <div class="demo-body"><noscript>Live editor demo requires JavaScript.</noscript></div>
+              </div>
+            </article>
+
+            <article class="slide" data-slide-index="3">
+              <div class="slide-copy">
+                <div class="slide-eyebrow">FITS HOW YOU ALREADY WORK</div>
+                <h2>It can be used any way.</h2>
+                <p>Open files from the terminal, launch it like any Mac app, or drag files onto the Dock icon &mdash; mdmini fits the way you already work.</p>
+              </div>
+              <div class="slide-static" data-demo="anyway" data-demo-theme="aurora-dark" data-theme="aurora-dark">
+                <noscript>
+<div class="static-card">
+                  <div class="static-card-label">from the terminal</div>
+                  <code class="static-card-code"><span class="tok-teal">$</span> mdmini README.md</code>
+                </div>
+                <div class="static-card static-card--row">
+                  <span class="app-icon app-icon--34" aria-hidden="true"><span class="app-icon-text">md</span></span>
+                  <div>
+                    <div class="static-card-label">as an app</div>
+                    <div class="static-card-text">Launch from Spotlight or the Dock</div>
+                  </div>
+                </div>
+                <div class="static-card static-card--row">
+                  <span class="file-chip">notes.md</span>
+                  <span class="static-arrow" aria-hidden="true">&rarr;</span>
+                  <span class="app-icon app-icon--34" aria-hidden="true"><span class="app-icon-text">md</span></span>
+                  <div>
+                    <div class="static-card-label">dock drop</div>
+                    <div class="static-card-text">Drag files onto the icon &mdash; one window each</div>
+                  </div>
+                </div>
+                </noscript>
+              </div>
+            </article>
+
+            <article class="slide slide--showcase" data-slide-index="4">
+              <div class="slide-showcase-copy">
+                <h2>And it&rsquo;s basically just a good markdown editor.</h2>
+                <p>Live preview, no split pane, no distractions.</p>
+              </div>
+              <div class="demo demo--showcase" data-demo="showcase" data-demo-theme="aurora-dark" data-theme="aurora-dark" data-demo-height="330" style="--demo-h: 330px">
+                <div class="demo-bar">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="demo-name">README.md &mdash; md-mini</span>
+                </div>
+                <div class="demo-body"><noscript>Live editor demo requires JavaScript.</noscript></div>
+              </div>
+            </article>
+
+           </div>
+          </div>
+          <div class="carousel-controls">
+            <button class="carousel-btn" id="carousel-prev" type="button" aria-label="Previous slide">&lsaquo;</button>
+            <div class="carousel-dots" id="carousel-dots" role="tablist" aria-label="AI showcase slides">
+              <button class="carousel-dot is-active" type="button" data-index="0" aria-label="Go to slide 1"></button>
+              <button class="carousel-dot" type="button" data-index="1" aria-label="Go to slide 2"></button>
+              <button class="carousel-dot" type="button" data-index="2" aria-label="Go to slide 3"></button>
+              <button class="carousel-dot" type="button" data-index="3" aria-label="Go to slide 4"></button>
+              <button class="carousel-dot" type="button" data-index="4" aria-label="Go to slide 5"></button>
+            </div>
+            <button class="carousel-btn" id="carousel-next" type="button" aria-label="Next slide">&rsaquo;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="features-section">
+    <div class="wrap">
+      <h2>Features</h2>
+      <p class="section-lede">Everything a markdown file needs, nothing else.</p>
       <div class="features-grid">
 
         <div class="feature-card">
-          <div class="feature-icon">✦</div>
-          <div class="feature-title">Live Preview</div>
-          <div class="feature-desc">Markdown renders inline as you type. No split pane, no preview toggle.</div>
+          <h3>Live Preview</h3>
+          <p>Markdown renders inline as you type. No split pane, no preview toggle.</p>
+          <div class="feature-illustration">
+            <div class="illus-inline">
+              <code class="illus-code-chip">**fast**</code>
+              <span class="illus-arrow" aria-hidden="true">&rarr;</span>
+              <span class="illus-serif-bold">fast</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">✳</div>
-          <div class="feature-title">AI Interface</div>
-          <div class="feature-desc">Let an agent drive an open window: <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">mdmini show</code> to point at a line, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">edit</code> to push content into the live buffer, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">ask</code> to put a real question in front of you and wait for the answer. Also speaks MCP.</div>
+          <h3>GFM Tables</h3>
+          <p>Create, edit, reorder, and delete table rows and columns. Drag to reorder.</p>
+          <div class="feature-illustration">
+            <div class="illus-table">
+              <div class="illus-table-cell illus-table-cell--head">item</div>
+              <div class="illus-table-cell illus-table-cell--head">qty</div>
+              <div class="illus-table-cell illus-table-cell--head">tag</div>
+              <div class="illus-table-cell illus-table-cell--hl">flour</div>
+              <div class="illus-table-cell illus-table-cell--hl">2</div>
+              <div class="illus-table-cell illus-table-cell--hl">&#8942;&#8942;</div>
+              <div class="illus-table-cell illus-table-cell--muted">eggs</div>
+              <div class="illus-table-cell illus-table-cell--muted">6</div>
+              <div class="illus-table-cell illus-table-cell--muted"></div>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">◨</div>
-          <div class="feature-title">Live Render <span style="font-size:11px;color:var(--muted);font-weight:400">beta</span></div>
-          <div class="feature-desc">An optional mode where the markdown markers stay hidden even under the caret, Notion-style. The default live-preview mode is untouched.</div>
+          <h3>Collapsible Headings</h3>
+          <p>Click any heading to fold the section below it. Keeps long docs navigable.</p>
+          <div class="feature-illustration">
+            <div class="illus-fold-list">
+              <div class="illus-fold-row"><span aria-hidden="true">&#9656;</span> <strong>Setup</strong></div>
+              <div class="illus-fold-row"><span aria-hidden="true">&#9662;</span> <strong>Usage</strong></div>
+              <div class="illus-fold-bar illus-fold-bar--75"></div>
+              <div class="illus-fold-bar illus-fold-bar--55"></div>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">▤</div>
-          <div class="feature-title">GFM Tables</div>
-          <div class="feature-desc">Create, edit, reorder, and delete table rows and columns. Drag to reorder.</div>
+          <h3>Syntax-Highlighted Code</h3>
+          <p>Fenced code blocks render with language-aware syntax highlighting.</p>
+          <div class="feature-illustration">
+            <div class="illus-code-lines">
+              <div><span class="tok-teal">let</span> <span class="tok-iris">editor</span> = <span class="tok-pink">"minimal"</span>;</div>
+              <div><span class="tok-teal">fn</span> <span class="tok-iris">render</span>(<span class="tok-cyan">md</span>) { &hellip; }</div>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">◧</div>
-          <div class="feature-title">Collapsible Headings</div>
-          <div class="feature-desc">Click any heading to fold the section below it. Keeps long docs navigable.</div>
+          <h3>Mermaid Diagrams</h3>
+          <p>Flowcharts, sequence, class, Gantt, ER, pie, mindmap &mdash; all render inline as SVG. Pinch to zoom, swipe to pan around the big ones.</p>
+          <div class="feature-illustration">
+            <div class="illus-flow">
+              <span class="flow-step">write</span>
+              <span class="static-arrow" aria-hidden="true">&rarr;</span>
+              <span class="flow-diamond"><span class="flow-diamond-text">md?</span></span>
+              <span class="static-arrow" aria-hidden="true">&rarr;</span>
+              <span class="flow-step flow-step--ship">ship</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">◈</div>
-          <div class="feature-title">Syntax-Highlighted Code</div>
-          <div class="feature-desc">Fenced code blocks render with language-aware syntax highlighting.</div>
+          <h3>Secret Masking</h3>
+          <p>Secret values in <code>.env</code> and shell configs (<code>.zshrc</code>, <code>.bashrc</code>) are masked by default. Cursor or Cmd+E to reveal.</p>
+          <div class="feature-illustration">
+            <div class="illus-secret">
+              <span><span class="tok-iris">API_KEY</span>=<span class="secret-dots">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span></span>
+              <span class="kbd">&#8984;E</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">◇</div>
-          <div class="feature-title">Mermaid Diagrams</div>
-          <div class="feature-desc">Flowcharts, sequence, class, Gantt, ER, pie, mindmap — all render inline as SVG. Pinch to zoom, swipe to pan around the big ones.</div>
+          <h3>File Watching</h3>
+          <p>External changes to open files are detected and reloaded automatically.</p>
+          <div class="feature-illustration">
+            <div class="illus-status">
+              <span>notes.md</span>
+              <span class="status-dot" aria-hidden="true">&bull;</span>
+              <span class="muted">reloaded just now</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">◉</div>
-          <div class="feature-title">Secret Masking</div>
-          <div class="feature-desc">Secret values in <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.env</code> and shell configs (<code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.zshrc</code>, <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">.bashrc</code>) are masked by default. Cursor or Cmd+E to reveal.</div>
+          <h3>CLI Launcher</h3>
+          <p>Open files instantly from the terminal with <code>mdmini file.md</code>.</p>
+          <div class="feature-illustration">
+            <div class="illus-cli"><span class="tok-teal">$</span> mdmini file.md<span class="cli-caret caret-blink" aria-hidden="true"></span></div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">⟳</div>
-          <div class="feature-title">File Watching</div>
-          <div class="feature-desc">External changes to open files are detected and reloaded automatically.</div>
+          <h3>Dock Drop</h3>
+          <p>Drag any file onto the Dock icon to open it. Works with multiple files at once.</p>
+          <div class="feature-illustration">
+            <div class="illus-inline">
+              <span class="file-chip file-chip--sm">a.md</span>
+              <span class="file-chip file-chip--sm">b.md</span>
+              <span class="illus-arrow" aria-hidden="true">&rarr;</span>
+              <span class="app-icon app-icon--24" aria-hidden="true"><span class="app-icon-text app-icon-text--sm">md</span></span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">⌘</div>
-          <div class="feature-title">CLI Launcher</div>
-          <div class="feature-desc">Open files instantly from the terminal with <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">mdmini file.md</code>.</div>
+          <h3>Session Restore</h3>
+          <p>Reopen the windows you had last time with <code>&#8679;&#8984;T</code> &mdash; files, positions, scroll, and unsaved drafts.</p>
+          <div class="feature-illustration">
+            <div class="illus-inline">
+              <span class="window-stack" aria-hidden="true">
+                <span class="window-chip"></span><span class="window-chip"></span><span class="window-chip"></span>
+              </span>
+              <span class="kbd">&#8679;&#8984;T</span>
+              <span class="muted illus-small">3 windows restored</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">↓</div>
-          <div class="feature-title">Dock Drop</div>
-          <div class="feature-desc">Drag any file onto the Dock icon to open it. Works with multiple files at once.</div>
+          <h3>Dark &amp; Light Themes</h3>
+          <p>Four themes: Ros&eacute; Pine dark and Ros&eacute; Pine Dawn, plus an Aurora light/dark pair that matches the app icon. Switch with a single keypress.</p>
+          <div class="feature-illustration">
+            <div class="illus-inline illus-small">
+              <span class="theme-pair"><span class="swatch swatch--rp-dark" aria-hidden="true"></span>Ros&eacute; Pine</span>
+              <span class="theme-pair"><span class="swatch swatch--rp-dawn" aria-hidden="true"></span>Dawn</span>
+              <span class="theme-pair"><span class="swatch swatch--aurora-dark" aria-hidden="true"></span>Aurora Dark</span>
+              <span class="theme-pair"><span class="swatch swatch--aurora-light" aria-hidden="true"></span>Aurora Light</span>
+            </div>
+          </div>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">⇧</div>
-          <div class="feature-title">Session Restore</div>
-          <div class="feature-desc">Reopen the windows you had last time with <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">⇧⌘T</code> — files, positions, scroll, and unsaved drafts.</div>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">◑</div>
-          <div class="feature-title">Four Themes</div>
-          <div class="feature-desc">Rosé Pine dark and dawn, plus Aurora light and dark. Or follow the system and let it switch itself.</div>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">⏺</div>
-          <div class="feature-title">Auto-Save &amp; Recovery</div>
-          <div class="feature-desc">Changes are saved continuously. Crash recovery restores your last session.</div>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">✚</div>
-          <div class="feature-title">Block Menu</div>
-          <div class="feature-desc">Type <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">/</code> for headings, lists, checkboxes, tables, code blocks, quotes, and rules &mdash; or hover the gutter beside any line and click the <code style="font-family:var(--font-mono);font-size:12px;background:var(--overlay);color:var(--foam);padding:1px 5px;border-radius:4px">+</code>.</div>
-        </div>
-
-      </div>
-    </section>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- CLI demo -->
-  <div class="container">
-    <section class="cli-section" style="text-align:center">
-      <div class="section-label">Quick start</div>
-      <div class="section-heading" style="margin-bottom:36px">Zero config, instant open</div>
-
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="terminal-dot red"></span>
-          <span class="terminal-dot yellow"></span>
-          <span class="terminal-dot green"></span>
-          <span class="terminal-title">zsh</span>
-        </div>
-        <div class="terminal-body">
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew tap malinborn/mdmini && brew trust malinborn/mdmini && brew install --cask mdmini</span></div>
-          <div><span class="t-out">==&gt; Downloading mdmini...</span></div>
-          <div><span class="t-out">==&gt; Installing mdmini</span></div>
-          <div><span class="t-out">✓  mdmini installed</span></div>
-          <br>
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">mdmini README.md</span></div>
-          <div><span class="t-pine"># Opens in a native macOS window</span></div>
-          <br>
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">mdmini *.md notes/*.md</span></div>
-          <div><span class="t-pine"># Each file gets its own window</span></div>
-          <br>
-          <div><span class="t-prompt">~ $</span> <span class="t-cmd">brew update && brew upgrade --cask mdmini</span></div>
-          <div><span class="t-pine"># Update to latest version</span></div>
-          <br>
-          <div><span class="t-prompt">~ $</span> <span class="t-cursor"></span></div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <div class="divider"></div>
-
-  <!-- Changelog -->
-  <div class="container">
-    <section id="changelog">
-      <div class="section-label">Releases</div>
-      <div class="section-heading">Changelog</div>
-
-      <div class="changelog-list">
-
-        <!-- ── TEMPLATE for new entries ──────────────────────────────────────
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.x.0</div>
-            <div class="changelog-date">YYYY-MM-DD</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Release title</h3>
-            <ul>
-              <li><strong>thing</strong> — description</li>
-            </ul>
-          </div>
-        </div>
-        ──────────────────────────────────────────────────────────────────── -->
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v1.0.1</div>
-            <div class="changelog-date">2026-08-23</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Now it installs on your Intel Mac, and tells you it speaks AI</h3>
-            <ul>
-              <li><strong>Intel Macs are supported</strong> &mdash; the build is universal now, one download for both architectures. Previously <code>brew install --cask mdmini</code> simply refused on an Intel machine, and never said why. The culprit was a single arch-dependent type: Objective-C's <code>BOOL</code> is a <code>bool</code> on Apple Silicon and an <code>i8</code> everywhere else, so one <code>true</code> literal compiled on one machine and broke the other</li>
-              <li><strong>The AI interface is findable</strong> &mdash; 1.0 shipped it and then hid it. A toast on launch now says the editor can be driven by your agent, and a new <strong>Getting Started</strong> entry sits at the top of the AI menu. It leads with a map of that menu rather than a wall of setup, because the thing worth remembering is where this lives, not which command to type</li>
-              <li><strong>It knows when to stop</strong> &mdash; the toast appears at most three times, once a day, never on the launch that already opened the welcome window, and never again once an agent has actually connected. The first time one does, md-mini says so &mdash; useful if someone handed you a config and you were wondering what just moved on screen</li>
-            </ul>
+          <h3>Auto-Save &amp; Recovery</h3>
+          <p>Changes are saved continuously. Crash recovery restores your last session.</p>
+          <div class="feature-illustration">
+            <div class="illus-status">
+              <span class="status-dot" aria-hidden="true">&bull;</span>
+              <span class="muted">Saved &middot; just now</span>
+            </div>
           </div>
         </div>
 
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v1.0.0</div>
-            <div class="changelog-date">2026-08-23</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>One point oh &mdash; now your agent can type too</h3>
-            <ul>
-              <li><strong>An interface for AI agents</strong> &mdash; <code>mdmini show file.md --line 42</code> scrolls a window to a spot and pulses it; <code>cat new.md | mdmini edit file.md</code> pushes content straight into the live buffer and highlights exactly what changed. No writing to disk and praying the watcher notices</li>
-              <li><strong>Your agent can ask you things</strong> &mdash; <code>mdmini ask</code> plants a real question with option buttons inside the document and <em>blocks</em> until you click. Checkboxes for multi-select, a free-text field when none of the options fit</li>
-              <li><strong>Speaks MCP too</strong> &mdash; <code>mdmini mcp</code> runs a stdio MCP server exposing the same three verbs as tools, so agents that prefer MCP need no shell glue. <code>mdmini agent</code> prints a ready-to-paste block for your CLAUDE.md</li>
-              <li><strong>Live Render, in beta</strong> &mdash; an opt-in mode where markdown markers stay hidden even when the caret sits on them, Notion-style. It installs only while selected, so the live-preview mode you already trust is untouched by construction. <code>View → Editor Engine → (beta) Live Render</code></li>
-              <li><strong>Aurora themes</strong> &mdash; two new palettes, light and dark, alongside Rosé Pine. Five entries in the theme menu now, System included, and the caret picked up a gradient</li>
-              <li><strong>A new app icon</strong> &mdash; and, at the last minute, a properly antialiased one: the first cut carried a baked drop shadow that ate a fifth of the canvas at 32px</li>
-              <li><strong>A welcome window, once</strong> &mdash; on first launch after the upgrade md-mini opens a short document showing how to connect your agent, by CLI or by MCP. Close it and it stays closed</li>
-              <li><strong>Fixed: external edits no longer jump you around</strong> &mdash; when a watched file is reloaded from disk, your scroll position and caret stay where you left them</li>
-              <li><strong>Fixed: selecting across a diagram</strong> &mdash; dragging a selection over a mermaid block or a table no longer paints over the widget</li>
-              <li><strong>New home</strong> &mdash; the site lives at <code>md-mini.com</code>; the old GitHub Pages address redirects</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.5.1</div>
-            <div class="changelog-date">2026-07-28</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Close that update notice once</h3>
-            <ul>
-              <li><strong>One notice, not one per window</strong> — dismissing the &ldquo;new version available&rdquo; toast now dismisses it everywhere instead of making you close it in every open window</li>
-              <li><strong>It stays dismissed</strong> — neither the next hourly check nor a window you open afterwards brings it back. A genuinely newer version still shows up</li>
-              <li><strong>One check per app, not per window</strong> — five windows used to mean five requests an hour for the same answer</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.5.0</div>
-            <div class="changelog-date">2026-07-28</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Your windows come back</h3>
-            <ul>
-              <li><strong>Reopen your last session</strong> — quitting no longer loses the windows you had open. A toast tells you how many are waiting; <code>⇧⌘T</code> brings them back, or use <code>File → Reopen Windows from Last Session</code></li>
-              <li><strong>Everything comes back with them</strong> — file, window position and size, where the caret was, and how far you had scrolled</li>
-              <li><strong>Unsaved drafts too</strong> — an Untitled window you never saved returns with its text intact, still marked dirty</li>
-              <li><strong>Survives an upgrade</strong> — this is the point: <code>brew upgrade --cask mdmini</code> closes every window, and now you can get them back</li>
-              <li><strong>Notifications stack</strong> — the update notice and the session offer sit above one another instead of overlapping, and each waits until you dismiss it</li>
-              <li><strong>Fixed: scrolling a diagram-heavy file</strong> — reaching the end of a document full of mermaid diagrams and scrolling back up threw you straight down again. Diagrams no longer briefly lay out at full natural size, which was corrupting every scroll position on the page</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.4.0</div>
-            <div class="changelog-date">2026-07-25</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Big diagrams, finally navigable</h3>
-            <ul>
-              <li><strong>Pinch to zoom</strong> — two fingers on the trackpad zoom around the cursor; <code>Cmd</code>+scroll does the same for a mouse</li>
-              <li><strong>Swipe to pan</strong> — a two-finger swipe moves around a zoomed diagram; at full view it scrolls the document exactly as before</li>
-              <li><strong>Gestures that don't yank the page</strong> — running into an edge mid-swipe springs back instead of throwing you down the document; lift your fingers and swipe again to scroll on</li>
-              <li><strong>Back to full view</strong> — the <code>⤢</code> button or a double-click refits; drag the bottom edge to resize the frame</li>
-              <li><strong>Zoom sticks around</strong> — scrolling a diagram off screen, or editing text above it, no longer resets what you were looking at</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.5</div>
-            <div class="changelog-date">2026-06-16</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Links that work inside tables</h3>
-            <ul>
-              <li><strong>Markdown links in table cells</strong> — <code>[text](url)</code> inside a cell now renders as a clickable link instead of raw brackets and parens</li>
-              <li><strong>Anchor links scroll, not escape</strong> — in-cell <code>[Back to top](#heading)</code> jumps within the document; re-clicking the same anchor no longer leaks out to the system browser</li>
-              <li><strong>Mixed inline formatting</strong> — links coexist with bold, italic, code and strikethrough in the same cell</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.4</div>
-            <div class="changelog-date">2026-06-05</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Shell configs come alive</h3>
-            <ul>
-              <li><strong>Syntax highlighting for shell configs</strong> — <code>.zshrc</code>, <code>.bashrc</code>, <code>.bash_profile</code>, <code>.profile</code> and friends now render as Shell code instead of plain text</li>
-              <li><strong>Inline secret masking</strong> — values in <code>export API_KEY=…</code>, <code>TOKEN=…</code> are masked to a <code>sk-…jkl</code> pill with a Copy button, while the key and the rest of the line stay highlighted</li>
-              <li><strong>Reveal on demand</strong> — put the cursor on the line, or press <code>Cmd+E</code>, to see the raw value; shell expansions (<code>$VAR</code>, <code>$(…)</code>) are left untouched</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.3</div>
-            <div class="changelog-date">2026-06-04</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>TOC links that actually jump</h3>
-            <ul>
-              <li><strong>In-document anchor links</strong> — clicking <code>[Section](#section)</code> now scrolls to the matching heading instead of doing nothing</li>
-              <li><strong>Cyrillic &amp; duplicates</strong> — percent-encoded and non-ASCII fragments resolve; duplicate headings disambiguate (<code>#section-2</code>)</li>
-              <li><strong>Folded sections auto-expand</strong> — a collapsed parent heading opens before scrolling to the target</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.2</div>
-            <div class="changelog-date">2026-05-23</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Ordered lists that count themselves</h3>
-            <ul>
-              <li><strong>Tab restarts numbering</strong> — indenting a numbered item now opens a fresh sub-list starting at <code>1.</code></li>
-              <li><strong>Shift-Tab renumbers the parent</strong> — outdenting back to the previous level keeps the surrounding numbers sequential</li>
-              <li><strong>Works at any nesting depth</strong> — list continuation on Enter no longer breaks at the third level and beyond</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.1</div>
-            <div class="changelog-date">2026-05-23</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Tables that fit your viewport</h3>
-            <ul>
-              <li><strong>Auto-wrap by default</strong> — cells wrap their text to keep tables inside the editor width, no more sideways spillover</li>
-              <li><strong>Per-table toggle (⇔)</strong> — release any single table to its natural width when you want the overflow back</li>
-              <li><strong>Multi-line cells</strong> — double-click opens a growing textarea; Cmd+Enter to commit, Enter for a new line</li>
-              <li><strong>Pipe &amp; newline roundtrip</strong> — <code>|</code> and line breaks inside cells survive a save/reload via <code>\|</code> and <code>&lt;br&gt;</code></li>
-              <li><strong>Stable column alignment</strong> — switched to native CSS table layout so columns no longer drift on edit</li>
-              <li><strong>Cursor never gets stuck</strong> — arrow keys past a table snap to the next or previous visible line</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.3.0</div>
-            <div class="changelog-date">2026-05-23</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Inline markdown inside headings</h3>
-            <ul>
-              <li><strong>Code, bold, italic, strike, links inside headings</strong> — formatting now decorates correctly when used inside <code># H1</code>‑<code>###### H6</code></li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.2.2</div>
-            <div class="changelog-date">2026-04-05</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Line Glow & heading fold redesign</h3>
-            <ul>
-              <li><strong>Line Glow</strong> — subtle gradient glow on active line, toggle via View menu</li>
-              <li><strong>Fold toggle</strong> — ▾/▸ inline after headings with glow when folded</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.2.1</div>
-            <div class="changelog-date">2026-04-05</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Heading fold toggle redesign</h3>
-            <ul>
-              <li><strong>Inline fold toggle</strong> — ▾/▸ appears right after heading text, no layout shift</li>
-              <li><strong>Glow indicator</strong> — folded sections show ▸ with subtle glow</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.2.0</div>
-            <div class="changelog-date">2026-04-05</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Mermaid Diagrams</h3>
-            <ul>
-              <li><strong>Live diagram preview</strong> — <code>```mermaid</code> blocks render as inline SVG diagrams</li>
-              <li><strong>All diagram types</strong> — flowcharts, sequence, class, state, ER, Gantt, pie, gitgraph, mindmap</li>
-              <li><strong>Lazy-loaded</strong> — zero overhead for documents without diagrams</li>
-              <li><strong>Hybrid errors</strong> — shows last valid diagram + error overlay while editing</li>
-              <li><strong>Theme-aware</strong> — diagrams adapt to light/dark theme</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.1.6</div>
-            <div class="changelog-date">2026-04-03</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Foreground windows</h3>
-            <ul>
-              <li><strong>Windows open in foreground</strong> — new windows from CLI now appear on top via NSApp activate</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.1.5</div>
-            <div class="changelog-date">2026-04-02</div>
-            <span class="changelog-tag feature">feature</span>
-          </div>
-          <div class="changelog-body">
-            <h3>File associations &amp; smart windows</h3>
-            <ul>
-              <li><strong>Dock file drop</strong> — drag files onto the Dock icon to open</li>
-              <li><strong>File associations</strong> — macOS registers mdmini for .md, .txt, .json, .py, .rs, .yml, .toml, .sh</li>
-              <li><strong>Smart window reuse</strong> — drag-drop and Dock drop open in empty windows</li>
-              <li><strong>No white flash</strong> — dark background set before CSS loads</li>
-              <li><strong>Cmd+Z safety</strong> — undo no longer clears content after file open</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.1.4</div>
-            <div class="changelog-date">2026-04-02</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Text wrapping &amp; table alignment</h3>
-            <ul>
-              <li><strong>Text wrapping</strong> — long text wraps correctly even with wide tables</li>
-              <li><strong>Gutter cleanup</strong> — removed gray bar, auto-hides on horizontal scroll</li>
-              <li><strong>Table alignment</strong> — consistent column alignment across all rows</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.1.3</div>
-            <div class="changelog-date">2026-03-30</div>
-            <span class="changelog-tag fix">fix</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Update checks &amp; theme fixes</h3>
-            <ul>
-              <li><strong>Update banner</strong> — correct brew command with <code>brew update</code> prefix</li>
-              <li><strong>Theme menu</strong> — single checkmark radio behavior</li>
-              <li><strong>Hourly update checks</strong> while app is open</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="changelog-entry">
-          <div class="changelog-meta">
-            <div class="changelog-version">v0.1.0</div>
-            <div class="changelog-date">2026-03-30</div>
-            <span class="changelog-tag initial">initial</span>
-          </div>
-          <div class="changelog-body">
-            <h3>Initial release</h3>
-            <ul>
-              <li><strong>Live preview</strong> — inline markdown rendering via CodeMirror 6 decorations</li>
-              <li><strong>GFM tables</strong> — create, edit, reorder rows/columns, drag-drop</li>
-              <li><strong>Collapsible headings</strong> — click to fold sections</li>
-              <li><strong>Syntax highlighting</strong> — fenced code blocks with language detection</li>
-              <li><strong>Secret masking</strong> — <code>.env</code> values blurred by default</li>
-              <li><strong>File watching</strong> — external edits reload automatically</li>
-              <li><strong>CLI launcher</strong> — <code>mdmini file.md</code> via Homebrew tap</li>
-              <li><strong>Themes</strong> — Rosé Pine dark &amp; dawn</li>
-              <li><strong>Auto-save &amp; crash recovery</strong></li>
-            </ul>
-          </div>
-        </div>
-
-      </div>
-    </section>
-  </div>
-
-  <!-- Footer -->
-  <footer>
-    <div class="container">
-      <div class="footer-inner">
-        <div class="footer-left">
-          <span class="footer-name">mdmini</span>
-          <span class="footer-sub">GPL-3.0 · Tauri 2 · Svelte 5 · CodeMirror 6</span>
-        </div>
-        <ul class="footer-links">
-          <li>
-            <a href="https://github.com/malinborn/mdmini">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="currentColor">
-                <path fill-rule="evenodd" d="M7.5.85a6.65 6.65 0 00-2.102 12.96c.333.06.456-.144.456-.322v-1.129c-1.852.402-2.244-.893-2.244-.893-.303-.77-.74-1.006-.74-1.006-.603-.413.045-.404.045-.404.668.047 1.02.686 1.02.686.594 1.018 1.558.724 1.94.554.06-.43.232-.724.422-.89C5.03 9.95 3.55 9.375 3.55 6.982c0-.71.254-1.29.67-1.745-.067-.166-.29-.826.064-1.72 0 0 .546-.175 1.788.666A6.23 6.23 0 017.5 3.97c.552.002 1.108.075 1.627.22 1.24-.84 1.786-.666 1.786-.666.355.894.132 1.554.065 1.72.417.454.67 1.035.67 1.745 0 2.401-1.483 2.97-2.895 3.127.228.196.43.582.43 1.172v1.736c0 .18.121.385.46.32A6.652 6.652 0 007.5.85z"/>
-              </svg>
-              GitHub
-            </a>
-          </li>
-          <li>
-            <a href="https://github.com/malinborn/mdmini/releases">Releases</a>
-          </li>
-          <li>
-            <a href="https://github.com/malinborn/mdmini/blob/main/LICENSE">License</a>
-          </li>
-        </ul>
       </div>
     </div>
-  </footer>
+  </section>
 
-  <script>
-    function copyCmd(btn, text) {
-      navigator.clipboard.writeText(text).then(() => {
-        const copy = btn.querySelector('.copy-icon');
-        const check = btn.querySelector('.check-icon');
-        copy.style.display = 'none';
-        check.style.display = 'block';
-        setTimeout(() => {
-          copy.style.display = 'block';
-          check.style.display = 'none';
-        }, 1800);
-      });
-    }
-  </script>
+  <section id="install" class="install-section">
+    <div class="wrap">
+      <h2>Quick start</h2>
+      <p class="section-lede">Install with Homebrew, open from anywhere, and register the MCP server once &mdash; your agent gets a local socket into the running app. No daemon, no cloud.</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          <span class="terminal-title">zsh &mdash; 80&times;16</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="tok-teal">$</span> brew tap malinborn/mdmini &amp;&amp; brew trust malinborn/mdmini &amp;&amp; brew install --cask mdmini</div>
+          <div class="terminal-line"><span class="tok-teal">$</span> mdmini README.md          <span class="terminal-comment"># opens in a native macOS window</span></div>
+          <div class="terminal-line"><span class="tok-teal">$</span> mdmini *.md notes/*.md    <span class="terminal-comment"># each file gets its own window</span></div>
+          <div class="terminal-line"><span class="tok-teal">$</span> claude mcp add --scope user mdmini -- mdmini mcp   <span class="terminal-comment"># connect your AI agent — or use plain CLI verbs: mdmini show / edit / ask</span></div>
+          <div class="terminal-line"><span class="tok-teal">$</span> brew update &amp;&amp; brew upgrade --cask mdmini</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="changelog" class="changelog-section">
+    <div class="wrap">
+      <h2>Changelog</h2>
+      <div class="changelog-list">
+
+        <details class="changelog-entry" open>
+          <summary class="changelog-summary">
+            <span class="changelog-version">v1.0.1</span>
+            <span class="changelog-date">2026-08-23</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Now it installs on your Intel Mac, and tells you it speaks AI</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Intel Macs are supported</strong> &mdash; the build is universal now, one download for both architectures. Previously <code>brew install --cask mdmini</code> simply refused on an Intel machine, and never said why. The culprit was a single arch-dependent type: Objective-C's <code>BOOL</code> is a <code>bool</code> on Apple Silicon and an <code>i8</code> everywhere else, so one <code>true</code> literal compiled on one machine and broke the other</li>
+            <li><strong>The AI interface is findable</strong> &mdash; 1.0 shipped it and then hid it. A toast on launch now says the editor can be driven by your agent, and a new <strong>Getting Started</strong> entry sits at the top of the AI menu. It leads with a map of that menu rather than a wall of setup, because the thing worth remembering is where this lives, not which command to type</li>
+            <li><strong>It knows when to stop</strong> &mdash; the toast appears at most three times, once a day, never on the launch that already opened the welcome window, and never again once an agent has actually connected. The first time one does, md-mini says so &mdash; useful if someone handed you a config and you were wondering what just moved on screen</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v1.0.0</span>
+            <span class="changelog-date">2026-08-23</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">One point oh &mdash; now your agent can type too</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>An interface for AI agents</strong> &mdash; <code>mdmini show file.md --line 42</code> scrolls a window to a spot and pulses it; <code>cat new.md | mdmini edit file.md</code> pushes content straight into the live buffer and highlights exactly what changed. No writing to disk and praying the watcher notices</li>
+            <li><strong>Your agent can ask you things</strong> &mdash; <code>mdmini ask</code> plants a real question with option buttons inside the document and <em>blocks</em> until you click. Checkboxes for multi-select, a free-text field when none of the options fit</li>
+            <li><strong>Speaks MCP too</strong> &mdash; <code>mdmini mcp</code> runs a stdio MCP server exposing the same three verbs as tools, so agents that prefer MCP need no shell glue. <code>mdmini agent</code> prints a ready-to-paste block for your CLAUDE.md</li>
+            <li><strong>Live Render, in beta</strong> &mdash; an opt-in mode where markdown markers stay hidden even when the caret sits on them, Notion-style. It installs only while selected, so the live-preview mode you already trust is untouched by construction. <code>View → Editor Engine → (beta) Live Render</code></li>
+            <li><strong>Aurora themes</strong> &mdash; two new palettes, light and dark, alongside Rosé Pine. Five entries in the theme menu now, System included, and the caret picked up a gradient</li>
+            <li><strong>A new app icon</strong> &mdash; and, at the last minute, a properly antialiased one: the first cut carried a baked drop shadow that ate a fifth of the canvas at 32px</li>
+            <li><strong>A welcome window, once</strong> &mdash; on first launch after the upgrade md-mini opens a short document showing how to connect your agent, by CLI or by MCP. Close it and it stays closed</li>
+            <li><strong>Fixed: external edits no longer jump you around</strong> &mdash; when a watched file is reloaded from disk, your scroll position and caret stay where you left them</li>
+            <li><strong>Fixed: selecting across a diagram</strong> &mdash; dragging a selection over a mermaid block or a table no longer paints over the widget</li>
+            <li><strong>New home</strong> &mdash; the site lives at <code>md-mini.com</code>; the old GitHub Pages address redirects</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.5.1</span>
+            <span class="changelog-date">2026-07-28</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Close that update notice once</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>One notice, not one per window</strong> &mdash; dismissing the &ldquo;new version available&rdquo; toast now dismisses it everywhere instead of making you close it in every open window</li>
+            <li><strong>It stays dismissed</strong> &mdash; neither the next hourly check nor a window you open afterwards brings it back. A genuinely newer version still shows up</li>
+            <li><strong>One check per app, not per window</strong> &mdash; five windows used to mean five requests an hour for the same answer</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.5.0</span>
+            <span class="changelog-date">2026-07-28</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Your windows come back</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Reopen your last session</strong> &mdash; quitting no longer loses the windows you had open. A toast tells you how many are waiting; <code>&#8679;&#8984;T</code> brings them back, or use <code>File &rarr; Reopen Windows from Last Session</code></li>
+            <li><strong>Everything comes back with them</strong> &mdash; file, window position and size, where the caret was, and how far you had scrolled</li>
+            <li><strong>Unsaved drafts too</strong> &mdash; an Untitled window you never saved returns with its text intact, still marked dirty</li>
+            <li><strong>Survives an upgrade</strong> &mdash; this is the point: <code>brew upgrade --cask mdmini</code> closes every window, and now you can get them back</li>
+            <li><strong>Notifications stack</strong> &mdash; the update notice and the session offer sit above one another instead of overlapping, and each waits until you dismiss it</li>
+            <li><strong>Fixed: scrolling a diagram-heavy file</strong> &mdash; reaching the end of a document full of mermaid diagrams and scrolling back up threw you straight down again. Diagrams no longer briefly lay out at full natural size, which was corrupting every scroll position on the page</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.4.0</span>
+            <span class="changelog-date">2026-07-25</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Big diagrams, finally navigable</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Pinch to zoom</strong> &mdash; two fingers on the trackpad zoom around the cursor; <code>Cmd</code>+scroll does the same for a mouse</li>
+            <li><strong>Swipe to pan</strong> &mdash; a two-finger swipe moves around a zoomed diagram; at full view it scrolls the document exactly as before</li>
+            <li><strong>Gestures that don&rsquo;t yank the page</strong> &mdash; running into an edge mid-swipe springs back instead of throwing you down the document; lift your fingers and swipe again to scroll on</li>
+            <li><strong>Back to full view</strong> &mdash; the <code>&#10530;</code> button or a double-click refits; drag the bottom edge to resize the frame</li>
+            <li><strong>Zoom sticks around</strong> &mdash; scrolling a diagram off screen, or editing text above it, no longer resets what you were looking at</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.5</span>
+            <span class="changelog-date">2026-06-16</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Links that work inside tables</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Markdown links in table cells</strong> &mdash; <code>[text](url)</code> inside a cell now renders as a clickable link instead of raw brackets and parens</li>
+            <li><strong>Anchor links scroll, not escape</strong> &mdash; in-cell <code>[Back to top](#heading)</code> jumps within the document; re-clicking the same anchor no longer leaks out to the system browser</li>
+            <li><strong>Mixed inline formatting</strong> &mdash; links coexist with bold, italic, code and strikethrough in the same cell</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.4</span>
+            <span class="changelog-date">2026-06-05</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Shell configs come alive</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Syntax highlighting for shell configs</strong> &mdash; <code>.zshrc</code>, <code>.bashrc</code>, <code>.bash_profile</code>, <code>.profile</code> and friends now render as Shell code instead of plain text</li>
+            <li><strong>Inline secret masking</strong> &mdash; values in <code>export API_KEY=&hellip;</code>, <code>TOKEN=&hellip;</code> are masked to a <code>sk-&hellip;jkl</code> pill with a Copy button, while the key and the rest of the line stay highlighted</li>
+            <li><strong>Reveal on demand</strong> &mdash; put the cursor on the line, or press <code>Cmd+E</code>, to see the raw value; shell expansions (<code>$VAR</code>, <code>$(&hellip;)</code>) are left untouched</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.3</span>
+            <span class="changelog-date">2026-06-04</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">TOC links that actually jump</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>In-document anchor links</strong> &mdash; clicking <code>[Section](#section)</code> now scrolls to the matching heading instead of doing nothing</li>
+            <li><strong>Cyrillic &amp; duplicates</strong> &mdash; percent-encoded and non-ASCII fragments resolve; duplicate headings disambiguate (<code>#section-2</code>)</li>
+            <li><strong>Folded sections auto-expand</strong> &mdash; a collapsed parent heading opens before scrolling to the target</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.2</span>
+            <span class="changelog-date">2026-05-23</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Ordered lists that count themselves</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Tab restarts numbering</strong> &mdash; indenting a numbered item now opens a fresh sub-list starting at <code>1.</code></li>
+            <li><strong>Shift-Tab renumbers the parent</strong> &mdash; outdenting back to the previous level keeps the surrounding numbers sequential</li>
+            <li><strong>Works at any nesting depth</strong> &mdash; list continuation on Enter no longer breaks at the third level and beyond</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.1</span>
+            <span class="changelog-date">2026-05-23</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Tables that fit your viewport</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Auto-wrap by default</strong> &mdash; cells wrap their text to keep tables inside the editor width, no more sideways spillover</li>
+            <li><strong>Per-table toggle (&hArr;)</strong> &mdash; release any single table to its natural width when you want the overflow back</li>
+            <li><strong>Multi-line cells</strong> &mdash; double-click opens a growing textarea; Cmd+Enter to commit, Enter for a new line</li>
+            <li><strong>Pipe &amp; newline roundtrip</strong> &mdash; <code>|</code> and line breaks inside cells survive a save/reload via <code>\|</code> and <code>&lt;br&gt;</code></li>
+            <li><strong>Stable column alignment</strong> &mdash; switched to native CSS table layout so columns no longer drift on edit</li>
+            <li><strong>Cursor never gets stuck</strong> &mdash; arrow keys past a table snap to the next or previous visible line</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.3.0</span>
+            <span class="changelog-date">2026-05-23</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Inline markdown inside headings</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Code, bold, italic, strike, links inside headings</strong> &mdash; formatting now decorates correctly when used inside <code># H1</code>&ndash;<code>###### H6</code></li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.2.2</span>
+            <span class="changelog-date">2026-04-05</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Line Glow &amp; heading fold redesign</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Line Glow</strong> &mdash; subtle gradient glow on active line, toggle via View menu</li>
+            <li><strong>Fold toggle</strong> &mdash; &#9662;/&#9656; inline after headings with glow when folded</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.2.1</span>
+            <span class="changelog-date">2026-04-05</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Heading fold toggle redesign</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Inline fold toggle</strong> &mdash; &#9662;/&#9656; appears right after heading text, no layout shift</li>
+            <li><strong>Glow indicator</strong> &mdash; folded sections show &#9656; with subtle glow</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.2.0</span>
+            <span class="changelog-date">2026-04-05</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">Mermaid Diagrams</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Live diagram preview</strong> &mdash; <code>```mermaid</code> blocks render as inline SVG diagrams</li>
+            <li><strong>All diagram types</strong> &mdash; flowcharts, sequence, class, state, ER, Gantt, pie, gitgraph, mindmap</li>
+            <li><strong>Lazy-loaded</strong> &mdash; zero overhead for documents without diagrams</li>
+            <li><strong>Hybrid errors</strong> &mdash; shows last valid diagram + error overlay while editing</li>
+            <li><strong>Theme-aware</strong> &mdash; diagrams adapt to light/dark theme</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.1.6</span>
+            <span class="changelog-date">2026-04-03</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Foreground windows</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Windows open in foreground</strong> &mdash; new windows from CLI now appear on top via NSApp activate</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.1.5</span>
+            <span class="changelog-date">2026-04-02</span>
+            <span class="changelog-tag feature">feature</span>
+            <span class="changelog-title">File associations &amp; smart windows</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Dock file drop</strong> &mdash; drag files onto the Dock icon to open</li>
+            <li><strong>File associations</strong> &mdash; macOS registers mdmini for .md, .txt, .json, .py, .rs, .yml, .toml, .sh</li>
+            <li><strong>Smart window reuse</strong> &mdash; drag-drop and Dock drop open in empty windows</li>
+            <li><strong>No white flash</strong> &mdash; dark background set before CSS loads</li>
+            <li><strong>Cmd+Z safety</strong> &mdash; undo no longer clears content after file open</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.1.4</span>
+            <span class="changelog-date">2026-04-02</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Text wrapping &amp; table alignment</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Text wrapping</strong> &mdash; long text wraps correctly even with wide tables</li>
+            <li><strong>Gutter cleanup</strong> &mdash; removed gray bar, auto-hides on horizontal scroll</li>
+            <li><strong>Table alignment</strong> &mdash; consistent column alignment across all rows</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.1.3</span>
+            <span class="changelog-date">2026-03-30</span>
+            <span class="changelog-tag fix">fix</span>
+            <span class="changelog-title">Update checks &amp; theme fixes</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Update banner</strong> &mdash; correct brew command with <code>brew update</code> prefix</li>
+            <li><strong>Theme menu</strong> &mdash; single checkmark radio behavior</li>
+            <li><strong>Hourly update checks</strong> while app is open</li>
+          </ul>
+        </details>
+
+        <details class="changelog-entry">
+          <summary class="changelog-summary">
+            <span class="changelog-version">v0.1.0</span>
+            <span class="changelog-date">2026-03-30</span>
+            <span class="changelog-tag initial">initial</span>
+            <span class="changelog-title">Initial release</span>
+          </summary>
+          <ul class="changelog-body-list">
+            <li><strong>Live preview</strong> &mdash; inline markdown rendering via CodeMirror 6 decorations</li>
+            <li><strong>GFM tables</strong> &mdash; create, edit, reorder rows/columns, drag-drop</li>
+            <li><strong>Collapsible headings</strong> &mdash; click to fold sections</li>
+            <li><strong>Syntax highlighting</strong> &mdash; fenced code blocks with language detection</li>
+            <li><strong>Secret masking</strong> &mdash; <code>.env</code> values blurred by default</li>
+            <li><strong>File watching</strong> &mdash; external edits reload automatically</li>
+            <li><strong>CLI launcher</strong> &mdash; <code>mdmini file.md</code> via Homebrew tap</li>
+            <li><strong>Themes</strong> &mdash; Ros&eacute; Pine dark &amp; dawn</li>
+            <li><strong>Auto-save &amp; crash recovery</strong></li>
+          </ul>
+        </details>
+
+      </div>
+      <p class="changelog-more"><a href="https://github.com/malinborn/mdmini/releases">Full release history on GitHub &rarr;</a></p>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span class="footer-mark">
+        <span class="footer-mark-swatch" aria-hidden="true"></span>
+        mdmini
+      </span>
+      <span class="footer-links">
+        <a href="https://github.com/malinborn/mdmini">GitHub</a>
+        <span class="footer-note">GPL-3.0 &middot; free and open source &middot; built with Tauri</span>
+      </span>
+    </div>
+  </footer>
 
 </body>
 </html>

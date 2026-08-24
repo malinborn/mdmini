@@ -13,11 +13,25 @@
     "moduleDetection": "force",
     "noEmit": true,
 
+    /* site/ imports the app's editor stack via this alias — mirrors
+       vite.config.site.ts's resolve.alias so `npm run check` resolves the
+       same `@app/...` specifiers the site build does. */
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/*"]
+    },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "vite.config.ts",
+    "vite.config.site.ts",
+    "site/**/*.ts"
+  ]
 }

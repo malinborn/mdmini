@@ -1,0 +1,143 @@
+/* Styles for the point demo. Owned by site/demos/point.ts. */
+
+/* Chrome: a tiny agent-conversation panel in the slide's left column, under
+ * the copy — the human's question, the tool call it drives, and a one-line
+ * result note. Fixed to this slide's own theme (aurora-dark, see
+ * site/index.html) with literal colors rather than the shared
+ * `[data-demo-theme]` tokens in site/styles/demo-themes.css: those tokens
+ * are scoped to the `.demo` element itself, but this chrome is `.demo`'s
+ * cousin inside `.slide` (left column vs. right column), not its
+ * descendant, so custom-property inheritance never reaches it.
+ *
+ * `.demo-chrome:empty { display: none; }` (site/styles/landing.css) is what
+ * keeps an *un*used chrome slot (edit/ask/anyway/showcase have none) from
+ * taking up space. This override reserves real height for THIS chrome slot
+ * before point.ts ever populates it: `.demo-body`'s own big comment block
+ * explains why a demo growing after mount shoves the carousel controls
+ * around and freezes the showcase ribbon's hover-pause — the exact same
+ * failure mode applies here if the chrome went from 0 height (empty, at
+ * first paint) to its real height only once JS fills it in. Reserving the
+ * height up front avoids the reflow entirely. `display: none` is beaten by
+ * `display: flex` below at equal specificity (one class + one attribute
+ * selector each) because this file loads after landing.css (see
+ * site/main.ts's import order).
+ */
+.demo-chrome[data-demo-chrome='point'] {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 92px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #1f1e35;
+  border: 1px solid #353456;
+}
+
+.point-chrome-line {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Hand-off connector: a thin guide in the panel's own left padding (the
+ * "cmd"/"note" rows are the agent's turn, sitting under the human's
+ * question) — drawn as an absolutely-positioned bar inside the unused
+ * gutter left of the tag column, so it costs zero text width on rows that
+ * are already tight at 390px (see the file-level comment on COMMAND_LINE
+ * in point.ts). Reads as a bracket grouping the tool call + its result
+ * apart from the question that triggered them, without becoming a chat
+ * bubble.
+ */
+.point-chrome-line--cmd::before,
+.point-chrome-line--note::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: #4a4972;
+}
+
+.point-chrome-tag {
+  flex: none;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #6a6b8c;
+  text-transform: uppercase;
+}
+
+.point-chrome-line--cmd .point-chrome-tag,
+.point-chrome-line--note .point-chrome-tag {
+  color: #6fd9c0;
+}
+
+.point-chrome-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  /* Every line is sized to fit fully typed, even on a 390px phone (see
+     point.ts's copy comments) — ellipsis is a defensive fallback, not the
+     plan, for whatever narrower viewport or font-substitution shows up. */
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.point-chrome-line--user .point-chrome-text {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  color: #e4e4f2;
+}
+
+.point-chrome-line--cmd .point-chrome-text {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  color: #c3a9f7;
+}
+
+.point-chrome-line--note .point-chrome-text {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  color: #9192b3;
+}
+
+/* `.slide`'s grid collapses to one narrow column under ~600px (see
+ * landing.css), leaving this panel little more than a phone's full width —
+ * tight enough that even the "you" line already leaned on the ellipsis
+ * fallback below before this file's actor-labelling change (confirmed by
+ * measuring scrollWidth vs. clientWidth with the old single-glyph `$` tag
+ * in place). Spelling out "agent" costs a bit more of the tag column's
+ * width on top of that, so claw a few px back here the same way
+ * demo-edit.css does for its own terminal: modest, not a claim that every
+ * line now fits without truncating.
+ */
+@media (max-width: 480px) {
+  .point-chrome-tag {
+    font-size: 9.5px;
+  }
+  .point-chrome-line {
+    gap: 6px;
+  }
+  .point-chrome-text {
+    font-size: 11px;
+  }
+}
+
+/* Under reduced motion, point.ts skips the typing/scroll/pulse sequence
+ * entirely and shows the first target already highlighted. `.cm-ai-pulse`'s
+ * own animation (src/styles/editor.css) fades to transparent after 1.6s with
+ * no `prefers-reduced-motion` override and no `animation-fill-mode`, which
+ * would leave the "static" highlight vanishing on its own — freezing it here
+ * at its starting color keeps the highlight genuinely static without
+ * touching the shared app stylesheet. Scoped to this demo only.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-demo='point'] .cm-line.cm-ai-pulse {
+    animation: none;
+    background-color: var(--ai-edit-bg);
+  }
+}
