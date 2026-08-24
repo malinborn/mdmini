@@ -103,7 +103,7 @@ pub async fn comment_create(
         .map(|thread| thread.id)
         .collect();
     let id = crate::comments::new_id_avoiding(doc, crate::comments::now_epoch(), &taken);
-    crate::comments::append_thread(doc, &id, line, &quote, "Вы", &text)?;
+    crate::comments::append_thread(doc, &id, line, &quote, "You", &text)?;
     Ok(id)
 }
 
@@ -116,7 +116,7 @@ pub async fn comment_create(
 #[command]
 pub async fn comment_reply(path: String, id: String, text: String) -> Result<(), String> {
     let doc = std::path::Path::new(&path);
-    crate::comments::append_reply(doc, &id, "Вы", &text)?;
+    crate::comments::append_reply(doc, &id, "You", &text)?;
     crate::comments::set_status(doc, &id, crate::comments::Status::Open)
 }
 

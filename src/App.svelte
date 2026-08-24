@@ -14,6 +14,7 @@
     onAiCommand,
     onCommentsChanged,
     type AiCommandPayload,
+    type UpdateInfo,
   } from './lib/tauri/events';
   import { invoke } from '@tauri-apps/api/core';
   import { ask } from '@tauri-apps/plugin-dialog';
@@ -920,16 +921,16 @@
 
     // The notice itself is process-wide: Rust broadcasts a find to every window
     // and remembers dismissal, so it does not have to be closed window by window.
-    invoke<{ latest: string; current: string } | null>('pending_update')
+    invoke<UpdateInfo | null>('pending_update')
       .then((info) => {
-        if (info) toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+        if (info) toasts.push({ kind: 'update', latest: info.latest, current: info.current, highlight: info.highlight });
       })
       .catch(() => {
         // Update notices are best-effort; never surface this.
       });
 
     const unlistenUpdateAvailable = onUpdateAvailable((info) => {
-      toasts.push({ kind: 'update', latest: info.latest, current: info.current });
+      toasts.push({ kind: 'update', latest: info.latest, current: info.current, highlight: info.highlight });
     });
 
     const unlistenUpdateDismissed = onUpdateDismissed(() => {

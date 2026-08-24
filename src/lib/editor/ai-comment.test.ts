@@ -338,7 +338,7 @@ describe('CommentWidget.toDOM action buttons', () => {
 
     const dom = widget.toDOM() as unknown as FakeElement;
     const [handoffButton] = findByClass(dom, 'cm-ai-comment-button').filter(
-      (el) => el.textContent === 'отправить в агента'
+      (el) => el.textContent === 'send to agent'
     );
     fire(handoffButton, 'click');
 
@@ -352,7 +352,7 @@ describe('CommentWidget.toDOM action buttons', () => {
     const widget = new CommentWidget({ thread: thread({ id: 'c-aaaaaa', status: 'open' }), orphaned: false, actions });
 
     const dom = widget.toDOM() as unknown as FakeElement;
-    const [resolveButton] = findByClass(dom, 'cm-ai-comment-button').filter((el) => el.textContent === 'решено');
+    const [resolveButton] = findByClass(dom, 'cm-ai-comment-button').filter((el) => el.textContent === 'resolve');
     fire(resolveButton, 'click');
 
     expect(actions.resolve).toHaveBeenCalledWith('c-aaaaaa');
@@ -363,7 +363,7 @@ describe('CommentWidget.toDOM action buttons', () => {
     const widget = new CommentWidget({ thread: thread({ status: 'resolved' }), orphaned: false, actions: makeActions() });
 
     const dom = widget.toDOM() as unknown as FakeElement;
-    const resolveButtons = findByClass(dom, 'cm-ai-comment-button').filter((el) => el.textContent === 'решено');
+    const resolveButtons = findByClass(dom, 'cm-ai-comment-button').filter((el) => el.textContent === 'resolve');
     expect(resolveButtons).toHaveLength(0);
   });
 
@@ -382,7 +382,7 @@ describe('CommentWidget.toDOM action buttons', () => {
 
     const dom = widget.toDOM() as unknown as FakeElement;
     const [insertButton] = findByClass(dom, 'cm-ai-comment-button').filter(
-      (el) => el.textContent === 'вставить в текст'
+      (el) => el.textContent === 'insert into text'
     );
     fire(insertButton, 'click');
 
@@ -395,7 +395,7 @@ describe('CommentWidget.toDOM action buttons', () => {
 
     const dom = widget.toDOM() as unknown as FakeElement;
     const insertButtons = findByClass(dom, 'cm-ai-comment-button').filter(
-      (el) => el.textContent === 'вставить в текст'
+      (el) => el.textContent === 'insert into text'
     );
     expect(insertButtons).toHaveLength(0);
   });

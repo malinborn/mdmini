@@ -173,18 +173,19 @@ export function documentDir(docPath: string): string {
 export function buildWatchPrompt(docPath: string): string {
   const dir = documentDir(docPath);
   return [
-    `Следи за моими комментариями в ${dir} и отвечай на них.`,
+    `Watch for my comments under ${dir} and answer them.`,
     ``,
-    `Если умеешь реагировать на поток событий (Claude Code — инструмент Monitor):`,
-    `Monitor({command: "mdmini watch ${dir}", description: "новые комменты в mdmini", persistent: true})`,
-    `Без persistent: true монитор умрёт через пять минут, и его тишина будет`,
-    `выглядеть как «комментариев нет».`,
+    `If you can react to an event stream (Claude Code: the Monitor tool):`,
+    `Monitor({command: "mdmini watch ${dir}", description: "new mdmini comments", persistent: true})`,
+    `persistent: true is not optional — without it the monitor dies after five`,
+    `minutes and its silence is indistinguishable from "no comments".`,
     ``,
-    `Если не умеешь — проверяй \`mdmini question ${dir}\` перед тем, как спросить`,
-    `меня в чате, и перед тем, как отчитаться о завершении.`,
+    `If you cannot, check \`mdmini question ${dir}\` at natural points: before`,
+    `asking me something in chat, and before reporting that you are done.`,
     ``,
-    `Отвечать: \`mdmini answer <файл> --id <id>\`, текст на stdin. Если коммент`,
-    `просит правку — примени её через \`mdmini edit\`, потом закрой тред ответом.`,
+    `To answer: \`mdmini answer <file> --id <id>\` with the text on stdin. If a`,
+    `comment asks for a change rather than an answer, make it with`,
+    `\`mdmini edit\`, then close the thread with an answer.`,
   ].join('\n');
 }
 
@@ -194,9 +195,9 @@ export function buildWatchPrompt(docPath: string): string {
  */
 export function buildHandoffPrompt(docPath: string, id: string): string {
   return [
-    `В файле ${sidecarPath(docPath)} есть открытый комментарий ${id} к ${docPath}.`,
-    `Прочитай тред и ответь: допиши реплику под ним и поменяй status на answered.`,
-    `Если нужна правка самого документа — примени её, затем ответь в тред.`,
-    `С MCP md-mini: инструменты question и answer. Из CLI: mdmini answer ${docPath} --id ${id} (текст на stdin).`,
+    `There is an open comment ${id} on ${docPath}, in ${sidecarPath(docPath)}.`,
+    `Read the thread and answer it: append a reply under it and set status to answered.`,
+    `If it asks for a change to the document itself, make the change, then answer in the thread.`,
+    `With md-mini over MCP: the question and answer tools. From a shell: mdmini answer ${docPath} --id ${id} (text on stdin).`,
   ].join('\n');
 }

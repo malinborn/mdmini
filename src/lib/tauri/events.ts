@@ -53,10 +53,16 @@ export function onSessionRestored(handler: (count: number) => void): Promise<() 
 }
 
 /** A newer release was found. Emitted to every window by the polling one. */
-export function onUpdateAvailable(
-  handler: (info: { latest: string; current: string }) => void
-): Promise<() => void> {
-  return listen<{ latest: string; current: string }>('update-available', (event) => {
+/** Matches `UpdateInfo` in src-tauri/src/updater.rs. */
+export interface UpdateInfo {
+  latest: string;
+  current: string;
+  /** One line from the release notes; absent when the notes had nothing usable. */
+  highlight?: string;
+}
+
+export function onUpdateAvailable(handler: (info: UpdateInfo) => void): Promise<() => void> {
+  return listen<UpdateInfo>('update-available', (event) => {
     handler(event.payload);
   });
 }

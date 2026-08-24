@@ -234,7 +234,7 @@ pub fn build_menu(
         // into. So the discoverable surface is a command the user hands over,
         // and it belongs next to the other "Connect AI via …" items.
         .item(
-            &MenuItemBuilder::with_id("ai_watch_command", "Copy Watch Command for Agent")
+            &MenuItemBuilder::with_id("ai_watch_command", "Connect Agent to Doc Questions")
                 .build(app)?,
         )
         .separator()

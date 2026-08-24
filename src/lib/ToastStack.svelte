@@ -47,6 +47,11 @@
             <strong>mdmini {toast.payload.latest}</strong> available
             <span class="md-toast-dim">(you have v{toast.payload.current})</span>
           </span>
+          <!-- What the release actually brings. A version number on its own
+               never told anyone why to upgrade. -->
+          {#if toast.payload.highlight}
+            <span class="md-toast-highlight">{toast.payload.highlight}</span>
+          {/if}
           <button class="md-toast-cmd" title="Click to copy" onclick={copyBrewCommand}>
             {copied ? 'Copied!' : BREW_CMD}
           </button>

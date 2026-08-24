@@ -74,9 +74,9 @@ export const removeAiComment = StateEffect.define<string>();
 export const clearAiComments = StateEffect.define<null>();
 
 const STATUS_LABEL: Record<CommentThread['status'], string> = {
-  open: 'ждёт агента',
-  answered: 'есть ответ',
-  resolved: 'решено',
+  open: 'waiting for agent',
+  answered: 'answered',
+  resolved: 'resolved',
 };
 
 export class CommentWidget extends WidgetType {
@@ -121,7 +121,7 @@ export class CommentWidget extends WidgetType {
     const head = document.createElement('div');
     head.className = 'cm-ai-comment-head';
     head.textContent = orphaned
-      ? `${thread.id} · якорь потерян`
+      ? `${thread.id} · anchor lost`
       : `${thread.id} · ${STATUS_LABEL[thread.status]}`;
 
     // The quoted fragment, right-aligned in the header. With several cards
@@ -157,7 +157,7 @@ export class CommentWidget extends WidgetType {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'cm-ai-comment-input';
-    input.placeholder = 'Ответить…';
+    input.placeholder = 'Reply…';
     // ignoreEvent() (below) only tells CM6's own handling to leave widget
     // events alone — it does not stop the DOM event from bubbling past
     // contentDOM to document-level listeners (e.g. the Escape-clears-
@@ -210,16 +210,16 @@ export class CommentWidget extends WidgetType {
     };
 
     button(
-      'отправить в агента',
+      'send to agent',
       () => actions.handoff(thread.id),
-      'отправьте промпт в сессию'
+      'paste it into your agent'
     );
     const last = thread.replies[thread.replies.length - 1];
     if (thread.status === 'answered' && last) {
-      button('вставить в текст', () => actions.insertIntoText(thread.id, last.text));
+      button('insert into text', () => actions.insertIntoText(thread.id, last.text));
     }
     if (thread.status !== 'resolved') {
-      button('решено', () => actions.resolve(thread.id));
+      button('resolve', () => actions.resolve(thread.id));
     }
     card.appendChild(row);
 

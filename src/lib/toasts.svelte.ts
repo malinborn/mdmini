@@ -7,7 +7,7 @@
  */
 
 export type ToastPayload =
-  | { kind: 'update'; latest: string; current: string }
+  | { kind: 'update'; latest: string; current: string; highlight?: string }
   | { kind: 'session'; count: number }
   /** Startup nudge for someone who has never connected an agent. */
   | { kind: 'ai-nudge' }
