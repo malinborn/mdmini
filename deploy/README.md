@@ -3,6 +3,47 @@
 Static site lives in `docs/`, served by Caddy from `/var/www/md-mini.com`.
 Pushes to `main` touching `docs/**` auto-deploy via `.github/workflows/deploy-site.yml`.
 
+## The site is a build, not hand-written HTML
+
+`docs/` is the **build output** of a second Vite entry point, sources live in
+`site/`:
+
+```
+site/                    # sources — edit here
+  index.html             # all copy, as real markup (crawlable, no JS injection)
+  main.ts                # page wiring: theme toggle, carousel, lazy demo mounting
+  demos/                 # live editor demos (point/edit/ask/showcase), reusing
+                          # the app's own CM6 stack from src/lib/editor/*
+  styles/                # landing.css (page chrome) + fonts.css
+vite.config.site.ts       # separate Vite config — root: site/, outDir: docs/
+```
+
+```bash
+npm run build:site   # vite build --config vite.config.site.ts -> docs/
+```
+
+`emptyOutDir` is off, because `docs/` also holds hand-maintained files that
+the build never touches or regenerates: `screenshot.png`, `robots.txt`,
+`sitemap.xml`, favicons, `llms.txt`, `sample.md`, and the internal `*.md`
+docs. Only `docs/index.html` and `docs/assets/**` are build artifacts.
+
+**The deploy workflow ships whatever is committed under `docs/` unchanged —
+it does not run the build.** So a content change to the landing page means:
+
+1. Edit `site/index.html` (copy), `site/styles/landing.css` (chrome), or
+   `site/demos/*.ts` (live demos) — not `docs/index.html` directly, it gets
+   overwritten by the next build.
+2. `npm run build:site`.
+3. Commit **both** the `site/` change and the regenerated `docs/index.html` +
+   `docs/assets/**` in the same commit. A `site/` change without a matching
+   rebuild silently ships the *old* `docs/` on the next unrelated push.
+
+`docs/assets/*.js` and `*.css` are content-hashed by Vite, so every build
+produces a fresh set of filenames; stale ones from a previous build are not
+cleaned up automatically (`emptyOutDir: false`) and should be removed by hand
+(`rm -rf docs/assets && npm run build:site`) before committing, so the commit
+doesn't accumulate orphaned chunks from earlier iterations.
+
 Caddy terminates TLS and **issues and renews the certificate by itself** — there
 is no certbot, no renewal cron job and no deploy hook to maintain. It also
 redirects HTTP to HTTPS automatically, so neither the config nor this guide

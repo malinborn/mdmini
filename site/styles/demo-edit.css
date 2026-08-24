@@ -1,0 +1,157 @@
+/* Styles for the edit demo. Owned by site/demos/edit.ts. */
+
+/* The chrome panel in the slide's left column, under the copy: a small
+   macOS-style terminal.
+   Its three lines (command / tool call / status) are always in the DOM —
+   only text content and opacity/visibility change across the loop — so its
+   height is fixed from the moment it's populated and never shifts again,
+   for the same reason `.demo-body`'s height is reserved up front (see the
+   comment on that rule in landing.css): a chrome panel that grows or
+   shrinks mid-loop would grow the carousel track under a stationary mouse
+   and can permanently freeze the showcase ribbon's hover-to-pause scroll. */
+.demo-terminal {
+  background: var(--code-bg);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+}
+
+.demo-terminal .demo-bar {
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-terminal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.demo-terminal-line {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 1.4em;
+}
+
+/* Not yet revealed, but still occupying its row — `visibility`, not
+   `display: none`, is what keeps the body's total height constant across
+   the whole loop (see the file header comment). */
+.demo-terminal-line--tool,
+.demo-terminal-line--status {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+}
+.demo-terminal-line--tool.is-visible,
+.demo-terminal-line--status.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Hand-off connector: the `$` line above is the human, genuinely typed —
+   these two rows are the agent's own turn (its tool call, then the tool's
+   JSON reply), so a thin guide brackets them together in the panel's own
+   left padding. Lives in the pseudo-element, not the flex flow, so it costs
+   no text width on rows that already lean on `text-overflow: ellipsis` at
+   narrow widths — see the min-width/ellipsis rule below. */
+.demo-terminal-line--tool::before,
+.demo-terminal-line--status::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border2);
+}
+
+.demo-terminal-prompt,
+.demo-terminal-arrow {
+  flex: none;
+  color: var(--muted);
+}
+
+/* Explicit actor label on the tool-call row: this is the agent invoking
+   mdmini, not the person typing another shell command — see the file
+   header comment. Small monospace chip, same restrained language as the
+   point-demo chrome's tags (site/styles/demo-point.css), themed via the
+   page's own accent token instead of a literal color since this terminal
+   (unlike point's aurora-dark-only chrome) follows the page's light/dark
+   theme. */
+.demo-terminal-tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--link);
+}
+
+/* Flex items default to a content-sized `min-width: auto`, which defeats
+   `text-overflow: ellipsis` — it never gets a chance to shrink below its
+   own text. `min-width: 0` plus `flex: 1 1 auto` gives each line's text a
+   real shrinkable box, so a long command truncates instead of wrapping
+   (wrapping would change this row's height mid-type, which is exactly the
+   shift this panel exists to avoid) on narrow viewports. */
+.demo-terminal-command,
+.demo-terminal-tool,
+.demo-terminal-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-terminal-command,
+.demo-terminal-tool {
+  color: var(--text);
+}
+
+.demo-terminal-status {
+  color: var(--muted);
+}
+.demo-terminal-status--running {
+  animation: demoTerminalPulse 1s ease-in-out infinite;
+}
+/* Reuses the same success hue the changelog's "feature" tag uses — already
+   tuned per-theme for contrast against this card's background (see the
+   --tag-feature definitions in landing.css). */
+.demo-terminal-status--ok {
+  color: var(--tag-feature);
+}
+
+.demo-terminal-cursor {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 1.1em;
+  background: var(--text);
+  opacity: 0;
+}
+.demo-terminal-cursor.is-blinking {
+  animation: demoTerminalCaret 1s step-end infinite;
+}
+
+@keyframes demoTerminalCaret { 0%, 55% { opacity: 1; } 60%, 100% { opacity: 0; } }
+@keyframes demoTerminalPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-terminal-cursor { animation: none; opacity: 0; }
+  .demo-terminal-status--running { animation: none; opacity: 0.75; }
+}
+
+/* `.slide`'s grid collapses to one narrow column under ~600px (see
+   landing.css), leaving this panel ~300px wide — small enough that the
+   longer terminal lines need a smaller face to have any chance of fitting
+   without leaning on the ellipsis fallback above. */
+@media (max-width: 480px) {
+  .demo-terminal-body { font-size: 9.5px; letter-spacing: -0.2px; }
+  .demo-terminal-tag { font-size: 9px; }
+}

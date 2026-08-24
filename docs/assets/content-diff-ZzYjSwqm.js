@@ -1,0 +1,1 @@
+function a(t,h){if(t===h)return null;const n=Math.min(t.length,h.length);let r=0;for(;r<n&&t.charCodeAt(r)===h.charCodeAt(r);)r++;let c=0;const i=n-r;for(;c<i&&t.charCodeAt(t.length-1-c)===h.charCodeAt(h.length-1-c);)c++;return{from:r,to:t.length-c,insert:h.slice(r,h.length-c)}}export{a as c};

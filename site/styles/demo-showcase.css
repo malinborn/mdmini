@@ -1,0 +1,39 @@
+/* Styles for the showcase demo. Owned by site/demos/showcase.ts.
+ *
+ * The ribbon now cycles three documents (markdown / .env / .zshrc) using two
+ * permanently-mounted editor "lanes" that crossfade into each other. Both
+ * lanes fill `.demo-body` (landing.css fixes its height via --demo-h — see
+ * that file's comment on the hover-pause bug this must never retrigger), so
+ * neither lane may affect layout height: absolute positioning + opacity only.
+ */
+/* `.demo-body` (landing.css) only sets min-height/max-height, never a plain
+ * `height` — so its computed height is 'auto' even though its rendered box
+ * is pinned to --demo-h. A percentage height on a static/relative child
+ * resolves against the *computed* value, not the rendered one, so
+ * `.showcase-stage { height: 100% }` measured 0 against it (confirmed via a
+ * throwaway Playwright probe). Absolutely positioned boxes don't have that
+ * restriction — `inset: 0` against a positioned ancestor uses its actual
+ * padding-box size regardless of how that size was arrived at — so both the
+ * stage and `.demo-body` itself are anchored with position instead of a
+ * percentage.
+ */
+.demo--showcase .demo-body {
+  position: relative;
+}
+
+.showcase-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.showcase-lane {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 700ms ease;
+  pointer-events: none;
+}
+
+.showcase-lane.is-active {
+  opacity: 1;
+}

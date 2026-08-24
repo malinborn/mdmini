@@ -1,0 +1,90 @@
+/* Styles for the ask demo. Owned by site/demos/ask.ts.
+ *
+ * Three demo-only visual states layered on top of the real `.cm-ai-ask-*`
+ * widget markup (defined in src/styles/editor.css, not duplicated here):
+ *
+ * 1. Entrance — every ask card fades and lifts in on mount. Pure CSS: each
+ *    appearance is a brand-new widget DOM node (see AskWidget.toDOM in
+ *    ai-ask.ts), so the animation just replays automatically every time
+ *    ask.ts adds one — no JS trigger needed.
+ * 2. `.demo-ask-precommit` — the "about to click" look the auto-loop applies
+ *    to a chip/button briefly before it presses it for real, so a visitor
+ *    sees the click coming rather than the state jumping straight to
+ *    answered.
+ * 3. `.demo-ask-exit` — a brief fade-and-lift while a card leaves, applied
+ *    by ask.ts between the real click landing and the widget actually being
+ *    removed from state, so "the card leaves" reads as a beat, not a cut.
+ *
+ * All three are opacity/transform only — never height — because CM6 measures
+ * a block widget's height from its root's DOM box (see the comment on
+ * `.cm-ai-ask-wrap` in editor.css), and this card's fixed 449px body (see
+ * landing.css --demo-h) can't absorb a layout shift from its own decoration.
+ */
+
+@keyframes demo-ask-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes demo-ask-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.demo[data-demo='ask'] .cm-ai-ask-wrap {
+  animation: demo-ask-enter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.demo[data-demo='ask'] .cm-ai-ask-wrap.demo-ask-exit {
+  /* Overrides the entrance animation above rather than stacking with it —
+     a card is always either arriving or leaving, never both. */
+  animation: demo-ask-exit 0.22s ease both;
+}
+
+/* Transitions for the precommit press live here (scoped to this demo only)
+   rather than on the shared `.cm-ai-ask-option`/`.cm-ai-ask-confirm` rules
+   in editor.css, which only transition background-color/opacity — the demo
+   additionally animates transform and box-shadow for the pressed look. */
+.demo[data-demo='ask'] .cm-ai-ask-option,
+.demo[data-demo='ask'] .cm-ai-ask-confirm {
+  transition:
+    background-color 0.12s ease,
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.demo[data-demo='ask'] .cm-ai-ask-option.demo-ask-precommit {
+  background: var(--ai-ask-chip-hover-bg);
+  box-shadow: 0 0 0 2px var(--ai-ask-accent);
+  transform: scale(0.96);
+}
+
+.demo[data-demo='ask'] .cm-ai-ask-confirm.demo-ask-precommit {
+  opacity: 0.85;
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo[data-demo='ask'] .cm-ai-ask-wrap,
+  .demo[data-demo='ask'] .cm-ai-ask-wrap.demo-ask-exit {
+    animation: none;
+  }
+
+  .demo[data-demo='ask'] .cm-ai-ask-option,
+  .demo[data-demo='ask'] .cm-ai-ask-confirm {
+    transition: none;
+  }
+}

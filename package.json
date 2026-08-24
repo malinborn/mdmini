@@ -13,6 +13,8 @@
     "tauri": "tauri",
     "dev:app": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build:dev": "tauri build --config src-tauri/tauri.dev.conf.json",
+    "dev:site": "vite --config vite.config.site.ts",
+    "build:site": "vite build --config vite.config.site.ts",
     "build:universal": "tauri build --target universal-apple-darwin",
     "check:x86": "cargo build --manifest-path src-tauri/Cargo.toml --target x86_64-apple-darwin"
   },
@@ -40,6 +42,9 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tauri-apps/cli": "^2",
+    "@types/node": "^26.2.0",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.62.1",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "~5.6.2",

@@ -12,6 +12,7 @@
   import { envPreviewPlugin } from './preview/env';
   import { computeReplacement } from './content-diff';
   import { aiHighlightPresenceNotifier } from './ai-highlight';
+  import '../../styles/editor-metrics.css';
 
   export interface EditorHandle {
     view: EditorView | undefined;
@@ -146,7 +147,7 @@
   });
 </script>
 
-<div class="editor-container" bind:this={editorContainer}></div>
+<div class="editor-container md-editor-host" bind:this={editorContainer}></div>
 
 <style>
   .editor-container {
@@ -157,15 +158,5 @@
 
   .editor-container :global(.cm-editor) {
     height: 100%;
-  }
-
-  .editor-container :global(.cm-scroller) {
-    padding: 2rem;
-    font-size: 16px;
-    line-height: 1.6;
-  }
-
-  .editor-container :global(.cm-focused) {
-    outline: none;
   }
 </style>

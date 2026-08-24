@@ -1,0 +1,14 @@
+/* Editor host metrics shared by the app window and the landing's demo cards.
+   These three values are the app's real reading experience; they used to live
+   only in Editor.svelte's scoped styles, which meant an editor mounted outside
+   that component (the marketing site's demos) silently rendered with no content
+   padding and the host page's font metrics. */
+.md-editor-host .cm-scroller {
+  padding: 2rem;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.md-editor-host .cm-focused {
+  outline: none;
+}
