@@ -451,7 +451,16 @@
       if (!view || at === null) return;
       // A normal, undoable edit: the answer is content the user chose to
       // accept, and Cmd+Z is how they take it back.
-      view.dispatch({ changes: { from: at, insert: `\n${text}\n` } });
+      //
+      // Highlighted like any other AI edit. Text arriving from an agent looks
+      // the same whether it came through `mdmini edit` or through a comment
+      // thread, so it gets the same wash and the same Escape to dismiss —
+      // without it, a paragraph the user did not write appears in their
+      // document with nothing marking it as not theirs.
+      view.dispatch({
+        changes: { from: at, insert: `\n${text}\n` },
+        effects: setAiHighlights.of([{ from: at + 1, to: at + 1 + text.length }]),
+      });
     },
   };
 

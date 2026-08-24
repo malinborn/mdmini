@@ -1,0 +1,410 @@
+/* Styles for the comment demo. Owned by site/demos/comment.ts. */
+
+/* The card hosts two absolutely-positioned pieces of chrome — the AI menu and
+   the toast that follows picking its watch item — so it needs to be their
+   containing block. `.demo` in landing.css deliberately has no `position`, and
+   adding it there would change the stacking context of every other slide, so
+   it is scoped to this one. `overflow: hidden` (already on `.demo`) is what
+   keeps both clipped to the card, which is what we want: a menu spilling
+   outside the window frame would read as a page-level element. */
+.demo[data-demo='comment'] {
+  position: relative;
+}
+
+/* The cards here are exhibits: site/demos/comment.ts owns the timeline, so a
+   click the script then overwrote would read as a broken button. The ask slide
+   is interactive because answering is its subject; this slide's subject is the
+   round trip. Kept in CSS rather than by omitting the widgets' handlers,
+   because the widgets are the app's real `CommentWidget` — its buttons come
+   wired. */
+[data-demo='comment'] .cm-ai-comment {
+  pointer-events: none;
+}
+
+/* Stands in for the click the script performs. Without it the document simply
+   changes with nothing on screen to say why — there is no cursor in a demo. */
+[data-demo='comment'] .cm-ai-comment-button.cmt-press {
+  background: var(--ai-ask-accent);
+  color: var(--ai-ask-accent-text);
+  border-color: var(--ai-ask-accent);
+}
+
+/* ---------------------------------------------------------------------------
+   The terminal, in the slide's left column under the copy.
+
+   Literal colors, not the `[data-demo-theme]` tokens from demo-themes.css:
+   those are scoped to the `.demo` element, and this panel is `.demo`'s cousin
+   inside `.slide` (left column vs. right), so custom-property inheritance
+   never reaches it. Same reason, same fix as demo-point.css. The values are
+   aurora-dark's, matching this slide's card.
+
+   `.demo-chrome:empty { display: none }` in landing.css keeps the unused
+   chrome slot on other slides from taking space; this block reserves real
+   height for THIS one before comment.ts populates it, because a chrome panel
+   that grows after mount shoves the carousel controls down under a stationary
+   cursor and can permanently latch the showcase ribbon's hover-pause. It wins
+   over `display: none` at equal specificity (one class + one attribute each)
+   only because this file is imported after landing.css — see site/main.ts.
+   --------------------------------------------------------------------------- */
+.demo-chrome[data-demo-chrome='comment'] {
+  display: flex;
+  flex-direction: column;
+  height: 178px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #171629;
+  border: 1px solid #353456;
+}
+
+.cmt-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 12px;
+  background: #1f1e35;
+  border-bottom: 1px solid #353456;
+}
+
+.cmt-term-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.cmt-term-dot--red {
+  background: #f7768e;
+}
+.cmt-term-dot--yellow {
+  background: #e0af68;
+}
+.cmt-term-dot--green {
+  background: #9ece6a;
+}
+
+.cmt-term-title {
+  margin-left: 4px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 10.5px;
+  color: #6a6b8c;
+}
+
+/* Fixed height with the transcript scrolling inside, rather than a stack of
+   pre-reserved rows (demo-edit.css's shape): this transcript grows by seven
+   rows across the loop and the `[mdmini]` wake-up line wraps, so reserving
+   every row up front would need either a much taller panel or a truncation of
+   the one line carrying the most meaning. What actually has to stay constant
+   is the panel's own box, and it does. */
+.cmt-term-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  /* Once the transcript is taller than the panel, the topmost row is cut
+     mid-glyph at the edge, which reads as a rendering fault rather than as
+     scrollback. Fading it says "there is more above" — the same reasoning as
+     `.demo-body`'s bottom fade in landing.css, and a mask rather than a
+     gradient overlay so it works over the panel's own background. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+}
+
+.cmt-term-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: none;
+}
+
+/* The agent's own rows, bracketed together in the panel's left padding — the
+   same restrained grouping demo-point.css and demo-edit.css use, drawn in a
+   pseudo-element so it costs no text width on a narrow viewport. */
+.cmt-term-row--tool::before,
+.cmt-term-row--note::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: #4a4972;
+}
+
+.cmt-term-prompt,
+.cmt-term-arrow {
+  flex: none;
+  color: #6a6b8c;
+}
+
+.cmt-term-tag {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6fd9c0;
+}
+
+/* Wrapping is allowed on purpose — see the `.cmt-term-body` comment. The panel
+   height is fixed regardless, so a wrapped line costs scroll, not layout. */
+.cmt-term-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #e4e4f2;
+}
+
+.cmt-term-row--note .cmt-term-text {
+  color: #9192b3;
+}
+
+/* ⌘V, drawn at the insertion point.
+   The watch prompt comes off the clipboard — the AI menu put it there — so it
+   lands whole instead of being typed out, and this is what says so. It lives
+   inline in the row, right after the `$`, so the key is pressed exactly where
+   the text then appears; the two swap in one frame. A version of this parked in
+   the panel's corner instead stated the fact without reading as an action. */
+.cmt-term-key {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: baseline;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+.cmt-term-key.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+.cmt-term-keycap {
+  min-width: 16px;
+  padding: 1px 4px 2px;
+  border-radius: 4px;
+  background: #2c2b4a;
+  border: 1px solid #55558a;
+  /* Thicker bottom edge reads as the height of a physical key — it is what the
+     press then flattens. */
+  border-bottom: 2px solid #6a6aa8;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+  color: #e4e4f2;
+  transition:
+    transform 0.09s ease-out,
+    background-color 0.09s ease-out,
+    border-bottom-width 0.09s ease-out,
+    border-bottom-color 0.09s ease-out;
+}
+
+/* The press: the cap drops onto its own bottom edge and lights up. Transform
+   and colour only, so it stays on the compositor. */
+.cmt-term-key.is-pressed .cmt-term-keycap {
+  transform: translateY(1px);
+  background: #6fd9c0;
+  border-color: #6fd9c0;
+  border-bottom-width: 1px;
+  border-bottom-color: #4fbda4;
+  color: #171629;
+}
+
+/* Ties the keycap to the line it produced: a one-shot tint on the pasted text,
+   so the two read as one event rather than as a badge floating nearby. */
+.cmt-term-row--in.is-pasted .cmt-term-text {
+  animation: cmt-paste-land 1.1s ease-out;
+}
+
+@keyframes cmt-paste-land {
+  0% {
+    background: rgba(111, 217, 192, 0.26);
+    box-shadow: 0 0 0 3px rgba(111, 217, 192, 0.26);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+/* The wake-up line. This is the one row that is neither the human typing nor
+   the agent choosing to act — it arrives on its own and interrupts the session,
+   so it gets its own weight. */
+.cmt-term-row--event .cmt-term-text {
+  color: #c3a9f7;
+}
+
+/* Under ~600px `.slide`'s grid collapses to one column (landing.css), so this
+   slide stacks THREE blocks — copy, terminal, card — where every other slide
+   stacks two. Measured at 390px, that made it the tallest slide in the
+   carousel by 164px, and since the track is as tall as its tallest slide, all
+   five others gained that much dead space on a phone. Both pieces shrink here
+   to bring it back in line; the demo already scrolls its own document, so a
+   shorter card costs visible lines, not content.
+   The card height is overridden on `.demo-body` rather than on the `--demo-h`
+   custom property, because that property is set *inline* in the markup (which
+   is deliberate — see landing.css) and an inline declaration would beat any
+   stylesheet rule short of `!important`. Two class/attribute selectors here
+   outrank landing.css's single class, and this file loads later. */
+@media (max-width: 600px) {
+  .demo-chrome[data-demo-chrome='comment'] {
+    height: 148px;
+  }
+  .cmt-term-body {
+    font-size: 10.5px;
+  }
+  [data-demo='comment'] .demo-body {
+    min-height: 380px;
+    max-height: 380px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The AI menu. Decorative (aria-hidden, no tab stops) — the slide's copy
+   carries the same meaning in text. Its items are the real menu, in the real
+   order, from src-tauri/src/menu.rs.
+   --------------------------------------------------------------------------- */
+.cmt-menu {
+  position: absolute;
+  top: 36px;
+  left: 12px;
+  z-index: 3;
+  width: 246px;
+  padding-bottom: 5px;
+  border-radius: 8px;
+  background: rgba(31, 30, 53, 0.97);
+  border: 1px solid #3f3e66;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  /* A macOS menu is translucent, but letting the document read through it made
+     the heading ghost across the item labels. A static blur keeps the
+     translucency and kills the legibility problem — static because an animated
+     `filter` re-rasterizes every frame (see site/CLAUDE.md on the hero field). */
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  font-size: 12px;
+  color: #e4e4f2;
+  /* Opacity + transform only, so opening the menu never triggers layout. */
+  opacity: 0;
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top left;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+  pointer-events: none;
+}
+.cmt-menu.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* The menu title the items hang from, so the panel reads as an opened menu
+   rather than as a free-floating list. */
+.cmt-menu-bar {
+  padding: 5px 10px 6px;
+  border-bottom: 1px solid #3f3e66;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #6fd9c0;
+}
+
+.cmt-menu-list {
+  padding: 5px 0 0;
+}
+
+.cmt-menu-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin: 0 4px;
+  white-space: nowrap;
+}
+
+.cmt-menu-item.is-picked {
+  background: #6fd9c0;
+  color: #171629;
+}
+
+.cmt-menu-accel {
+  flex: none;
+  font-size: 11px;
+  color: #6a6b8c;
+}
+.cmt-menu-item.is-picked .cmt-menu-accel {
+  color: rgba(23, 22, 41, 0.65);
+}
+
+.cmt-menu-sep {
+  height: 1px;
+  margin: 5px 10px;
+  background: #3f3e66;
+}
+
+/* The app's own toast, in the card's bottom-right corner where the real one
+   sits. Says what to do next, not only that a copy happened — the clipboard is
+   half the action, matching src/lib/ToastStack.svelte. */
+.cmt-toast {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  max-width: calc(100% - 28px);
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: rgba(31, 30, 53, 0.97);
+  border: 1px solid #3f3e66;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: #e4e4f2;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+.cmt-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cmt-toast-dim {
+  margin-left: 5px;
+  color: #9192b3;
+}
+
+/* Reduced motion: comment.ts already renders one settled frame instead of
+   running the loop, so all that is left is to make sure nothing here animates
+   into place. Last in the file on purpose — an override at equal specificity
+   loses on source order, which is how a reduced-motion block earlier in a file
+   once left the hero's raw markdown markers on screen permanently. */
+@media (prefers-reduced-motion: reduce) {
+  .cmt-menu,
+  .cmt-toast {
+    transition: none;
+  }
+  /* The menu never opens in this mode, and a toast with nothing to announce is
+     just an obstruction over the document. Same for the keycap: with no paste
+     to narrate, it would sit over the transcript forever. */
+  .cmt-menu,
+  .cmt-toast,
+  .cmt-term-key {
+    display: none;
+  }
+  .cmt-term-row--in.is-pasted .cmt-term-text {
+    animation: none;
+  }
+}
