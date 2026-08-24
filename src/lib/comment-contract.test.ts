@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import FIXTURE from './__fixtures__/comments-contract.md?raw';
 import { parseComments } from './comment-format';
 
 /**
@@ -15,11 +14,10 @@ import { parseComments } from './comment-format';
  * Поэтому фикстура одна на две стороны. Здесь TypeScript обязан её разобрать;
  * зеркальный тест в `comments.rs` обязан её сгенерировать байт в байт. Правка
  * формата, сделанная в одном языке, роняет тест в другом — именно этого и надо.
+ *
+ * Фикстура втягивается Vite-суффиксом `?raw`, а не `node:fs`: в проекте нет
+ * `@types/node`, и тащить его ради одного чтения файла — лишняя зависимость.
  */
-const FIXTURE = readFileSync(
-  fileURLToPath(new URL('./__fixtures__/comments-contract.md', import.meta.url)),
-  'utf8'
-);
 
 describe('comment file format — cross-language contract', () => {
   it('parses every thread the fixture declares', () => {
