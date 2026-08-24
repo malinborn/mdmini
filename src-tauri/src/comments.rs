@@ -394,6 +394,66 @@ pub fn set_status(doc: &Path, id: &str, status: Status) -> Result<(), String> {
     write_atomic(&path, &format!("{}\n", out.join("\n")))
 }
 
+/// Тред вместе с документом, к которому он относится.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Located {
+    pub doc: PathBuf,
+    pub thread: Thread,
+}
+
+/// Обойти дерево каталогов и собрать все треды со статусом `open`.
+///
+/// Скоуп задаётся деревом, а не набором открытых окон: `question` и `watch`
+/// работают при закрытом приложении, и cwd агента естественно ограничивает
+/// выборку без всякой отдельной логики скоупа.
+pub fn collect_open(root: &Path) -> Vec<Located> {
+    let mut out = Vec::new();
+    collect_open_into(root, &mut out, 0);
+    out.sort_by(|a, b| a.doc.cmp(&b.doc).then(a.thread.id.cmp(&b.thread.id)));
+    out
+}
+
+fn collect_open_into(dir: &Path, out: &mut Vec<Located>, depth: usize) {
+    if depth > 24 {
+        return; // защита от символических циклов
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if path.is_dir() {
+            // Не ходим в каталоги, которые заведомо не содержат документов
+            // пользователя и стоят дорого.
+            if matches!(name.as_ref(), ".git" | "node_modules" | "target") {
+                continue;
+            }
+            collect_open_into(&path, out, depth + 1);
+            continue;
+        }
+        if !is_sidecar(&path) {
+            continue;
+        }
+        let Some(doc_name) = name.strip_prefix(".mdmini_comments_") else {
+            continue;
+        };
+        let doc = path.with_file_name(doc_name);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for thread in parse(&text) {
+            if thread.status == Status::Open {
+                out.push(Located {
+                    doc: doc.clone(),
+                    thread,
+                });
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -614,5 +674,18 @@ Nginx там был сломан.
         let doc = temp_doc(".mdmini_comments_spec.md");
         let err = append_thread(&doc, "c-aaaaaa", 1, "q", "Макс", "?").unwrap_err();
         assert!(err.contains("comment file"), "got {err}");
+    }
+
+    #[test]
+    fn collect_open_walks_the_tree_and_returns_only_open_threads() {
+        let doc = temp_doc("spec.md");
+        append_thread(&doc, "c-open01", 1, "q1", "Макс", "Открыт?").unwrap();
+        append_thread(&doc, "c-done01", 2, "q2", "Макс", "Закрыт?").unwrap();
+        set_status(&doc, "c-done01", Status::Resolved).unwrap();
+
+        let found = collect_open(doc.parent().unwrap());
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].thread.id, "c-open01");
+        assert_eq!(found[0].doc, doc);
     }
 }

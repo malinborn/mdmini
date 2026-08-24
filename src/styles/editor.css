@@ -1400,3 +1400,90 @@
   background-image: linear-gradient(90deg, rgba(var(--color-glow), 0.10) 0%, transparent 60%) !important;
   box-shadow: 0 0 12px 4px rgba(var(--color-glow), 0.06) !important;
 }
+
+/* AI-комментарии — обратное направление AI-интерфейса. Одна визуальная семья
+ * с `.cm-ai-ask`, поэтому те же токены `--ai-ask-*`.
+ *
+ * `.cm-ai-comment-wrap` — корень виджета, и CM6 измеряет его высоту по
+ * DOM-боксу, куда margin не входит. Вертикальные отступы поэтому padding
+ * здесь, а не margin на `.cm-ai-comment`. */
+.cm-ai-comment-wrap {
+  padding: 0.4rem 0;
+}
+
+.cm-ai-comment {
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+  /* Непрозрачный стек, ОБЯЗАТЕЛЬНО оба свойства — ровно как у `.cm-ai-ask`.
+   * `--ai-ask-bg` это заливка с альфой 6–10%, а слой drawSelection лежит на
+   * z-index -2, то есть позади контента: без сплошного background-color
+   * выделение просвечивает сквозь карточку. */
+  background-color: var(--bg-base);
+  background-image: linear-gradient(var(--ai-ask-bg), var(--ai-ask-bg));
+  font-size: 0.9em;
+  /* Протяжённое выделение по документу не должно закрашивать карточку. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Поле ввода — единственное место в карточке, где выделение текста нужно. */
+.cm-ai-comment-input:focus {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.cm-ai-comment-orphaned {
+  border-style: dashed;
+}
+
+.cm-ai-comment-head {
+  opacity: 0.7;
+  font-size: 0.85em;
+  margin-bottom: 0.4rem;
+}
+
+.cm-ai-comment-reply {
+  margin-bottom: 0.4rem;
+}
+
+.cm-ai-comment-author {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+.cm-ai-comment-text {
+  white-space: pre-wrap;
+}
+
+.cm-ai-comment-input {
+  width: 100%;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 4px;
+  background: var(--ai-ask-chip-bg);
+  color: inherit;
+  font: inherit;
+}
+
+.cm-ai-comment-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.cm-ai-comment-button {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--ai-ask-border);
+  border-radius: 4px;
+  background: var(--ai-ask-chip-bg);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.cm-ai-comment-button:hover {
+  background: var(--ai-ask-chip-hover-bg);
+}
