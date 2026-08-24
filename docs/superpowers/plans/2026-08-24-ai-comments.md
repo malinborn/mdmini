@@ -1727,7 +1727,9 @@ git commit -m "feat(comments): pure frontend parser, quote anchoring and handoff
 - `deco.map(tr.changes)` в начале `update`, чтобы виджет ехал с текстом.
 - `ignoreEvent(): true`.
 - Внешняя обёртка `.cm-ai-comment-wrap` несёт отступы **padding**, у карточки `.cm-ai-comment` margin нулевой. Иначе CM6 измерит высоту виджета без margin, и `posAtCoords` перестанет находить строки ниже.
-- На кнопках `mousedown` → `preventDefault()`, чтобы клик не двигал выделение. На фокусируемом `input` — `stopPropagation()` на всех клавиатурных событиях и на `mousedown`, но **без** `preventDefault` на `mousedown`.
+- На кнопках `mousedown` → `preventDefault()`, чтобы клик не двигал выделение. На фокусируемом `input` — `stopPropagation()` на всех клавиатурных событиях (`keydown`, `keypress`, `keyup`) и на `mousedown`, но **без** `preventDefault` на `mousedown`: иначе браузер не поставит каретку в поле.
+
+**В репозитории нет jsdom и happy-dom.** Поэтому тесты ниже вызывают только `eq()` и работу StateField — через `EditorState.create()` и `state.update({effects})`, без `EditorView`. Если понадобится протестировать `toDOM`, брать готовый харнес из `src/lib/editor/ai-ask.test.ts` (там `FakeElement` + `vi.stubGlobal('document', {createElement: createFakeElement})` и хелпер `findByClass`, матчащий класс по слову, а не по строке — иначе двухтокенный `className` не найдётся). Не тащить новую зависимость ради DOM.
 
 - [ ] **Step 1: Написать падающие тесты**
 
@@ -2059,9 +2061,22 @@ import { aiCommentField } from './ai-comment';
   border: 1px solid var(--ai-ask-border);
   border-radius: 6px;
   padding: 0.6rem 0.7rem;
-  /* Непрозрачный стек: тинт поверх базы редактора, как у `.cm-ai-ask`. */
+  /* Непрозрачный стек, ОБЯЗАТЕЛЬНО оба свойства — ровно как у `.cm-ai-ask`.
+   * `--ai-ask-bg` это заливка с альфой 6–10%, а слой drawSelection лежит на
+   * z-index -2, то есть позади контента: без сплошного background-color
+   * выделение просвечивает сквозь карточку. */
+  background-color: var(--bg-base);
   background-image: linear-gradient(var(--ai-ask-bg), var(--ai-ask-bg));
   font-size: 0.9em;
+  /* Протяжённое выделение по документу не должно закрашивать карточку. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Поле ввода — единственное место в карточке, где выделение текста нужно. */
+.cm-ai-comment-input:focus {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .cm-ai-comment-orphaned {
@@ -2196,11 +2211,37 @@ pub async fn comment_resolve(path: String, id: String) -> Result<(), String> {
 
 Зарегистрировать все четыре в `tauri::generate_handler![...]` в `lib.rs`, рядом с `read_file`, `write_file`, `file_exists`.
 
-- [ ] **Step 2: Наблюдать сайдкар**
+- [ ] **Step 2: Наблюдать сайдкар — и НЕ переиспользовать путь внешнего изменения**
 
-В `src-tauri/src/watcher.rs`: там, где документ добавляется в набор наблюдаемых файлов, добавить рядом его сайдкар, если он существует, и присылать фронтенду то же событие внешнего изменения. Прочитать файл и вставить по образцу существующего кода — не изобретать второй механизм.
+Файл комментариев правят двое, md-mini и агент, поэтому ответ агента должен появляться в открытом окне сам. Но существующий путь `file-changed-externally` для этого не годится, и это проверено по коду, а не предположено:
 
-Причина: файл комментариев правят двое, md-mini и агент, и ответ агента должен появиться в открытом окне без ручного обновления.
+- `handleExternalChange` (`src/App.svelte:288-317`) делает ранний выход при `path !== fileState.filePath` — событие про сайдкар до него просто не дойдёт.
+- Ветка «файл грязный» открывает блокирующее модальное окно `ask()` из `@tauri-apps/plugin-dialog`. Для сайдкара это неприемлемо: агент пишет ответ, а пользователю прилетает модалка.
+- Подавление собственной записи — один глобальный флаг `isSaving` с трейлинг-таймером на 600 мс (`src/App.svelte:139,163,172`), а не per-path.
+
+Поэтому нужен **отдельный, адресный** событие-канал. Watcher уже перезапускается как побочный эффект команды `register_open_file` (см. комментарий в `src/App.svelte:243-245` — отдельного `start_watching` больше нет), так что добавлять сайдкар в набор наблюдаемых надо там же.
+
+Событие эмитить **в конкретное окно**, а не глобально, и слушать через `getCurrentWebviewWindow().listen`, а не через глобальный `listen`. Причина задокументирована в `src/lib/tauri/events.ts:103-115`: у глобального слушателя target равен `Any`, что матчит и адресные emit'ы — тогда событие получат все окна, и не-владельцы начнут наперегонки его обрабатывать.
+
+Добавить в `src/lib/tauri/events.ts` по образцу `onAiCommand`:
+
+```ts
+/**
+ * Файл комментариев документа изменился на диске. Отдельно от
+ * `file-changed-externally`: тот путь ранним выходом отсекает любой путь,
+ * кроме самого документа, и в грязном состоянии показывает блокирующую
+ * модалку — а сайдкар пишет агент, и спрашивать пользователя тут нечего.
+ *
+ * Адресное событие, поэтому слушать через текущее окно, а не глобально.
+ */
+export function onCommentsChanged(handler: (path: string) => void): Promise<() => void> {
+  return getCurrentWebviewWindow().listen<string>('comments-changed', (event) => {
+    handler(event.payload);
+  });
+}
+```
+
+Реакция — только перерисовка тредов (`reloadComments()` из шага 4), никогда не перезагрузка документа: сам документ при записи сайдкара не менялся.
 
 - [ ] **Step 3: Добавить обёртки IPC**
 
@@ -2285,7 +2326,17 @@ export async function commentResolve(path: string, id: string): Promise<void> {
   });
 ```
 
-В обработчике внешнего изменения файла: если изменившийся путь — сайдкар текущего документа, вызвать `reloadComments()` вместо перезагрузки документа. Для проверки использовать `sidecarPath(fileState.path) === changedPath`.
+Зарегистрировать новый слушатель в том же блоке `onMount`, рядом с `onFileChangedExternally` (`src/App.svelte:661-663`):
+
+```ts
+    const unlistenComments = onCommentsChanged(() => {
+      void reloadComments();
+    });
+```
+
+и добавить `unlistenComments` в тот же список отписок, что и остальные `unlisten*` в этом блоке. Обработчик `handleExternalChange` не трогать вовсе — сайдкар через него не ходит.
+
+**Замечание про имя поля:** в `App.svelte` путь текущего файла называется `fileState.filePath`, а не `fileState.path` — псевдокод выше в шаге 4 использовал короткое имя, при реализации взять настоящее.
 
 - [ ] **Step 5: Проверить и закоммитить**
 
@@ -2442,7 +2493,9 @@ npm run check
 npm run check:x86
 ```
 
-Expected: всё зелёное. `npx vitest run --dir src` — именно так, потому что обычный `npm run test` подхватывает устаревшие копии из `.claude/worktrees/` и завышает счёт.
+Expected: всё зелёное. `npx vitest run --dir src` — именно так, и запускать из корня worktree: обычный `npm run test` это `vitest` в watch-режиме без конфига тестов, он подхватывает устаревшие копии из `.claude/worktrees/` и завышает счёт.
+
+**Базовая линия — 531 теста в 27 файлах** (измерено в этом worktree перед началом работы). В CLAUDE.md записано 513 — цифра устарела, ориентироваться на 531. К концу плана должно стать 531 плюс новые тесты задач 7 и 8.
 
 - [ ] **Step 2: Проверить путь Monitor целиком**
 
