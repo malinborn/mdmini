@@ -278,6 +278,16 @@
         editorHandle?.setCodeMode(null);
         activePreview = 'markdown';
       }
+
+      // `setCodeMode`/`setEnvMode` above reconfigure the preview compartment
+      // themselves, and the markdown branch installs a bare livePreviewPlugin
+      // — no flavour facet, no live-render bundle. Re-assert the engine's own
+      // configuration on top, or a freshly opened window sits in a half-built
+      // state: in live-render that meant no atomic markers, no hidden markers
+      // and no selection toolbar until the engine was toggled by hand.
+      // `activePreview` was just assigned, so this cannot rely on the $effect
+      // firing first.
+      applyPreviewConfig();
     } catch (err) {
       console.error('Failed to open file:', err);
     }
@@ -475,7 +485,17 @@
     // this guard a single menu click would start a draft in every open
     // document. Focus is only knowable here, not in the Rust menu handler,
     // where the menu bar itself is what the OS considers active.
+    //
+    // The in-editor toolbar button calls `startCommentFromSelection` directly
+    // instead: a click inside this window's own toolbar already says which
+    // document is meant, and going through the guard would make the button
+    // untestable under automation, where nothing holds OS focus.
     if (!document.hasFocus()) return;
+    startCommentFromSelection();
+  }
+
+  /** The actual work, with no focus guard — see `createCommentFromSelection`. */
+  function startCommentFromSelection(): void {
     const view = editorHandle?.view;
     if (!view || !fileState.filePath) return;
     const range = view.state.selection.main;
@@ -1012,7 +1032,20 @@
   //    files keep their own preview plugin and ignore the flavour, which only
   //    means anything for markdown.
   // 3. Markdown picks its plugin plus the flavour facet.
-  $effect(() => {
+  /**
+   * Put the preview compartment into the shape the current engine and file
+   * type call for.
+   *
+   * Called both from the `$effect` below and imperatively after a file opens,
+   * because `Editor.svelte`'s `setCodeMode`/`setEnvMode` reconfigure the SAME
+   * compartment — and its markdown branch installs a bare `livePreviewPlugin`
+   * with no flavour facet and no live-render bundle. `handleOpenFilePath`
+   * calls `setCodeMode(null)` for every markdown file, so on a freshly opened
+   * window it wiped whatever this effect had just installed: live-render was
+   * dead until the engine was toggled by hand, which re-ran the effect. Two
+   * owners of one compartment, and this one is authoritative.
+   */
+  function applyPreviewConfig(): void {
     const e = engine.value;
     const v = editorHandle?.view;
     if (!v) return;
@@ -1040,9 +1073,22 @@
       effects: previewCompartment.reconfigure([
         livePreviewPlugin,
         flavourFacet.of(liveRender ? LIVE_RENDER : LIVE_PREVIEW),
-        ...(liveRender ? liveRenderExtensions() : []),
+        // The toolbar's comment button reaches the same code path as the menu
+        // item, minus the focus guard: a click in this window's own toolbar is
+        // unambiguous about which document is meant.
+        ...(liveRender
+          ? liveRenderExtensions({ onComment: () => startCommentFromSelection() })
+          : []),
       ]),
     });
+  }
+
+  $effect(() => {
+    // Read both dependencies unconditionally so the effect re-runs on either.
+    void engine.value;
+    void editorHandle?.view;
+    void activePreview;
+    applyPreviewConfig();
   });
 </script>
 

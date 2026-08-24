@@ -23,13 +23,13 @@ import { elementInspector } from './inspector';
  * resolved through the view's PendingKeys / beforeinput path rather than from
  * keydown alone. See the comment on `blockFormatKeymap`.
  */
-export function liveRenderExtensions(): Extension[] {
+export function liveRenderExtensions(options?: { onComment?: () => void }): Extension[] {
   return [
     ...liveRenderAtomic,
     blockFormatKeymap,
     headingSpaceInput(),
     inlineContinuation(),
-    selectionToolbar(),
+    selectionToolbar({ onComment: options?.onComment }),
     elementInspector(),
   ];
 }

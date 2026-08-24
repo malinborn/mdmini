@@ -115,6 +115,31 @@ function buildPopup(view: EditorView): HTMLElement {
   divider.className = 'cm-selection-toolbar-divider';
   popup.appendChild(divider);
 
+  // Commenting on a selection belongs here more than anywhere else — this
+  // toolbar is already the answer to "I have selected something, now what".
+  // `dataset.kind` is deliberately left unset: `updateButtonStates` iterates
+  // the buttons and asks whether each format is active, and a comment has no
+  // active state to report.
+  if (onCommentRef) {
+    const commentBtn = document.createElement('button');
+    commentBtn.type = 'button';
+    commentBtn.className = 'cm-selection-toolbar-btn cm-selection-toolbar-btn-comment';
+    commentBtn.textContent = '💬';
+    commentBtn.setAttribute('aria-label', 'Comment on selection');
+    commentBtn.addEventListener('mousedown', (e) => {
+      // Same preventDefault reason as the format buttons: the selection must
+      // survive the click, since it is what the comment anchors to.
+      e.preventDefault();
+      onCommentRef?.();
+      hidePopup();
+    });
+    popup.appendChild(commentBtn);
+
+    const commentDivider = document.createElement('div');
+    commentDivider.className = 'cm-selection-toolbar-divider';
+    popup.appendChild(commentDivider);
+  }
+
   const linkBtn = makeButton('Link', 'Link', 'cm-selection-toolbar-btn-link', 'link');
   linkBtn.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -227,6 +252,17 @@ class SelectionToolbarPlugin {
   }
 }
 
-export function selectionToolbar(): Extension {
+/**
+ * Callback for the comment button, supplied by the app.
+ *
+ * Module-level rather than carried on the plugin, because the popup is built
+ * lazily from `buildPopup` deep inside this module and the DOM here is bare,
+ * not a component tree. Set once per editor configuration; there is only ever
+ * one popup on screen.
+ */
+let onCommentRef: (() => void) | null = null;
+
+export function selectionToolbar(options?: { onComment?: () => void }): Extension {
+  onCommentRef = options?.onComment ?? null;
   return ViewPlugin.fromClass(SelectionToolbarPlugin);
 }
