@@ -170,6 +170,22 @@ pub fn run() {
                     return;
                 }
 
+                // "Comment on Selection" acts on a specific document's
+                // selection, so it goes to the focused window only — same
+                // reasoning as "close" below. The generic path at the bottom
+                // broadcasts to every window, which is right for global
+                // preferences (theme, zoom) but here would drop a draft comment
+                // card into every open document at once.
+                if id == "ai_comment" {
+                    for (_label, win) in _app.webview_windows() {
+                        if win.is_focused().unwrap_or(false) {
+                            let _ = win.emit("menu-event", &id);
+                            break;
+                        }
+                    }
+                    return;
+                }
+
                 // Handle "close" — close the focused window directly from Rust
                 if id == "close" {
                     for (_label, win) in _app.webview_windows() {
