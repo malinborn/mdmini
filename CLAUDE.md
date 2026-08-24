@@ -21,6 +21,8 @@ Minimalist live-preview markdown editor for macOS. Tauri 2 + Svelte 5 + CodeMirr
 | `npm run tauri build` | **Production build (creates .dmg).** Replaces the user's installed md-mini if installed. **Explicit, owner-triggered only — do NOT run as part of routine dev/QA.** |
 | `npm run tauri dev` | Tauri dev with **production identifier**. Conflicts with running production md-mini (shares single-instance socket, app data, recovery files). **Avoid while the user is actively using md-mini — use `npm run dev` or `npm run dev:app` instead.** |
 | `npm run build` | Frontend build only (no Tauri bundle) |
+| `npm run dev:site` | Dev server for the **md-mini.com landing** (Vite at http://localhost:1421). Never run alongside `npm run dev` — see the two-servers gotcha below. |
+| `npm run build:site` | Build the landing from `site/` into `docs/`. Run `rm -rf docs/assets` first; read `site/CLAUDE.md` before touching the landing. |
 
 ### Build / Test Policy While User Is Working
 
@@ -100,6 +102,7 @@ src/                    # Frontend (Svelte + TypeScript)
 - `src/lib/editor/live-render/CLAUDE.md` — **Read before touching the live-render beta.** Why atomicity needs two mechanisms, why Backspace needs `Prec.highest` while Escape does not, the two-offsets-one-pixel caret boundary, and the three traps that make this mode's bugs invisible to unit tests
 - `src/lib/editor/block-templates.ts` — Single source of truth for block insertion templates (hover menu + slash commands)
 - `src/lib/editor/folding.ts` — Heading fold service + click handler
+- `site/CLAUDE.md` — **Read before touching the md-mini.com landing.** How it builds and deploys, why its demos are real editor instances, and the layout/field/theme traps found while building it
 
 ## Tech Stack
 
